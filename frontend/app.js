@@ -251,6 +251,10 @@ function showDashboard() {
     userName.textContent = currentUser.name;
     userRoleBadge.textContent = currentUser.role === 'admin' ? 'Admin' : currentUser.role === 'procurement' ? 'Procurement' : `Requester · ${currentUser.building}`;
 
+    // Reset tab visibility and admin-only buttons on every login
+    if (usersTabButton) usersTabButton.hidden = true;
+    if (buildingsTabButton) buildingsTabButton.hidden = true;
+
     if (currentUser.role === 'requester') {
         createOrderSection.classList.remove('hidden');
         requesterBuildingBadge.textContent = `Building ${currentUser.building}`;
@@ -267,6 +271,12 @@ function showDashboard() {
             if (buildingsTabButton) buildingsTabButton.hidden = false;
         }
     }
+
+    // Always default to Orders tab and hide all others on (re)login
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+    const ordersTabEl = document.getElementById('ordersTab');
+    if (ordersTabEl) ordersTabEl.classList.remove('hidden');
+    currentTab = 'ordersTab';
 
     loadBuildings();
 
@@ -572,7 +582,7 @@ function renderOrderDetail(o) {
         html += '<div class="detail-section-title mt-2">History</div>';
         html += '<div class="text-muted" style="max-height: 120px; overflow-y: auto; font-size: 0.78rem;">';
         for (const h of o.history) {
-            html += `<div>[${formatDateTime(h.changed_at)}] <strong>${escapeHtml(h.changed_by)}</strong> changed <strong>${escapeHtml(h.field_name)}</strong> from "${escapeHtml(h.old_value || '')}" to "${escapeHtml(h.new_value || '')}"</div>`;
+            html += `<div>[${formatDateTime(h.changed_at)}] <strong>${escapeHtml(h.changed_by)}</strong> changed <strong>${escapeHtml(h.field_name)}</strong> from \"${escapeHtml(h.old_value || '')}\" to \"${escapeHtml(h.new_value || '')}\"</div>`;
         }
         html += '</div>';
     }
@@ -583,13 +593,13 @@ function renderOrderDetail(o) {
         html += '<div class="detail-section-title">Update Order</div>';
         html += `<div class="form-group mt-1">
             <label>Status</label>
-            <select id="detailStatus" class="form-control form-control-sm">${ORDER_STATUSES.map(s => `<option value="${s}" ${s === o.status ? 'selected' : ''}>${s}</option>`).join('')}</select>
+            <select id="detailStatus" class="form-control form-control-sm">${ORDER_STATUSES.map(s => `<option value=\"${s}\" ${s === o.status ? 'selected' : ''}>${s}</option>`).join('')}</select>
         </div>`;
         html += `<div class="form-group">
             <label>Supplier</label>
             <select id="detailSupplier" class="form-control form-control-sm">
-                <option value="">None</option>
-                ${suppliersState.map(s => `<option value="${s.id}" ${o.supplier_id === s.id ? 'selected' : ''}>${escapeHtml(s.name)}</option>`).join('')}
+                <option value=\"\">None</option>
+                ${suppliersState.map(s => `<option value=\"${s.id}\" ${o.supplier_id === s.id ? 'selected' : ''}>${escapeHtml(s.name)}</option>`).join('')}
             </select>
         </div>`;
         html += `<div class="detail-grid">
@@ -1161,64 +1171,6 @@ function renderSuppliersTable() {
             if (s) openSupplierForm(s);
         });
     });
-}
-
-function openSupplierForm(supplier) {
-    if (supplier) {
-        supplierFormTitle.textContent = 'Edit Supplier';
-        supplierIdInput.value = supplier.id;
-        supplierNameInput.value = supplier.name || '';
-        supplierContactInput.value = supplier.contact_person || '';
-        supplierEmailInput.value = supplier.email || '';
-        supplierPhoneInput.value = supplier.phone || '';
-        supplierWebsiteInput.value = supplier.website || '';
-        supplierAddressInput.value = supplier.address || '';
-        supplierNotesInput.value = supplier.notes || '';
-        supplierActiveInput.value = supplier.active ? '1' : '0';
-    } else {
-        supplierFormTitle.textContent = 'Create Supplier';
-        supplierForm.reset();
-        supplierIdInput.value = '';
-        supplierActiveInput.value = '1';
-    }
-    supplierFormCard.hidden = false;
-}
-
-async function handleSaveSupplier(e) {
-    e.preventDefault();
-
-    const payload = {
-        name: supplierNameInput.value.trim(),
-        contact_person: supplierContactInput.value.trim(),
-        email: supplierEmailInput.value.trim(),
-        phone: supplierPhoneInput.value.trim(),
-        website: supplierWebsiteInput.value.trim(),
-        address: supplierAddressInput.value.trim(),
-        notes: supplierNotesInput.value.trim(),
-        active: parseInt(supplierActiveInput.value, 10)
-    };
-
-    if (!payload.name) {
-        alert('Name is required');
-        return;
-    }
-
-    const id = supplierIdInput.value;
-    let res;
-    if (id) {
-        res = await apiPut(`/suppliers/${id}`, payload);
-    } else {
-        res = await apiPost('/suppliers', payload);
-    }
-
-    if (res.success) {
-        alert('Supplier saved');
-        supplierFormCard.hidden = true;
-        loadSuppliers();
-        populateSupplierFilter();
-    } else {
-        alert('Failed to save supplier');
-    }
 }
 
 // Filters helpers

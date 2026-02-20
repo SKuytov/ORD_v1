@@ -49,6 +49,7 @@
                 <button class="tab" data-tab="quotesTab">Quotes</button>
                 <button class="tab" data-tab="suppliersTab">Suppliers</button>
                 <button class="tab" data-tab="buildingsTab" id="buildingsTabButton" hidden>Buildings</button>
+                <button class="tab" data-tab="costCentersTab" id="costCentersTabButton" hidden>Cost Centers</button>
                 <button class="tab" data-tab="usersTab" id="usersTabButton" hidden>Users</button>
             </div>
 
@@ -65,6 +66,12 @@
                             <select id="building" class="form-control" required>
                                 <option value="">Select Building</option>
                             </select>
+                        </div>
+                        <div class="form-group" id="costCenterGroup">
+                            <label>Cost Center <span style="color:#ef4444;">*</span></label>
+                            <div id="costCenterRadios" class="radio-group">
+                                <span class="text-muted">Select a building first</span>
+                            </div>
                         </div>
                         <div class="form-group">
                             <label for="itemDescription">Item Description</label>
@@ -270,6 +277,60 @@
                             <div class="form-actions">
                                 <button type="submit" class="btn btn-primary">Save</button>
                                 <button type="button" id="btnCancelBuilding" class="btn btn-secondary">Cancel</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Cost Centers Tab (admin only) -->
+            <section id="costCentersTab" class="tab-content hidden">
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-header-row">
+                            <h2>Cost Centers</h2>
+                            <button id="btnNewCostCenter" class="btn btn-primary btn-sm">New Cost Center</button>
+                        </div>
+                        <div class="form-group" style="margin-bottom:0.5rem;">
+                            <select id="ccFilterBuilding" class="form-control form-control-sm">
+                                <option value="">All Buildings</option>
+                            </select>
+                        </div>
+                        <div id="costCentersTable"></div>
+                    </div>
+                    <div class="card" id="costCenterFormCard" hidden>
+                        <h2 id="costCenterFormTitle">Create Cost Center</h2>
+                        <form id="costCenterForm">
+                            <input type="hidden" id="costCenterId">
+                            <div class="form-group">
+                                <label for="ccBuilding">Building</label>
+                                <select id="ccBuilding" class="form-control" required>
+                                    <option value="">Select Building</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="ccCode">Cost Center Code</label>
+                                <input type="text" id="ccCode" class="form-control" required placeholder="e.g. CC-CT-PROD">
+                            </div>
+                            <div class="form-group">
+                                <label for="ccName">Name</label>
+                                <input type="text" id="ccName" class="form-control" required placeholder="e.g. CT Production">
+                            </div>
+                            <div class="form-group">
+                                <label for="ccDescription">Description</label>
+                                <textarea id="ccDescription" class="form-control" rows="2"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="ccActive">Active</label>
+                                <select id="ccActive" class="form-control">
+                                    <option value="1">Yes</option>
+                                    <option value="0">No</option>
+                                </select>
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn-primary">Save</button>
+                                <button type="button" id="btnCancelCostCenter" class="btn btn-secondary">Cancel</button>
+                                <button type="button" id="btnDeleteCostCenter" class="btn btn-danger" hidden>Delete</button>
                             </div>
                         </form>
                     </div>

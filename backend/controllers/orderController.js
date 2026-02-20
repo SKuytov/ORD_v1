@@ -11,16 +11,16 @@ exports.createOrder = async (req, res) => {
         const {
             building, itemDescription, partNumber, category,
             quantity, dateNeeded, priority, notes,
-            requester, requesterEmail
+            requester, requesterEmail, costCenterId
         } = req.body;
 
         const [result] = await connection.query(
             `INSERT INTO orders (
-                building, item_description, part_number, category,
+                building, cost_center_id, item_description, part_number, category,
                 quantity, date_needed, priority, notes,
                 requester_id, requester_name, requester_email, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'New')`,
-            [building, itemDescription, partNumber || null, category || null,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'New')`,
+            [building, costCenterId || null, itemDescription, partNumber || null, category || null,
              quantity, dateNeeded, priority || 'Normal', notes,
              req.user.id, requester, requesterEmail]
         );
@@ -70,6 +70,8 @@ exports.getOrders = async (req, res) => {
             SELECT o.*,
                    s.name as supplier_name,
                    q.quote_number,
+                   cc.code as cost_center_code,
+                   cc.name as cost_center_name,
                    GROUP_CONCAT(
                        DISTINCT JSON_OBJECT(
                            'id', f.id,
@@ -83,6 +85,7 @@ exports.getOrders = async (req, res) => {
             LEFT JOIN order_files f ON o.id = f.order_id
             LEFT JOIN suppliers s ON o.supplier_id = s.id
             LEFT JOIN quotes q ON o.quote_ref = q.id
+            LEFT JOIN cost_centers cc ON o.cost_center_id = cc.id
         `;
 
         const conditions = [];
@@ -118,7 +121,6 @@ exports.getOrders = async (req, res) => {
             if (order.files && order.files !== 'null') {
                 try {
                     order.files = JSON.parse(`[${order.files}]`);
-                    // Remove null entries
                     order.files = order.files.filter(f => f.id !== null);
                 } catch { order.files = []; }
             } else {
@@ -141,10 +143,12 @@ exports.getOrderById = async (req, res) => {
             SELECT o.*,
                    s.name as supplier_name, s.email as supplier_email,
                    s.contact_person as supplier_contact,
-                   q.quote_number, q.status as quote_status
+                   q.quote_number, q.status as quote_status,
+                   cc.code as cost_center_code, cc.name as cost_center_name
             FROM orders o
             LEFT JOIN suppliers s ON o.supplier_id = s.id
             LEFT JOIN quotes q ON o.quote_ref = q.id
+            LEFT JOIN cost_centers cc ON o.cost_center_id = cc.id
             WHERE o.id = ?
         `, [id]);
 
@@ -197,7 +201,8 @@ exports.updateOrder = async (req, res) => {
         const allowedFields = [
             'status', 'supplier', 'supplier_id', 'quote_id', 'price',
             'unit_price', 'total_price', 'assigned_to', 'priority',
-            'expected_delivery_date', 'notes', 'part_number', 'category'
+            'expected_delivery_date', 'notes', 'part_number', 'category',
+            'cost_center_id'
         ];
 
         const updateFields = [];

@@ -12,6 +12,7 @@ const supplierRoutes = require('./routes/suppliers');
 const quoteRoutes = require('./routes/quotes');
 const userRoutes = require('./routes/users');
 const buildingRoutes = require('./routes/buildings');
+const costCenterRoutes = require('./routes/costCenters');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -39,6 +40,7 @@ app.use('/api/suppliers', supplierRoutes);
 app.use('/api/quotes', quoteRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/buildings', buildingRoutes);
+app.use('/api/cost-centers', costCenterRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -46,7 +48,7 @@ app.get('/api/health', (req, res) => {
         status: 'OK',
         timestamp: new Date().toISOString(),
         environment: process.env.NODE_ENV,
-        version: '2.0.0'
+        version: '2.1.0'
     });
 });
 
@@ -66,7 +68,7 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`PartPulse Orders Server v2.0 running on port ${PORT}`);
+    console.log(`PartPulse Orders Server v2.1 running on port ${PORT}`);
     console.log(`Environment: ${process.env.NODE_ENV}`);
     console.log(`Frontend URL: ${process.env.FRONTEND_URL}`);
 });

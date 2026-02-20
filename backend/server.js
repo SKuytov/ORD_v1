@@ -8,12 +8,14 @@ require('dotenv').config();
 
 const authRoutes = require('./routes/auth');
 const orderRoutes = require('./routes/orders');
+const supplierRoutes = require('./routes/suppliers');
+const quoteRoutes = require('./routes/quotes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Security middleware
-app.use(helmet());
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({
     origin: process.env.FRONTEND_URL || '*',
     credentials: true
@@ -24,29 +26,32 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(compression());
 
-// Static files
+// Static files - uploads served with original names
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use(express.static(path.join(__dirname, '../frontend')));
 
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api/suppliers', supplierRoutes);
+app.use('/api/quotes', quoteRoutes);
 
-// Health check endpoint
+// Health check
 app.get('/api/health', (req, res) => {
-    res.json({ 
-        status: 'OK', 
+    res.json({
+        status: 'OK',
         timestamp: new Date().toISOString(),
-        environment: process.env.NODE_ENV 
+        environment: process.env.NODE_ENV,
+        version: '2.0.0'
     });
 });
 
-// Serve frontend for all other routes
+// Serve frontend
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, '../frontend/index.html'));
 });
 
-// Error handling middleware
+// Error handling
 app.use((err, req, res, next) => {
     console.error('Error:', err);
     res.status(err.status || 500).json({
@@ -56,9 +61,8 @@ app.use((err, req, res, next) => {
     });
 });
 
-// Start server
 app.listen(PORT, () => {
-    console.log(`PartPulse Orders Server running on port ${PORT}`);
+    console.log(`PartPulse Orders Server v2.0 running on port ${PORT}`);
     console.log(`Environment: ${process.env.NODE_ENV}`);
     console.log(`Frontend URL: ${process.env.FRONTEND_URL}`);
 });

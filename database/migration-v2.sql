@@ -66,15 +66,15 @@ ALTER TABLE orders
         'Cancelled', 'On Hold'
     ) DEFAULT 'New';
 
--- Add new columns to orders (ignore errors if they already exist)
-ALTER TABLE orders ADD COLUMN IF NOT EXISTS unit_price DECIMAL(10, 2) DEFAULT 0.00 AFTER price;
-ALTER TABLE orders ADD COLUMN IF NOT EXISTS total_price DECIMAL(12, 2) DEFAULT 0.00 AFTER unit_price;
-ALTER TABLE orders ADD COLUMN IF NOT EXISTS expected_delivery_date DATE AFTER date_needed;
-ALTER TABLE orders ADD COLUMN IF NOT EXISTS priority ENUM('Low', 'Normal', 'High', 'Urgent') DEFAULT 'Normal' AFTER notes;
-ALTER TABLE orders ADD COLUMN IF NOT EXISTS supplier_id INT AFTER supplier;
-ALTER TABLE orders ADD COLUMN IF NOT EXISTS quote_ref INT AFTER quote_id;
-ALTER TABLE orders ADD COLUMN IF NOT EXISTS part_number VARCHAR(100) AFTER item_description;
-ALTER TABLE orders ADD COLUMN IF NOT EXISTS category VARCHAR(50) AFTER part_number;
+-- Add new columns to orders
+ALTER TABLE orders ADD COLUMN unit_price DECIMAL(10, 2) DEFAULT 0.00 AFTER price;
+ALTER TABLE orders ADD COLUMN total_price DECIMAL(12, 2) DEFAULT 0.00 AFTER unit_price;
+ALTER TABLE orders ADD COLUMN expected_delivery_date DATE AFTER date_needed;
+ALTER TABLE orders ADD COLUMN priority ENUM('Low', 'Normal', 'High', 'Urgent') DEFAULT 'Normal' AFTER notes;
+ALTER TABLE orders ADD COLUMN supplier_id INT AFTER supplier;
+ALTER TABLE orders ADD COLUMN quote_ref INT AFTER quote_id;
+ALTER TABLE orders ADD COLUMN part_number VARCHAR(100) AFTER item_description;
+ALTER TABLE orders ADD COLUMN category VARCHAR(50) AFTER part_number;
 
 -- Add foreign keys for new columns
 ALTER TABLE orders ADD FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE SET NULL;

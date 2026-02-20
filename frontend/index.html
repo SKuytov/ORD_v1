@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PartPulse Order Management</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Login Screen -->
+        <div id="loginScreen" class="screen">
+            <div class="login-container">
+                <h1>PartPulse Orders</h1>
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="username">Username</label>
+                        <input type="text" id="username" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <input type="password" id="password" class="form-control" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">Login</button>
+                </form>
+                <div id="loginError" class="error-message hidden"></div>
+            </div>
+        </div>
+
+        <!-- Main Dashboard -->
+        <div id="dashboardScreen" class="screen hidden">
+            <header>
+                <div class="container">
+                    <h1>PartPulse Order Management</h1>
+                    <div class="user-info">
+                        <span id="userName"></span>
+                        <button id="logoutBtn" class="btn btn-secondary">Logout</button>
+                    </div>
+                </div>
+            </header>
+
+            <div class="container">
+                <!-- Order Creation Form (for requesters) -->
+                <div id="createOrderSection" class="card hidden">
+                    <h2>Create New Order</h2>
+                    <form id="createOrderForm">
+                        <div class="form-group">
+                            <label for="building">Building</label>
+                            <select id="building" class="form-control" required>
+                                <option value="">Select Building</option>
+                                <option value="CT">CT</option>
+                                <option value="CB">CB</option>
+                                <option value="WW">WW</option>
+                                <option value="PS">PS</option>
+                                <option value="LT">LT</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="itemDescription">Item Description</label>
+                            <textarea id="itemDescription" class="form-control" rows="3" required></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="quantity">Quantity</label>
+                            <input type="number" id="quantity" class="form-control" min="1" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="dateNeeded">Date Needed</label>
+                            <input type="date" id="dateNeeded" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="notes">Additional Notes</label>
+                            <textarea id="notes" class="form-control" rows="2"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="files">Attach Files (optional)</label>
+                            <input type="file" id="files" multiple>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Submit Order</button>
+                    </form>
+                </div>
+
+                <!-- Orders List -->
+                <div class="card">
+                    <h2>Orders</h2>
+                    <div id="ordersTable"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

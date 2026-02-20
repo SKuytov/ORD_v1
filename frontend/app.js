@@ -7,6 +7,7 @@ let authToken = null;
 let ordersState = [];
 let suppliersState = [];
 let quotesState = [];
+let usersState = [];
 let selectedOrderIds = new Set();
 let currentTab = 'ordersTab';
 
@@ -17,7 +18,7 @@ const loginForm = document.getElementById('loginForm');
 const loginError = document.getElementById('loginError');
 const logoutBtn = document.getElementById('logoutBtn');
 const userName = document.getElementById('userName');
-const userRole = document.getElementById('userRole');
+const userRoleBadge = document.getElementById('userRole');
 const createOrderSection = document.getElementById('createOrderSection');
 const requesterBuildingBadge = document.getElementById('requesterBuildingBadge');
 const createOrderForm = document.getElementById('createOrderForm');
@@ -61,6 +62,25 @@ const supplierWebsiteInput = document.getElementById('supplierWebsite');
 const supplierAddressInput = document.getElementById('supplierAddress');
 const supplierNotesInput = document.getElementById('supplierNotes');
 const supplierActiveInput = document.getElementById('supplierActive');
+
+// Users admin DOM
+const usersTabButton = document.getElementById('usersTabButton');
+const usersTable = document.getElementById('usersTable');
+const userFormCard = document.getElementById('userFormCard');
+const userFormTitle = document.getElementById('userFormTitle');
+const userForm = document.getElementById('userForm');
+const btnNewUser = document.getElementById('btnNewUser');
+const btnCancelUser = document.getElementById('btnCancelUser');
+
+const userIdInput = document.getElementById('userId');
+const userUsernameInput = document.getElementById('userUsername');
+const userNameInput = document.getElementById('userNameInput');
+const userEmailInput = document.getElementById('userEmail');
+const userRoleSelect = document.getElementById('userRoleSelect');
+const userBuildingSelect = document.getElementById('userBuilding');
+const userActiveSelect = document.getElementById('userActive');
+const userPasswordInput = document.getElementById('userPassword');
+const userPasswordGroup = document.getElementById('userPasswordGroup');
 
 // Constants
 const ORDER_STATUSES = [
@@ -118,6 +138,18 @@ function setupEventListeners() {
         supplierFormCard.hidden = true;
     });
     supplierForm.addEventListener('submit', handleSaveSupplier);
+
+    if (btnNewUser) {
+        btnNewUser.addEventListener('click', () => openUserForm());
+    }
+    if (btnCancelUser) {
+        btnCancelUser.addEventListener('click', () => {
+            userFormCard.hidden = true;
+        });
+    }
+    if (userForm) {
+        userForm.addEventListener('submit', handleSaveUser);
+    }
 }
 
 // Auth
@@ -188,7 +220,7 @@ function showDashboard() {
     loginScreen.classList.add('hidden');
     dashboardScreen.classList.remove('hidden');
     userName.textContent = currentUser.name;
-    userRole.textContent = currentUser.role === 'admin' ? 'Admin' : currentUser.role === 'procurement' ? 'Procurement' : `Requester · ${currentUser.building}`;
+    userRoleBadge.textContent = currentUser.role === 'admin' ? 'Admin' : currentUser.role === 'procurement' ? 'Procurement' : `Requester · ${currentUser.building}`;
 
     if (currentUser.role === 'requester') {
         createOrderSection.classList.remove('hidden');
@@ -203,6 +235,10 @@ function showDashboard() {
         navTabs.classList.remove('hidden');
         filtersBar.classList.remove('hidden');
         populateStatusFilter();
+
+        if (currentUser.role === 'admin' && usersTabButton) {
+            usersTabButton.hidden = false;
+        }
     }
 
     loadSuppliers().then(() => {
@@ -211,6 +247,9 @@ function showDashboard() {
     loadOrders();
     if (currentUser.role !== 'requester') {
         loadQuotes();
+    }
+    if (currentUser.role === 'admin') {
+        loadUsers();
     }
 }
 
@@ -347,7 +386,7 @@ function renderOrdersTable() {
         }
         html += `<td>#${order.id}</td>`;
         html += `<td>${order.building}</td>`;
-        html += `<td title="${escapeHtml(order.item_description)}">${escapeHtml(order.item_description.substring(0, 40))}${order.item_description.length > 40 ? '\u2026' : ''}</td>`;
+        html += `<td title="${escapeHtml(order.item_description)}">${escapeHtml(order.item_description.substring(0, 40))}${order.item_description.length > 40 ? '…' : ''}</td>`;
         html += `<td>${order.quantity}</td>`;
         html += `<td>${formatDate(order.date_needed)}</td>`;
         html += `<td><span class="status-badge ${statusClass}">${order.status}</span></td>`;
@@ -357,10 +396,10 @@ function renderOrdersTable() {
             html += `<td>${order.supplier_name || '-'}</td>`;
             html += `<td class="text-right">${fmtPrice(order.unit_price)}</td>`;
             html += `<td class="text-right">${fmtPrice(order.total_price)}</td>`;
-            html += `<td>${hasFiles ? '\ud83d\udcce ' + order.files.length : '-'}</td>`;
+            html += `<td>${hasFiles ? '📎 ' + order.files.length : '-'}</td>`;
             html += `<td>${order.requester_name}</td>`;
         } else {
-            html += `<td>${hasFiles ? '\ud83d\udcce ' + order.files.length : '-'}</td>`;
+            html += `<td>${hasFiles ? '📎 ' + order.files.length : '-'}</td>`;
         }
 
         html += `<td><button class="btn btn-secondary btn-sm btn-view-order" data-id="${order.id}">View</button></td>`;
@@ -649,7 +688,7 @@ function renderQuoteDetail(q) {
             html += `<tr>
                 <td>#${it.order_id}</td>
                 <td>${it.building}</td>
-                <td>${escapeHtml(it.item_description.substring(0,40))}${it.item_description.length>40?'\u2026':''}</td>
+                <td>${escapeHtml(it.item_description.substring(0,40))}${it.item_description.length>40?'…':''}</td>
                 <td>${it.quantity}</td>
                 <td class="text-right">${fmtPrice(it.unit_price)}</td>
                 <td class="text-right">${fmtPrice(it.total_price)}</td>
@@ -698,27 +737,29 @@ function openCreateQuoteDialog() {
 
     const html = `Create quote for <strong>${orders.length}</strong> orders.\nSupplier: <select id="dlgSupplier">${supplierOptions}</select>\nValid until (YYYY-MM-DD): <input id="dlgValid" type="text" placeholder="optional">`;
 
-    const supplierId = promptHtml(html);
-    if (!supplierId) return;
+    const supplierIdPromise = promptHtml(html);
+    supplierIdPromise.then(supplierId => {
+        if (!supplierId) return;
 
-    const validUntilInput = document.getElementById('dlgValid')?.value || null;
+        const validUntilInput = document.getElementById('dlgValid')?.value || null;
 
-    const body = {
-        supplier_id: parseInt(document.getElementById('dlgSupplier').value, 10),
-        order_ids: orders.map(o => o.id),
-        valid_until: validUntilInput
-    };
+        const body = {
+            supplier_id: parseInt(document.getElementById('dlgSupplier').value, 10),
+            order_ids: orders.map(o => o.id),
+            valid_until: validUntilInput
+        };
 
-    apiPost('/quotes', body).then(res => {
-        if (res.success) {
-            alert(`Quote ${res.quoteNumber} created`);
-            selectedOrderIds.clear();
-            updateSelectionUi();
-            loadOrders();
-            loadQuotes();
-        } else {
-            alert('Failed to create quote: ' + (res.message || 'Unknown error'));
-        }
+        apiPost('/quotes', body).then(res => {
+            if (res.success) {
+                alert(`Quote ${res.quoteNumber} created`);
+                selectedOrderIds.clear();
+                updateSelectionUi();
+                loadOrders();
+                loadQuotes();
+            } else {
+                alert('Failed to create quote: ' + (res.message || 'Unknown error'));
+            }
+        });
     });
 }
 
@@ -772,6 +813,141 @@ function promptHtml(messageHtml) {
             resolve(supplierVal);
         };
     });
+}
+
+// Users (admin)
+async function loadUsers() {
+    try {
+        const res = await apiGet('/users');
+        if (res.success) {
+            usersState = res.users;
+            renderUsersTable();
+        }
+    } catch (err) {
+        console.error('loadUsers error:', err);
+        usersTable.innerHTML = '<p>Failed to load users.</p>';
+    }
+}
+
+function renderUsersTable() {
+    if (!usersState.length) {
+        usersTable.innerHTML = '<p class="text-muted">No users yet.</p>';
+        return;
+    }
+
+    let html = '<div class="table-wrapper"><table><thead><tr>';
+    html += '<th>Username</th><th>Name</th><th>Email</th><th>Role</th><th>Building</th><th>Active</th><th></th>';
+    html += '</tr></thead><tbody>';
+
+    for (const u of usersState) {
+        html += `<tr data-id="${u.id}">
+            <td>${escapeHtml(u.username)}</td>
+            <td>${escapeHtml(u.name || '')}</td>
+            <td>${escapeHtml(u.email || '')}</td>
+            <td>${u.role}</td>
+            <td>${u.building || ''}</td>
+            <td>${u.active ? 'Yes' : 'No'}</td>
+            <td>
+                <button class="btn btn-secondary btn-sm btn-edit-user" data-id="${u.id}">Edit</button>
+                <button class="btn btn-secondary btn-sm btn-reset-pass" data-id="${u.id}">Reset Password</button>
+            </td>
+        </tr>`;
+    }
+
+    html += '</tbody></table></div>';
+    usersTable.innerHTML = html;
+
+    document.querySelectorAll('.btn-edit-user').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const id = parseInt(btn.dataset.id, 10);
+            const u = usersState.find(x => x.id === id);
+            if (u) openUserForm(u);
+        });
+    });
+
+    document.querySelectorAll('.btn-reset-pass').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const id = parseInt(btn.dataset.id, 10);
+            resetUserPassword(id);
+        });
+    });
+}
+
+function openUserForm(user) {
+    if (user) {
+        userFormTitle.textContent = 'Edit User';
+        userIdInput.value = user.id;
+        userUsernameInput.value = user.username || '';
+        userNameInput.value = user.name || '';
+        userEmailInput.value = user.email || '';
+        userRoleSelect.value = user.role || 'requester';
+        userBuildingSelect.value = user.building || '';
+        userActiveSelect.value = user.active ? '1' : '0';
+        userPasswordInput.value = '';
+        userPasswordGroup.style.display = 'none';
+    } else {
+        userFormTitle.textContent = 'Create User';
+        userForm.reset();
+        userIdInput.value = '';
+        userActiveSelect.value = '1';
+        userPasswordGroup.style.display = '';
+    }
+    userFormCard.hidden = false;
+}
+
+async function handleSaveUser(e) {
+    e.preventDefault();
+
+    const payload = {
+        username: userUsernameInput.value.trim(),
+        name: userNameInput.value.trim(),
+        email: userEmailInput.value.trim(),
+        role: userRoleSelect.value,
+        building: userBuildingSelect.value || null,
+        active: userActiveSelect.value === '1',
+        password: userPasswordGroup.style.display !== 'none' ? userPasswordInput.value.trim() : undefined
+    };
+
+    if (!payload.username || !payload.name || !payload.email || !payload.role) {
+        alert('Username, name, email and role are required');
+        return;
+    }
+
+    const id = userIdInput.value;
+    let res;
+    if (id) {
+        // Edit mode: do not send password here
+        delete payload.password;
+        res = await apiPut(`/users/${id}`, payload);
+    } else {
+        res = await apiPost('/users', payload);
+    }
+
+    if (res.success) {
+        if (!id && res.password) {
+            alert(`User created. Initial password: ${res.password}`);
+        } else {
+            alert('User saved');
+        }
+        userFormCard.hidden = true;
+        loadUsers();
+    } else {
+        alert('Failed to save user: ' + (res.message || 'Unknown error'));
+    }
+}
+
+async function resetUserPassword(id) {
+    if (!confirm('Reset password for this user?')) return;
+    try {
+        const res = await apiPost(`/users/${id}/reset-password`, {});
+        if (res.success && res.password) {
+            alert(`New password: ${res.password}`);
+        } else {
+            alert('Password reset failed: ' + (res.message || 'Unknown error'));
+        }
+    } catch (err) {
+        alert('Password reset failed');
+    }
 }
 
 // Suppliers

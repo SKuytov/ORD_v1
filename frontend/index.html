@@ -48,6 +48,7 @@
                 <button class="tab active" data-tab="ordersTab">Orders</button>
                 <button class="tab" data-tab="quotesTab">Quotes</button>
                 <button class="tab" data-tab="suppliersTab">Suppliers</button>
+                <button class="tab" data-tab="usersTab" id="usersTabButton" hidden>Users</button>
             </div>
 
             <!-- Requester: Create Order -->
@@ -236,6 +237,71 @@
                             <div class="form-actions">
                                 <button type="submit" class="btn btn-primary">Save</button>
                                 <button type="button" id="btnCancelSupplier" class="btn btn-secondary">Cancel</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Users Tab (admin only) -->
+            <section id="usersTab" class="tab-content hidden">
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-header-row">
+                            <h2>Users</h2>
+                            <button id="btnNewUser" class="btn btn-primary btn-sm">New User</button>
+                        </div>
+                        <div id="usersTable"></div>
+                    </div>
+                    <div class="card" id="userFormCard" hidden>
+                        <h2 id="userFormTitle">Create User</h2>
+                        <form id="userForm">
+                            <input type="hidden" id="userId">
+                            <div class="form-group">
+                                <label for="userUsername">Username</label>
+                                <input type="text" id="userUsername" class="form-control" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="userNameInput">Full Name</label>
+                                <input type="text" id="userNameInput" class="form-control" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="userEmail">Email</label>
+                                <input type="email" id="userEmail" class="form-control" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="userRole">Role</label>
+                                <select id="userRoleSelect" class="form-control" required>
+                                    <option value="admin">Admin</option>
+                                    <option value="procurement">Procurement</option>
+                                    <option value="requester">Requester</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="userBuilding">Building (for requester)</label>
+                                <select id="userBuilding" class="form-control">
+                                    <option value="">None</option>
+                                    <option value="CT">CT</option>
+                                    <option value="CB">CB</option>
+                                    <option value="WW">WW</option>
+                                    <option value="PS">PS</option>
+                                    <option value="LT">LT</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="userActive">Active</label>
+                                <select id="userActive" class="form-control">
+                                    <option value="1">Yes</option>
+                                    <option value="0">No</option>
+                                </select>
+                            </div>
+                            <div class="form-group" id="userPasswordGroup">
+                                <label for="userPassword">Password (leave empty to auto-generate)</label>
+                                <input type="password" id="userPassword" class="form-control">
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn-primary">Save</button>
+                                <button type="button" id="btnCancelUser" class="btn btn-secondary">Cancel</button>
                             </div>
                         </form>
                     </div>

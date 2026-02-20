@@ -70,6 +70,13 @@ const ORDER_STATUSES = [
     'Cancelled', 'On Hold'
 ];
 
+// Helper: safely format a price value (handles string decimals from MySQL)
+function fmtPrice(val) {
+    const n = parseFloat(val);
+    if (isNaN(n) || n === 0) return '-';
+    return n.toFixed(2);
+}
+
 // Init
 window.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
@@ -306,6 +313,7 @@ async function loadOrders() {
             renderOrdersTable();
         }
     } catch (err) {
+        console.error('loadOrders error:', err);
         ordersTable.innerHTML = '<p>Failed to load orders.</p>';
     }
 }
@@ -339,7 +347,7 @@ function renderOrdersTable() {
         }
         html += `<td>#${order.id}</td>`;
         html += `<td>${order.building}</td>`;
-        html += `<td title="${escapeHtml(order.item_description)}">${escapeHtml(order.item_description.substring(0, 40))}${order.item_description.length > 40 ? '…' : ''}</td>`;
+        html += `<td title="${escapeHtml(order.item_description)}">${escapeHtml(order.item_description.substring(0, 40))}${order.item_description.length > 40 ? '\u2026' : ''}</td>`;
         html += `<td>${order.quantity}</td>`;
         html += `<td>${formatDate(order.date_needed)}</td>`;
         html += `<td><span class="status-badge ${statusClass}">${order.status}</span></td>`;
@@ -347,12 +355,12 @@ function renderOrdersTable() {
 
         if (isAdminView) {
             html += `<td>${order.supplier_name || '-'}</td>`;
-            html += `<td class="text-right">${order.unit_price ? order.unit_price.toFixed(2) : '-'}</td>`;
-            html += `<td class="text-right">${order.total_price ? order.total_price.toFixed(2) : '-'}</td>`;
-            html += `<td>${hasFiles ? '📎 ' + order.files.length : '-'}</td>`;
+            html += `<td class="text-right">${fmtPrice(order.unit_price)}</td>`;
+            html += `<td class="text-right">${fmtPrice(order.total_price)}</td>`;
+            html += `<td>${hasFiles ? '\ud83d\udcce ' + order.files.length : '-'}</td>`;
             html += `<td>${order.requester_name}</td>`;
         } else {
-            html += `<td>${hasFiles ? '📎 ' + order.files.length : '-'}</td>`;
+            html += `<td>${hasFiles ? '\ud83d\udcce ' + order.files.length : '-'}</td>`;
         }
 
         html += `<td><button class="btn btn-secondary btn-sm btn-view-order" data-id="${order.id}">View</button></td>`;
@@ -452,11 +460,11 @@ function renderOrderDetail(o) {
         </div>
         <div>
             <div class="detail-label">Unit Price</div>
-            <div class="detail-value">${o.unit_price ? o.unit_price.toFixed(2) : '-'}</div>
+            <div class="detail-value">${fmtPrice(o.unit_price)}</div>
         </div>
         <div>
             <div class="detail-label">Total Price</div>
-            <div class="detail-value">${o.total_price ? o.total_price.toFixed(2) : '-'}</div>
+            <div class="detail-value">${fmtPrice(o.total_price)}</div>
         </div>
     </div>`;
 
@@ -527,13 +535,13 @@ function renderOrderDetail(o) {
             <div>
                 <div class="form-group">
                     <label>Unit Price</label>
-                    <input type="number" step="0.01" id="detailUnitPrice" class="form-control form-control-sm" value="${o.unit_price || ''}">
+                    <input type="number" step="0.01" id="detailUnitPrice" class="form-control form-control-sm" value="${parseFloat(o.unit_price) || ''}">
                 </div>
             </div>
         </div>`;
         html += `<div class="form-group">
             <label>Total Price</label>
-            <input type="number" step="0.01" id="detailTotalPrice" class="form-control form-control-sm" value="${o.total_price || ''}">
+            <input type="number" step="0.01" id="detailTotalPrice" class="form-control form-control-sm" value="${parseFloat(o.total_price) || ''}">
         </div>`;
         html += `<div class="form-actions">
             <button id="btnSaveOrder" class="btn btn-primary btn-sm">Save</button>
@@ -593,7 +601,7 @@ function renderQuotesTable() {
             <td>${q.supplier_name || '-'}</td>
             <td>${q.status}</td>
             <td>${q.item_count || 0}</td>
-            <td class="text-right">${q.total_amount ? q.total_amount.toFixed(2) : '-'}</td>
+            <td class="text-right">${fmtPrice(q.total_amount)}</td>
             <td>${q.valid_until ? formatDate(q.valid_until) : '-'}</td>
             <td>${formatDateTime(q.created_at)}</td>
             <td><button class="btn btn-secondary btn-sm btn-view-quote" data-id="${q.id}">View</button></td>
@@ -626,7 +634,7 @@ function renderQuoteDetail(q) {
         <div><div class="detail-label">Status</div><div class="detail-value">${q.status}</div></div>
         <div><div class="detail-label">Supplier</div><div class="detail-value">${q.supplier_name || '-'}</div></div>
         <div><div class="detail-label">Valid Until</div><div class="detail-value">${q.valid_until ? formatDate(q.valid_until) : '-'}</div></div>
-        <div><div class="detail-label">Total Amount</div><div class="detail-value">${q.total_amount ? q.total_amount.toFixed(2) : '-'}</div></div>
+        <div><div class="detail-label">Total Amount</div><div class="detail-value">${fmtPrice(q.total_amount)}</div></div>
         <div><div class="detail-label">Currency</div><div class="detail-value">${q.currency}</div></div>
     </div>`;
 
@@ -641,10 +649,10 @@ function renderQuoteDetail(q) {
             html += `<tr>
                 <td>#${it.order_id}</td>
                 <td>${it.building}</td>
-                <td>${escapeHtml(it.item_description.substring(0,40))}${it.item_description.length>40?'…':''}</td>
+                <td>${escapeHtml(it.item_description.substring(0,40))}${it.item_description.length>40?'\u2026':''}</td>
                 <td>${it.quantity}</td>
-                <td class="text-right">${it.unit_price ? it.unit_price.toFixed(2) : '-'}</td>
-                <td class="text-right">${it.total_price ? it.total_price.toFixed(2) : '-'}</td>
+                <td class="text-right">${fmtPrice(it.unit_price)}</td>
+                <td class="text-right">${fmtPrice(it.total_price)}</td>
             </tr>`;
         }
         html += '</tbody></table></div>';

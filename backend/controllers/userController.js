@@ -106,20 +106,21 @@ exports.resetPassword = async (req, res) => {
         const userId = parseInt(req.params.id, 10);
         const { password } = req.body || {};
 
+        if (!password || password.trim().length < 6) {
+            return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
+        }
+
         const [existingRows] = await db.query('SELECT * FROM users WHERE id = ?', [userId]);
         if (existingRows.length === 0) {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
 
-        const plainPassword = password && password.trim().length >= 6
-            ? password.trim()
-            : generatePassword(10);
-
+        const plainPassword = password.trim();
         const passwordHash = await bcrypt.hash(plainPassword, 10);
 
         await db.query('UPDATE users SET password_hash = ? WHERE id = ?', [passwordHash, userId]);
 
-        res.json({ success: true, password: plainPassword });
+        res.json({ success: true });
     } catch (err) {
         console.error('resetPassword error:', err);
         res.status(500).json({ success: false, message: 'Failed to reset password' });

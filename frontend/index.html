@@ -48,6 +48,7 @@
                 <button class="tab active" data-tab="ordersTab">Orders</button>
                 <button class="tab" data-tab="quotesTab">Quotes</button>
                 <button class="tab" data-tab="suppliersTab">Suppliers</button>
+                <button class="tab" data-tab="buildingsTab" id="buildingsTabButton" hidden>Buildings</button>
                 <button class="tab" data-tab="usersTab" id="usersTabButton" hidden>Users</button>
             </div>
 
@@ -63,11 +64,6 @@
                             <label for="building">Building</label>
                             <select id="building" class="form-control" required>
                                 <option value="">Select Building</option>
-                                <option value="CT">CT</option>
-                                <option value="CB">CB</option>
-                                <option value="WW">WW</option>
-                                <option value="PS">PS</option>
-                                <option value="LT">LT</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -132,11 +128,6 @@
                         </select>
                         <select id="filterBuilding" class="form-control form-control-sm">
                             <option value="">Building: All</option>
-                            <option value="CT">CT</option>
-                            <option value="CB">CB</option>
-                            <option value="WW">WW</option>
-                            <option value="PS">PS</option>
-                            <option value="LT">LT</option>
                         </select>
                         <select id="filterPriority" class="form-control form-control-sm">
                             <option value="">Priority: All</option>
@@ -243,6 +234,48 @@
                 </div>
             </section>
 
+            <!-- Buildings Tab (admin only) -->
+            <section id="buildingsTab" class="tab-content hidden">
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-header-row">
+                            <h2>Buildings</h2>
+                            <button id="btnNewBuilding" class="btn btn-primary btn-sm">New Building</button>
+                        </div>
+                        <div id="buildingsTable"></div>
+                    </div>
+                    <div class="card" id="buildingFormCard" hidden>
+                        <h2 id="buildingFormTitle">Create Building</h2>
+                        <form id="buildingForm">
+                            <input type="hidden" id="buildingId">
+                            <div class="form-group">
+                                <label for="buildingCode">Code</label>
+                                <input type="text" id="buildingCode" class="form-control" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="buildingName">Name</label>
+                                <input type="text" id="buildingName" class="form-control" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="buildingDescription">Description</label>
+                                <textarea id="buildingDescription" class="form-control" rows="2"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="buildingActive">Active</label>
+                                <select id="buildingActive" class="form-control">
+                                    <option value="1">Yes</option>
+                                    <option value="0">No</option>
+                                </select>
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn-primary">Save</button>
+                                <button type="button" id="btnCancelBuilding" class="btn btn-secondary">Cancel</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </section>
+
             <!-- Users Tab (admin only) -->
             <section id="usersTab" class="tab-content hidden">
                 <div class="grid-2">
@@ -281,11 +314,6 @@
                                 <label for="userBuilding">Building (for requester)</label>
                                 <select id="userBuilding" class="form-control">
                                     <option value="">None</option>
-                                    <option value="CT">CT</option>
-                                    <option value="CB">CB</option>
-                                    <option value="WW">WW</option>
-                                    <option value="PS">PS</option>
-                                    <option value="LT">LT</option>
                                 </select>
                             </div>
                             <div class="form-group">

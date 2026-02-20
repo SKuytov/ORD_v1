@@ -8,6 +8,7 @@ let ordersState = [];
 let suppliersState = [];
 let quotesState = [];
 let usersState = [];
+let buildingsState = [];
 let selectedOrderIds = new Set();
 let currentTab = 'ordersTab';
 
@@ -22,6 +23,7 @@ const userRoleBadge = document.getElementById('userRole');
 const createOrderSection = document.getElementById('createOrderSection');
 const requesterBuildingBadge = document.getElementById('requesterBuildingBadge');
 const createOrderForm = document.getElementById('createOrderForm');
+const buildingSelect = document.getElementById('building');
 const ordersTable = document.getElementById('ordersTable');
 const navTabs = document.getElementById('navTabs');
 const filtersBar = document.getElementById('filtersBar');
@@ -62,6 +64,21 @@ const supplierWebsiteInput = document.getElementById('supplierWebsite');
 const supplierAddressInput = document.getElementById('supplierAddress');
 const supplierNotesInput = document.getElementById('supplierNotes');
 const supplierActiveInput = document.getElementById('supplierActive');
+
+// Buildings admin DOM
+const buildingsTabButton = document.getElementById('buildingsTabButton');
+const buildingsTable = document.getElementById('buildingsTable');
+const buildingFormCard = document.getElementById('buildingFormCard');
+const buildingFormTitle = document.getElementById('buildingFormTitle');
+const buildingForm = document.getElementById('buildingForm');
+const btnNewBuilding = document.getElementById('btnNewBuilding');
+const btnCancelBuilding = document.getElementById('btnCancelBuilding');
+
+const buildingIdInput = document.getElementById('buildingId');
+const buildingCodeInput = document.getElementById('buildingCode');
+const buildingNameInput = document.getElementById('buildingName');
+const buildingDescriptionInput = document.getElementById('buildingDescription');
+const buildingActiveSelect = document.getElementById('buildingActive');
 
 // Users admin DOM
 const usersTabButton = document.getElementById('usersTabButton');
@@ -138,6 +155,18 @@ function setupEventListeners() {
         supplierFormCard.hidden = true;
     });
     supplierForm.addEventListener('submit', handleSaveSupplier);
+
+    if (btnNewBuilding) {
+        btnNewBuilding.addEventListener('click', () => openBuildingForm());
+    }
+    if (btnCancelBuilding) {
+        btnCancelBuilding.addEventListener('click', () => {
+            buildingFormCard.hidden = true;
+        });
+    }
+    if (buildingForm) {
+        buildingForm.addEventListener('submit', handleSaveBuilding);
+    }
 
     if (btnNewUser) {
         btnNewUser.addEventListener('click', () => openUserForm());
@@ -225,9 +254,6 @@ function showDashboard() {
     if (currentUser.role === 'requester') {
         createOrderSection.classList.remove('hidden');
         requesterBuildingBadge.textContent = `Building ${currentUser.building}`;
-        const b = document.getElementById('building');
-        b.value = currentUser.building;
-        b.disabled = true;
         navTabs.classList.add('hidden');
         filtersBar.classList.add('hidden');
     } else {
@@ -236,10 +262,13 @@ function showDashboard() {
         filtersBar.classList.remove('hidden');
         populateStatusFilter();
 
-        if (currentUser.role === 'admin' && usersTabButton) {
-            usersTabButton.hidden = false;
+        if (currentUser.role === 'admin') {
+            if (usersTabButton) usersTabButton.hidden = false;
+            if (buildingsTabButton) buildingsTabButton.hidden = false;
         }
     }
+
+    loadBuildings();
 
     loadSuppliers().then(() => {
         populateSupplierFilter();
@@ -294,7 +323,7 @@ async function handleCreateOrder(e) {
     e.preventDefault();
 
     const formData = new FormData();
-    formData.append('building', document.getElementById('building').value);
+    formData.append('building', buildingSelect.value);
     formData.append('itemDescription', document.getElementById('itemDescription').value.trim());
     formData.append('partNumber', document.getElementById('partNumber').value.trim());
     formData.append('category', document.getElementById('category').value.trim());
@@ -324,8 +353,7 @@ async function handleCreateOrder(e) {
         alert('Order created successfully!');
         createOrderForm.reset();
         if (currentUser.role === 'requester') {
-            const b = document.getElementById('building');
-            b.value = currentUser.building;
+            buildingSelect.value = currentUser.building;
         }
         loadOrders();
     } catch (err) {
@@ -815,6 +843,135 @@ function promptHtml(messageHtml) {
     });
 }
 
+// Buildings (admin)
+async function loadBuildings() {
+    try {
+        const res = await apiGet('/buildings');
+        if (res.success) {
+            buildingsState = res.buildings;
+            populateBuildingSelects();
+            if (currentUser && currentUser.role === 'admin') {
+                renderBuildingsTable();
+            }
+        }
+    } catch (err) {
+        console.error('loadBuildings error:', err);
+        if (buildingsTable) {
+            buildingsTable.innerHTML = '<p>Failed to load buildings.</p>';
+        }
+    }
+}
+
+function populateBuildingSelects() {
+    // Order form select
+    if (buildingSelect) {
+        buildingSelect.innerHTML = '<option value="">Select Building</option>' +
+            buildingsState.filter(b => b.active).map(b => `<option value="${b.code}">${escapeHtml(b.code)} - ${escapeHtml(b.name)}</option>`).join('');
+        if (currentUser && currentUser.role === 'requester') {
+            buildingSelect.value = currentUser.building;
+            buildingSelect.disabled = true;
+        }
+    }
+
+    // User form select
+    if (userBuildingSelect) {
+        userBuildingSelect.innerHTML = '<option value="">None</option>' +
+            buildingsState.filter(b => b.active).map(b => `<option value="${b.code}">${escapeHtml(b.code)} - ${escapeHtml(b.name)}</option>`).join('');
+    }
+
+    // Filters
+    if (filterBuilding) {
+        const currentVal = filterBuilding.value;
+        filterBuilding.innerHTML = '<option value="">Building: All</option>' +
+            buildingsState.filter(b => b.active).map(b => `<option value="${b.code}">${escapeHtml(b.code)} - ${escapeHtml(b.name)}</option>`).join('');
+        if (currentVal) filterBuilding.value = currentVal;
+    }
+}
+
+function renderBuildingsTable() {
+    if (!buildingsTable) return;
+
+    if (!buildingsState.length) {
+        buildingsTable.innerHTML = '<p class="text-muted">No buildings yet.</p>';
+        return;
+    }
+
+    let html = '<div class="table-wrapper"><table><thead><tr>';
+    html += '<th>Code</th><th>Name</th><th>Active</th><th></th>';
+    html += '</tr></thead><tbody>';
+
+    for (const b of buildingsState) {
+        html += `<tr data-id="${b.id}">
+            <td>${escapeHtml(b.code)}</td>
+            <td>${escapeHtml(b.name)}</td>
+            <td>${b.active ? 'Yes' : 'No'}</td>
+            <td><button class="btn btn-secondary btn-sm btn-edit-building" data-id="${b.id}">Edit</button></td>
+        </tr>`;
+    }
+
+    html += '</tbody></table></div>';
+    buildingsTable.innerHTML = html;
+
+    document.querySelectorAll('.btn-edit-building').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const id = parseInt(btn.dataset.id, 10);
+            const b = buildingsState.find(x => x.id === id);
+            if (b) openBuildingForm(b);
+        });
+    });
+}
+
+function openBuildingForm(building) {
+    if (!buildingFormCard) return;
+
+    if (building) {
+        buildingFormTitle.textContent = 'Edit Building';
+        buildingIdInput.value = building.id;
+        buildingCodeInput.value = building.code || '';
+        buildingNameInput.value = building.name || '';
+        buildingDescriptionInput.value = building.description || '';
+        buildingActiveSelect.value = building.active ? '1' : '0';
+    } else {
+        buildingFormTitle.textContent = 'Create Building';
+        buildingForm.reset();
+        buildingIdInput.value = '';
+        buildingActiveSelect.value = '1';
+    }
+    buildingFormCard.hidden = false;
+}
+
+async function handleSaveBuilding(e) {
+    e.preventDefault();
+
+    const payload = {
+        code: buildingCodeInput.value.trim(),
+        name: buildingNameInput.value.trim(),
+        description: buildingDescriptionInput.value.trim(),
+        active: buildingActiveSelect.value === '1'
+    };
+
+    if (!payload.code || !payload.name) {
+        alert('Code and name are required');
+        return;
+    }
+
+    const id = buildingIdInput.value;
+    let res;
+    if (id) {
+        res = await apiPut(`/buildings/${id}`, payload);
+    } else {
+        res = await apiPost('/buildings', payload);
+    }
+
+    if (res.success) {
+        alert('Building saved');
+        buildingFormCard.hidden = true;
+        loadBuildings();
+    } else {
+        alert('Failed to save building: ' + (res.message || 'Unknown error'));
+    }
+}
+
 // Users (admin)
 async function loadUsers() {
     try {
@@ -937,11 +1094,21 @@ async function handleSaveUser(e) {
 }
 
 async function resetUserPassword(id) {
-    if (!confirm('Reset password for this user?')) return;
+    const pwd = prompt('Enter new password (min 6 characters):');
+    if (!pwd || pwd.trim().length < 6) {
+        alert('Password too short. Nothing changed.');
+        return;
+    }
+    const confirmPwd = prompt('Confirm new password:');
+    if (confirmPwd !== pwd) {
+        alert('Passwords do not match. Nothing changed.');
+        return;
+    }
+
     try {
-        const res = await apiPost(`/users/${id}/reset-password`, {});
-        if (res.success && res.password) {
-            alert(`New password: ${res.password}`);
+        const res = await apiPost(`/users/${id}/reset-password`, { password: pwd });
+        if (res.success) {
+            alert('Password reset successfully.');
         } else {
             alert('Password reset failed: ' + (res.message || 'Unknown error'));
         }

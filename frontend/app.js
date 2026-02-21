@@ -677,28 +677,74 @@ async function handleCreateOrder(e) {
         formData.append('files', files[i]);
     }
 
-    try {
-        const res = await fetch(`${API_BASE}/orders`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${authToken}` },
-            body: formData
-        });
-        const data = await res.json();
-        if (!data.success) {
-            alert('Failed to create order: ' + (data.message || 'Unknown error'));
-            return;
-        }
-        alert('Order created successfully!');
-        createOrderForm.reset();
-        if (currentUser.role === 'requester') {
-            buildingSelect.value = currentUser.building;
-            renderCostCenterRadios(currentUser.building);
-        }
-        loadOrders();
-    } catch (err) {
-        alert('Failed to create order.');
+    // Show progress overlay
+    if (window.UploadProgress) {
+        window.UploadProgress.show();
     }
+
+    // Use XMLHttpRequest for upload progress tracking
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+
+        // Track upload progress
+        xhr.upload.addEventListener('progress', (e) => {
+            if (e.lengthComputable && window.UploadProgress) {
+                const percentComplete = (e.loaded / e.total) * 100;
+                window.UploadProgress.update(percentComplete);
+            }
+        });
+
+        // Handle completion
+        xhr.addEventListener('load', () => {
+            if (window.UploadProgress) {
+                window.UploadProgress.hide();
+            }
+
+            try {
+                const data = JSON.parse(xhr.responseText);
+                if (!data.success) {
+                    alert('Failed to create order: ' + (data.message || 'Unknown error'));
+                    reject(new Error(data.message));
+                    return;
+                }
+                alert('Order created successfully!');
+                createOrderForm.reset();
+                if (currentUser.role === 'requester') {
+                    buildingSelect.value = currentUser.building;
+                    renderCostCenterRadios(currentUser.building);
+                }
+                loadOrders();
+                resolve(data);
+            } catch (err) {
+                alert('Failed to process server response.');
+                reject(err);
+            }
+        });
+
+        // Handle errors
+        xhr.addEventListener('error', () => {
+            if (window.UploadProgress) {
+                window.UploadProgress.hide();
+            }
+            alert('Failed to create order. Network error.');
+            reject(new Error('Network error'));
+        });
+
+        xhr.addEventListener('abort', () => {
+            if (window.UploadProgress) {
+                window.UploadProgress.hide();
+            }
+            alert('Upload cancelled.');
+            reject(new Error('Upload cancelled'));
+        });
+
+        // Open connection and send
+        xhr.open('POST', `${API_BASE}/orders`);
+        xhr.setRequestHeader('Authorization', `Bearer ${authToken}`);
+        xhr.send(formData);
+    });
 }
+
 
 async function loadOrders() {
     try {

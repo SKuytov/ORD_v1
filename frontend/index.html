@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PartPulse Order Management v2</title>
     <link rel="stylesheet" href="styles.css">
+    <!-- File Upload Enhancement Styles -->
+    <link rel="stylesheet" href="css/order-form-enhanced.css">
 </head>
 <body>
 <div id="app">
@@ -109,8 +111,12 @@
                             <textarea id="notes" class="form-control" rows="2"></textarea>
                         </div>
                         <div class="form-group">
-                            <label for="files">Attach Files (drawings, offers, photos)</label>
-                            <input type="file" id="files" multiple>
+                            <label for="attachments">Attach Files (drawings, offers, photos) - You can select multiple files</label>
+                            <input type="file" id="attachments" name="attachments" multiple>
+                            <!-- File preview will be inserted here by JavaScript -->
+                            <div id="file-preview-container"></div>
+                            <!-- Upload progress will be inserted here by JavaScript -->
+                            <div id="upload-progress-container" style="display: none;"></div>
                         </div>
                         <button type="submit" class="btn btn-primary">Submit Order</button>
                     </div>
@@ -428,5 +434,7 @@
 </div>
 
 <script src="app.js"></script>
+<!-- File Upload Enhancement Script -->
+<script src="js/order-form-enhanced.js"></script>
 </body>
 </html>

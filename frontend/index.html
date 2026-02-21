@@ -122,33 +122,60 @@
                 <div class="card">
                     <div class="card-header-row">
                         <h2>Orders</h2>
-                        <div class="order-actions" id="orderActionsBar" hidden>
-                            <span id="selectedCount" class="badge-muted">0 selected</span>
-                            <button id="btnCreateQuote" class="btn btn-primary btn-sm">Create Quote from Selected</button>
+                        <div class="order-actions">
+                            <div class="view-mode-toggle">
+                                <button id="btnViewFlat" class="btn-view-mode active" title="Flat list view">☰</button>
+                                <button id="btnViewGrouped" class="btn-view-mode" title="Group by status">⊞</button>
+                            </div>
+                            <div id="orderActionsBar" class="order-actions-inner" hidden>
+                                <span id="selectedCount" class="badge-muted">0 selected</span>
+                                <button id="btnCreateQuote" class="btn btn-primary btn-sm">Create Quote from Selected</button>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Filters for admin/procurement -->
-                    <div id="filtersBar" class="filters hidden">
-                        <select id="filterStatus" class="form-control form-control-sm">
-                            <option value="">Status: All</option>
-                        </select>
-                        <select id="filterBuilding" class="form-control form-control-sm">
-                            <option value="">Building: All</option>
-                        </select>
-                        <select id="filterPriority" class="form-control form-control-sm">
-                            <option value="">Priority: All</option>
-                            <option value="Low">Low</option>
-                            <option value="Normal">Normal</option>
-                            <option value="High">High</option>
-                            <option value="Urgent">Urgent</option>
-                        </select>
-                        <select id="filterSupplier" class="form-control form-control-sm">
-                            <option value="">Supplier: All</option>
-                        </select>
-                        <input type="text" id="filterSearch" class="form-control form-control-sm" placeholder="Search item / part / requester">
-                        <button id="btnApplyFilters" class="btn btn-secondary btn-sm">Apply</button>
-                        <button id="btnClearFilters" class="btn-link btn-sm">Clear</button>
+                    <!-- Smart Filters (visible to all roles) -->
+                    <div class="filters-container">
+                        <!-- Quick Filter Chips -->
+                        <div class="quick-filters">
+                            <button class="quick-filter-chip" data-filter="late">⚠ Late</button>
+                            <button class="quick-filter-chip" data-filter="due7">🕒 Due in 7d</button>
+                            <button class="quick-filter-chip" data-filter="due14">📅 Due in 14d</button>
+                            <button class="quick-filter-chip" data-filter="new">🆕 New</button>
+                            <button class="quick-filter-chip" data-filter="ordered">📦 Ordered</button>
+                            <button class="quick-filter-chip" data-filter="transit">🚚 In Transit</button>
+                        </div>
+
+                        <!-- Detailed Filters -->
+                        <div class="filters-grid">
+                            <input type="text" id="filterSearch" class="form-control form-control-sm" placeholder="🔍 Search all fields...">
+                            <select id="filterStatus" class="form-control form-control-sm">
+                                <option value="">Status: All</option>
+                            </select>
+                            <select id="filterBuilding" class="form-control form-control-sm">
+                                <option value="">Building: All</option>
+                            </select>
+                            <select id="filterPriority" class="form-control form-control-sm">
+                                <option value="">Priority: All</option>
+                                <option value="Low">Low</option>
+                                <option value="Normal">Normal</option>
+                                <option value="High">High</option>
+                                <option value="Urgent">Urgent</option>
+                            </select>
+                            <select id="filterSupplier" class="form-control form-control-sm">
+                                <option value="">Supplier: All</option>
+                            </select>
+                            <select id="filterDelivery" class="form-control form-control-sm">
+                                <option value="">Delivery: All</option>
+                                <option value="late">Late</option>
+                                <option value="due7">Due in 7 days</option>
+                                <option value="due14">Due in 14 days</option>
+                                <option value="ontrack">On Track</option>
+                            </select>
+                        </div>
+                        <div class="filters-actions">
+                            <button id="btnClearFilters" class="btn-link btn-sm">Clear All Filters</button>
+                        </div>
                     </div>
 
                     <div id="ordersTable"></div>

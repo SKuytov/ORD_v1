@@ -1,4 +1,4 @@
-/* PartPulse Order Management v2 - Frontend Styles */
+/* PartPulse Order Management v2.1 - Enhanced Filtering & Grouping */
 
 :root {
     --color-bg-primary: #020617;
@@ -175,31 +175,18 @@ textarea.form-control {
     resize: vertical;
 }
 
-/* ===================================== */
-/* Date Picker - Full-field click to open */
-/* ===================================== */
-
+/* Date Picker */
 input[type="date"].date-picker {
     position: relative;
     cursor: pointer;
     color-scheme: dark;
 }
 
-/*
- * Stretch the native calendar-picker-indicator to cover the ENTIRE input.
- * This makes clicking anywhere on the field open the calendar popup.
- * The icon itself stays visible as a white calendar in the right side.
- */
 input[type="date"].date-picker::-webkit-calendar-picker-indicator {
     position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    width: auto;
-    height: auto;
-    margin: 0;
-    padding: 0;
+    top: 0; left: 0; right: 0; bottom: 0;
+    width: auto; height: auto;
+    margin: 0; padding: 0;
     cursor: pointer;
     background: transparent;
     filter: invert(1);
@@ -207,13 +194,11 @@ input[type="date"].date-picker::-webkit-calendar-picker-indicator {
     z-index: 1;
 }
 
-/* Hover glow on the whole field */
 input[type="date"].date-picker:hover {
     border-color: rgba(56, 189, 248, 0.6);
     box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.3);
 }
 
-/* Empty state text styling */
 input[type="date"].date-picker:invalid::-webkit-datetime-edit {
     color: var(--color-text-secondary);
 }
@@ -303,17 +288,97 @@ input[type="date"].date-picker:invalid::-webkit-datetime-edit {
     color: var(--color-text-secondary);
 }
 
-/* Filters */
-.filters {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    margin-bottom: 0.75rem;
-    align-items: center;
+/* ======================== */
+/* Enhanced Filters & Chips */
+/* ======================== */
+
+.filters-container {
+    margin-bottom: 1rem;
 }
 
-.filters input[type="text"] {
-    min-width: 220px;
+.quick-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 0.6rem;
+}
+
+.quick-filter-chip {
+    padding: 0.3rem 0.75rem;
+    border-radius: 999px;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    background: rgba(15, 23, 42, 0.8);
+    color: var(--color-text-secondary);
+    font-size: 0.78rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.quick-filter-chip:hover {
+    border-color: var(--color-accent);
+    background: var(--color-accent-soft);
+    color: var(--color-accent);
+}
+
+.quick-filter-chip.active {
+    border-color: var(--color-accent);
+    background: rgba(56, 189, 248, 0.25);
+    color: var(--color-accent);
+    font-weight: 500;
+}
+
+.filters-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 0.5rem;
+    margin-bottom: 0.4rem;
+}
+
+.filters-actions {
+    text-align: right;
+}
+
+/* View Mode Toggle */
+.order-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.order-actions-inner {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.view-mode-toggle {
+    display: flex;
+    gap: 0.15rem;
+    background: rgba(15, 23, 42, 0.95);
+    border-radius: 8px;
+    padding: 0.2rem;
+    border: 1px solid rgba(31, 41, 55, 0.9);
+}
+
+.btn-view-mode {
+    background: transparent;
+    border: none;
+    color: var(--color-text-secondary);
+    padding: 0.3rem 0.6rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.15s ease;
+}
+
+.btn-view-mode:hover {
+    background: rgba(148, 163, 184, 0.15);
+}
+
+.btn-view-mode.active {
+    background: var(--color-accent);
+    color: #020617;
+    font-weight: 600;
 }
 
 /* Tables */
@@ -391,6 +456,80 @@ th.sticky, td.sticky {
 .priority-normal { background: rgba(148, 163, 184, 0.18); color: #e5e7eb; }
 .priority-high { background: rgba(234, 179, 8, 0.18); color: #facc15; }
 .priority-urgent { background: rgba(239, 68, 68, 0.2); color: #fecaca; }
+
+/* Delivery Timeline Badges */
+.delivery-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.12rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-weight: 500;
+}
+
+.delivery-late { background: rgba(239, 68, 68, 0.25); color: #fecaca; }
+.delivery-due7 { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+.delivery-due14 { background: rgba(234, 179, 8, 0.18); color: #facc15; }
+.delivery-ontrack { background: rgba(34, 197, 94, 0.15); color: #6ee7b7; }
+
+/* Grouped View */
+.status-group {
+    margin-bottom: 1rem;
+    border: 1px solid rgba(31, 41, 55, 0.8);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.status-group-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.7rem 0.9rem;
+    background: rgba(15, 23, 42, 0.95);
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s ease;
+}
+
+.status-group-header:hover {
+    background: rgba(15, 23, 42, 0.98);
+}
+
+.status-group-title {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.92rem;
+    font-weight: 500;
+}
+
+.status-group-count {
+    background: rgba(148, 163, 184, 0.2);
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    color: var(--color-text-secondary);
+}
+
+.status-group-chevron {
+    font-size: 0.85rem;
+    color: var(--color-text-secondary);
+    transition: transform 0.2s ease;
+}
+
+.status-group-header.collapsed .status-group-chevron {
+    transform: rotate(-90deg);
+}
+
+.status-group-body {
+    max-height: 2000px;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+}
+
+.status-group-body.collapsed {
+    max-height: 0;
+}
 
 /* Side panels */
 .side-panel {
@@ -491,12 +630,6 @@ th.sticky, td.sticky {
     font-size: 0.85rem;
 }
 
-.order-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-}
-
 .form-actions {
     display: flex;
     gap: 0.5rem;
@@ -532,8 +665,11 @@ th.sticky, td.sticky {
         gap: 0.6rem;
     }
 
-    .filters {
+    .filters-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .quick-filters {
         flex-direction: column;
-        align-items: stretch;
     }
 }

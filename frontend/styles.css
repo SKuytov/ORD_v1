@@ -175,6 +175,54 @@ textarea.form-control {
     resize: vertical;
 }
 
+/* ======================== */
+/* Date Picker - Dark Theme */
+/* ======================== */
+
+/* Make the entire date input clickable */
+input[type="date"].date-picker {
+    position: relative;
+    cursor: pointer;
+    padding-right: 2.5rem;
+}
+
+/* Bright calendar icon for dark backgrounds */
+input[type="date"].date-picker::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    filter: invert(0.85) sepia(0.2) saturate(3) hue-rotate(175deg);
+    opacity: 1;
+    width: 1.4rem;
+    height: 1.4rem;
+    padding: 2px;
+    border-radius: 4px;
+    transition: all 0.15s ease;
+}
+
+input[type="date"].date-picker::-webkit-calendar-picker-indicator:hover {
+    filter: invert(0.7) sepia(0.6) saturate(5) hue-rotate(175deg) brightness(1.2);
+    background: rgba(56, 189, 248, 0.15);
+}
+
+/* Make the whole field open the picker on click */
+input[type="date"].date-picker::-webkit-date-and-time-value {
+    text-align: left;
+}
+
+/* Hover state for the whole field */
+input[type="date"].date-picker:hover {
+    border-color: rgba(56, 189, 248, 0.5);
+}
+
+/* When empty, show placeholder-style text */
+input[type="date"].date-picker:invalid::-webkit-datetime-edit {
+    color: var(--color-text-secondary);
+}
+
+/* Firefox: style the date input for dark backgrounds */
+input[type="date"].date-picker {
+    color-scheme: dark;
+}
+
 /* Cards & layout */
 .card {
     background: radial-gradient(circle at top left, rgba(15, 23, 42, 0.98), rgba(15, 23, 42, 0.95));

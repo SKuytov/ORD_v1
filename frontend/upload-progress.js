@@ -30,7 +30,9 @@
        // "🎪 Three rings of requisition circus...",
        // "🏗️ Building a monument to efficiency...",
        // "🎁 Gift-wrapping your request...",
-       // "🌈 Riding rainbows to the database..."    ];
+       // "🌈 Riding rainbows to the database..."    
+        
+    ];
 
     function createProgressOverlay() {
         const overlay = document.createElement('div');

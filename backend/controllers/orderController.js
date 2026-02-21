@@ -41,12 +41,29 @@ exports.createOrder = async (req, res) => {
             );
         }
 
+        // Get cost center code for email
+        let costCenterCode = null;
+        if (costCenterId) {
+            const [cc] = await connection.query(
+                'SELECT code FROM cost_centers WHERE id = ?',
+                [costCenterId]
+            );
+            if (cc.length > 0) costCenterCode = cc[0].code;
+        }
+
         await connection.commit();
 
-        // Send email notification (non-blocking)
+        // Send email notification to admin/procurement (non-blocking)
         emailService.sendNewOrderNotification({
-            orderId, building, itemDescription, quantity, requester, dateNeeded
-        }).catch(err => console.error('Email notification failed:', err.message));
+            orderId,
+            building,
+            itemDescription,
+            quantity,
+            requester,
+            dateNeeded,
+            priority: priority || 'Normal',
+            costCenterCode
+        }).catch(err => console.error('New order email failed:', err.message));
 
         res.status(201).json({
             success: true,
@@ -197,6 +214,8 @@ exports.updateOrder = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Order not found' });
         }
 
+        const orderData = currentOrder[0];
+
         // Allowed updatable fields
         const allowedFields = [
             'status', 'supplier', 'supplier_id', 'quote_id', 'price',
@@ -225,13 +244,13 @@ exports.updateOrder = async (req, res) => {
 
             // Log history for each changed field
             for (const key of Object.keys(updates)) {
-                if (allowedFields.includes(key) && String(currentOrder[0][key]) !== String(updates[key])) {
+                if (allowedFields.includes(key) && String(orderData[key]) !== String(updates[key])) {
                     await connection.query(
                         `INSERT INTO order_history
                         (order_id, changed_by, field_name, old_value, new_value)
                         VALUES (?, ?, ?, ?, ?)`,
                         [id, req.user.username, key,
-                         String(currentOrder[0][key] || ''), String(updates[key] || '')]
+                         String(orderData[key] || ''), String(updates[key] || '')]
                     );
                 }
             }
@@ -240,13 +259,16 @@ exports.updateOrder = async (req, res) => {
         await connection.commit();
 
         // Send email if status changed
-        if (updates.status && updates.status !== currentOrder[0].status) {
+        if (updates.status && updates.status !== orderData.status) {
             emailService.sendStatusUpdateNotification({
                 orderId: id,
-                requesterEmail: currentOrder[0].requester_email,
-                oldStatus: currentOrder[0].status,
-                newStatus: updates.status
-            }).catch(err => console.error('Status email failed:', err.message));
+                requesterEmail: orderData.requester_email,
+                requesterName: orderData.requester_name,
+                oldStatus: orderData.status,
+                newStatus: updates.status,
+                building: orderData.building,
+                itemDescription: orderData.item_description
+            }).catch(err => console.error('Status update email failed:', err.message));
         }
 
         res.json({ success: true, message: 'Order updated successfully' });

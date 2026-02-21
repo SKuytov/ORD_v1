@@ -179,17 +179,18 @@ textarea.form-control {
 /* Date Picker - Dark Theme */
 /* ======================== */
 
-/* Make the entire date input clickable */
+/* Make date input fully clickable with pure white icon */
 input[type="date"].date-picker {
     position: relative;
     cursor: pointer;
     padding-right: 2.5rem;
+    color-scheme: dark;
 }
 
-/* Bright calendar icon for dark backgrounds */
+/* Pure white calendar icon */
 input[type="date"].date-picker::-webkit-calendar-picker-indicator {
     cursor: pointer;
-    filter: invert(0.85) sepia(0.2) saturate(3) hue-rotate(175deg);
+    filter: invert(1);
     opacity: 1;
     width: 1.4rem;
     height: 1.4rem;
@@ -198,29 +199,21 @@ input[type="date"].date-picker::-webkit-calendar-picker-indicator {
     transition: all 0.15s ease;
 }
 
+/* Icon hover - brightness boost + subtle glow */
 input[type="date"].date-picker::-webkit-calendar-picker-indicator:hover {
-    filter: invert(0.7) sepia(0.6) saturate(5) hue-rotate(175deg) brightness(1.2);
+    filter: invert(1) brightness(1.2);
     background: rgba(56, 189, 248, 0.15);
 }
 
-/* Make the whole field open the picker on click */
-input[type="date"].date-picker::-webkit-date-and-time-value {
-    text-align: left;
-}
-
-/* Hover state for the whole field */
+/* Whole field hover - accent border glow */
 input[type="date"].date-picker:hover {
-    border-color: rgba(56, 189, 248, 0.5);
+    border-color: rgba(56, 189, 248, 0.6);
+    box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.3);
 }
 
-/* When empty, show placeholder-style text */
+/* Empty state text styling */
 input[type="date"].date-picker:invalid::-webkit-datetime-edit {
     color: var(--color-text-secondary);
-}
-
-/* Firefox: style the date input for dark backgrounds */
-input[type="date"].date-picker {
-    color-scheme: dark;
 }
 
 /* Cards & layout */

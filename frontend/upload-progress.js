@@ -3,27 +3,34 @@
     'use strict';
 
     const funMessages = [
-        "🚀 Launching your order into cyberspace...",
-        "📦 Wrapping your request with care...",
-        "🎯 Taking aim at the procurement department...",
-        "🧙‍♂️ Summoning the order wizards...",
-        "☕ Brewing a fresh batch of requisitions...",
-        "🎪 Juggling bytes and paperwork...",
-        "🏃‍♂️ Running to the digital warehouse...",
-        "🎵 Composing a symphony of supply chain...",
-        "🍕 Delivering better than pizza (almost)...",
-        "🎲 Rolling for critical order success...",
-        "🌟 Making your dreams come true, one order at a time...",
-        "🦄 Riding unicorns to the approval queue...",
-        "🎨 Painting your order masterpiece...",
-        "🔮 Predicting 100% delivery success...",
-        "🎭 Performing order submission theater...",
-        "🚂 All aboard the procurement express...",
-        "🎪 Three rings of requisition circus...",
-        "🏗️ Building a monument to efficiency...",
-        "🎁 Gift-wrapping your request...",
-        "🌈 Riding rainbows to the database..."
-    ];
+      "📝 Техникът казва: „Не e развалено, така си работи“ - a системата казва „заявката e изпратена“.",
+        "🧙‍♂️ Призоваваме магьосниците от поддръжката - c ключ 13, изолирбанд и WD-40.",
+       "🎪 Правим цирк около машината, докато системата ти приема заявката...",
+        "🎵 Машините дрънкат, компресорът свири, a ние бутаме заявката към одобрение.",
+       "🎯 Целим ce право в липсуващата част, дано този път я има на склад.",
+        "🎲 Хвърляме зара - или идва част навреме, или пак „ще го оправим временно“.",
+        "🔌 Изключи, включи, рестарт на машината - за щастие поръчката не иска рестарт.",
+       
+        // "🚀 Launching your order into cyberspace...",
+       // "📦 Wrapping your request with care...",
+       // "🎯 Taking aim at the procurement department...",
+       // "🧙‍♂️ Summoning the order wizards...",
+       // "☕ Brewing a fresh batch of requisitions...",
+       // "🎪 Juggling bytes and paperwork...",
+       // "🏃‍♂️ Running to the digital warehouse...",
+       // "🎵 Composing a symphony of supply chain...",
+       // "🍕 Delivering better than pizza (almost)...",
+       // "🎲 Rolling for critical order success...",
+       // "🌟 Making your dreams come true, one order at a time...",
+       // "🦄 Riding unicorns to the approval queue...",
+       // "🎨 Painting your order masterpiece...",
+        //"🔮 Predicting 100% delivery success...",
+       // "🎭 Performing order submission theater...",
+        //"🚂 All aboard the procurement express...",
+       // "🎪 Three rings of requisition circus...",
+       // "🏗️ Building a monument to efficiency...",
+       // "🎁 Gift-wrapping your request...",
+       // "🌈 Riding rainbows to the database..."    ];
 
     function createProgressOverlay() {
         const overlay = document.createElement('div');

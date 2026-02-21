@@ -250,6 +250,27 @@ function clearFilters() {
     applyFilters();
 }
 
+function resetFiltersOnLogout() {
+    // Reset filter state
+    filterState = { search: '', status: '', building: '', priority: '', supplier: '', delivery: '', quickFilter: '' };
+    
+    // Reset filter UI elements
+    if (filterSearch) filterSearch.value = '';
+    if (filterStatus) filterStatus.value = '';
+    if (filterBuilding) filterBuilding.value = '';
+    if (filterPriority) filterPriority.value = '';
+    if (filterSupplier) filterSupplier.value = '';
+    if (filterDelivery) filterDelivery.value = '';
+    
+    // Clear quick filter chips
+    document.querySelectorAll('.quick-filter-chip').forEach(c => c.classList.remove('active'));
+    
+    // Reset view mode
+    viewMode = 'flat';
+    if (btnViewFlat) btnViewFlat.classList.add('active');
+    if (btnViewGrouped) btnViewGrouped.classList.remove('active');
+}
+
 // ===================== DELIVERY TIMELINE LOGIC =====================
 
 function getDeliveryStatus(order) {
@@ -379,6 +400,10 @@ function handleLogout() {
     localStorage.removeItem('authToken');
     authToken = null;
     currentUser = null;
+    
+    // Reset all filters and UI state
+    resetFiltersOnLogout();
+    
     showLogin();
 }
 

@@ -1,10 +1,11 @@
-// frontend/app.js - PartPulse Orders v2.1
+// frontend/app.js - PartPulse Orders v2.1 - Enhanced Filtering & Grouping
 
 const API_BASE = '/api';
 let currentUser = null;
 let authToken = null;
 
 let ordersState = [];
+let filteredOrders = [];
 let suppliersState = [];
 let quotesState = [];
 let usersState = [];
@@ -12,6 +13,18 @@ let buildingsState = [];
 let costCentersState = [];
 let selectedOrderIds = new Set();
 let currentTab = 'ordersTab';
+let viewMode = 'flat'; // 'flat' or 'grouped'
+
+// Filter state
+let filterState = {
+    search: '',
+    status: '',
+    building: '',
+    priority: '',
+    supplier: '',
+    delivery: '',
+    quickFilter: ''
+};
 
 // DOM
 const loginScreen = document.getElementById('loginScreen');
@@ -28,14 +41,15 @@ const buildingSelect = document.getElementById('building');
 const costCenterRadios = document.getElementById('costCenterRadios');
 const ordersTable = document.getElementById('ordersTable');
 const navTabs = document.getElementById('navTabs');
-const filtersBar = document.getElementById('filtersBar');
 const filterStatus = document.getElementById('filterStatus');
 const filterBuilding = document.getElementById('filterBuilding');
 const filterPriority = document.getElementById('filterPriority');
 const filterSupplier = document.getElementById('filterSupplier');
 const filterSearch = document.getElementById('filterSearch');
-const btnApplyFilters = document.getElementById('btnApplyFilters');
+const filterDelivery = document.getElementById('filterDelivery');
 const btnClearFilters = document.getElementById('btnClearFilters');
+const btnViewFlat = document.getElementById('btnViewFlat');
+const btnViewGrouped = document.getElementById('btnViewGrouped');
 const orderDetailPanel = document.getElementById('orderDetailPanel');
 const orderDetailBody = document.getElementById('orderDetailBody');
 const btnCloseDetail = document.getElementById('btnCloseDetail');
@@ -66,7 +80,6 @@ const supplierAddressInput = document.getElementById('supplierAddress');
 const supplierNotesInput = document.getElementById('supplierNotes');
 const supplierActiveInput = document.getElementById('supplierActive');
 
-// Buildings admin DOM
 const buildingsTabButton = document.getElementById('buildingsTabButton');
 const buildingsTable = document.getElementById('buildingsTable');
 const buildingFormCard = document.getElementById('buildingFormCard');
@@ -81,7 +94,6 @@ const buildingNameInput = document.getElementById('buildingName');
 const buildingDescriptionInput = document.getElementById('buildingDescription');
 const buildingActiveSelect = document.getElementById('buildingActive');
 
-// Cost Centers admin DOM
 const costCentersTabButton = document.getElementById('costCentersTabButton');
 const costCentersTable = document.getElementById('costCentersTable');
 const costCenterFormCard = document.getElementById('costCenterFormCard');
@@ -99,7 +111,6 @@ const ccNameInput = document.getElementById('ccName');
 const ccDescriptionInput = document.getElementById('ccDescription');
 const ccActiveSelect = document.getElementById('ccActive');
 
-// Users admin DOM
 const usersTabButton = document.getElementById('usersTabButton');
 const usersTable = document.getElementById('usersTable');
 const userFormCard = document.getElementById('userFormCard');
@@ -118,7 +129,6 @@ const userActiveSelect = document.getElementById('userActive');
 const userPasswordInput = document.getElementById('userPassword');
 const userPasswordGroup = document.getElementById('userPasswordGroup');
 
-// Constants
 const ORDER_STATUSES = [
     'New', 'Pending', 'Quote Requested', 'Quote Received',
     'Quote Under Approval', 'Approved', 'Ordered',
@@ -139,18 +149,11 @@ window.addEventListener('DOMContentLoaded', () => {
     checkAuth();
 });
 
-// ===================== DATE PICKER FULL-CLICK =====================
-// Makes every input.date-picker open the calendar on ANY click
-// (fallback for browsers where the CSS overlay trick doesn't work)
 function setupDatePickers() {
     document.addEventListener('click', (e) => {
         const dateInput = e.target.closest('input[type="date"].date-picker');
         if (dateInput && typeof dateInput.showPicker === 'function') {
-            try {
-                dateInput.showPicker();
-            } catch (_) {
-                // showPicker can throw if already open or not user-initiated
-            }
+            try { dateInput.showPicker(); } catch (_) {}
         }
     });
 }
@@ -160,7 +163,6 @@ function setupEventListeners() {
     logoutBtn.addEventListener('click', handleLogout);
     createOrderForm.addEventListener('submit', handleCreateOrder);
 
-    // Building change triggers cost center radio update
     buildingSelect.addEventListener('change', () => {
         renderCostCenterRadios(buildingSelect.value);
     });
@@ -169,23 +171,38 @@ function setupEventListeners() {
         tab.addEventListener('click', () => switchTab(tab.dataset.tab));
     });
 
-    btnApplyFilters.addEventListener('click', () => loadOrders());
-    btnClearFilters.addEventListener('click', () => {
-        filterStatus.value = '';
-        filterBuilding.value = '';
-        filterPriority.value = '';
-        filterSupplier.value = '';
-        filterSearch.value = '';
-        loadOrders();
+    // Real-time filtering
+    if (filterSearch) filterSearch.addEventListener('input', () => { filterState.search = filterSearch.value.trim(); applyFilters(); });
+    if (filterStatus) filterStatus.addEventListener('change', () => { filterState.status = filterStatus.value; applyFilters(); });
+    if (filterBuilding) filterBuilding.addEventListener('change', () => { filterState.building = filterBuilding.value; applyFilters(); });
+    if (filterPriority) filterPriority.addEventListener('change', () => { filterState.priority = filterPriority.value; applyFilters(); });
+    if (filterSupplier) filterSupplier.addEventListener('change', () => { filterState.supplier = filterSupplier.value; applyFilters(); });
+    if (filterDelivery) filterDelivery.addEventListener('change', () => { filterState.delivery = filterDelivery.value; applyFilters(); });
+
+    if (btnClearFilters) btnClearFilters.addEventListener('click', clearFilters);
+
+    // Quick filter chips
+    document.querySelectorAll('.quick-filter-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            const filter = chip.dataset.filter;
+            if (filterState.quickFilter === filter) {
+                filterState.quickFilter = '';
+                chip.classList.remove('active');
+            } else {
+                document.querySelectorAll('.quick-filter-chip').forEach(c => c.classList.remove('active'));
+                filterState.quickFilter = filter;
+                chip.classList.add('active');
+            }
+            applyFilters();
+        });
     });
 
-    btnCloseDetail.addEventListener('click', () => {
-        orderDetailPanel.classList.add('hidden');
-    });
+    // View mode toggle
+    if (btnViewFlat) btnViewFlat.addEventListener('click', () => setViewMode('flat'));
+    if (btnViewGrouped) btnViewGrouped.addEventListener('click', () => setViewMode('grouped'));
 
-    btnCloseQuoteDetail.addEventListener('click', () => {
-        quoteDetailPanel.classList.add('hidden');
-    });
+    btnCloseDetail.addEventListener('click', () => { orderDetailPanel.classList.add('hidden'); });
+    btnCloseQuoteDetail.addEventListener('click', () => { quoteDetailPanel.classList.add('hidden'); });
 
     btnCreateQuote.addEventListener('click', openCreateQuoteDialog);
     btnRefreshQuotes.addEventListener('click', loadQuotes);
@@ -209,7 +226,117 @@ function setupEventListeners() {
     if (userForm) userForm.addEventListener('submit', handleSaveUser);
 }
 
-// Auth
+function setViewMode(mode) {
+    viewMode = mode;
+    if (mode === 'flat') {
+        btnViewFlat.classList.add('active');
+        btnViewGrouped.classList.remove('active');
+    } else {
+        btnViewFlat.classList.remove('active');
+        btnViewGrouped.classList.add('active');
+    }
+    renderOrdersTable();
+}
+
+function clearFilters() {
+    filterState = { search: '', status: '', building: '', priority: '', supplier: '', delivery: '', quickFilter: '' };
+    if (filterSearch) filterSearch.value = '';
+    if (filterStatus) filterStatus.value = '';
+    if (filterBuilding) filterBuilding.value = '';
+    if (filterPriority) filterPriority.value = '';
+    if (filterSupplier) filterSupplier.value = '';
+    if (filterDelivery) filterDelivery.value = '';
+    document.querySelectorAll('.quick-filter-chip').forEach(c => c.classList.remove('active'));
+    applyFilters();
+}
+
+// ===================== DELIVERY TIMELINE LOGIC =====================
+
+function getDeliveryStatus(order) {
+    if (!order.expected_delivery_date) return 'none';
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const expected = new Date(order.expected_delivery_date);
+    expected.setHours(0, 0, 0, 0);
+    const diffDays = Math.ceil((expected - today) / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) return 'late';
+    if (diffDays <= 7) return 'due7';
+    if (diffDays <= 14) return 'due14';
+    return 'ontrack';
+}
+
+function getDeliveryBadgeHtml(status) {
+    const badges = {
+        'late': '<span class="delivery-badge delivery-late">⚠ Late</span>',
+        'due7': '<span class="delivery-badge delivery-due7">🕒 Due 7d</span>',
+        'due14': '<span class="delivery-badge delivery-due14">📅 Due 14d</span>',
+        'ontrack': '<span class="delivery-badge delivery-ontrack">✓ On Track</span>',
+        'none': '-'
+    };
+    return badges[status] || '-';
+}
+
+// ===================== FILTERING =====================
+
+function applyFilters() {
+    filteredOrders = ordersState.filter(order => {
+        // Full-text search (across all fields)
+        if (filterState.search) {
+            const term = filterState.search.toLowerCase();
+            const searchFields = [
+                order.item_description || '',
+                order.part_number || '',
+                order.category || '',
+                order.notes || '',
+                order.requester_name || '',
+                order.cost_center_code || '',
+                order.cost_center_name || '',
+                order.supplier_name || '',
+                order.building || '',
+                order.status || ''
+            ].join(' ').toLowerCase();
+
+            if (!searchFields.includes(term)) return false;
+        }
+
+        // Status filter
+        if (filterState.status && order.status !== filterState.status) return false;
+
+        // Building filter
+        if (filterState.building && order.building !== filterState.building) return false;
+
+        // Priority filter
+        if (filterState.priority && order.priority !== filterState.priority) return false;
+
+        // Supplier filter
+        if (filterState.supplier && order.supplier_id !== parseInt(filterState.supplier, 10)) return false;
+
+        // Delivery timeline filter
+        if (filterState.delivery) {
+            const deliveryStatus = getDeliveryStatus(order);
+            if (filterState.delivery !== deliveryStatus) return false;
+        }
+
+        // Quick filters
+        if (filterState.quickFilter) {
+            const qf = filterState.quickFilter;
+            if (qf === 'late' || qf === 'due7' || qf === 'due14') {
+                const deliveryStatus = getDeliveryStatus(order);
+                if (deliveryStatus !== qf) return false;
+            } else if (qf === 'new' && order.status !== 'New') return false;
+            else if (qf === 'ordered' && order.status !== 'Ordered') return false;
+            else if (qf === 'transit' && order.status !== 'In Transit') return false;
+        }
+
+        return true;
+    });
+
+    renderOrdersTable();
+}
+
+// ===================== AUTH =====================
+
 async function checkAuth() {
     const token = localStorage.getItem('authToken');
     if (!token) { showLogin(); return; }
@@ -265,9 +392,8 @@ function showDashboard() {
     loginScreen.classList.add('hidden');
     dashboardScreen.classList.remove('hidden');
     userName.textContent = currentUser.name;
-    userRoleBadge.textContent = currentUser.role === 'admin' ? 'Admin' : currentUser.role === 'procurement' ? 'Procurement' : `Requester \u00b7 ${currentUser.building}`;
+    userRoleBadge.textContent = currentUser.role === 'admin' ? 'Admin' : currentUser.role === 'procurement' ? 'Procurement' : `Requester · ${currentUser.building}`;
 
-    // Reset admin-only tab buttons
     if (usersTabButton) usersTabButton.hidden = true;
     if (buildingsTabButton) buildingsTabButton.hidden = true;
     if (costCentersTabButton) costCentersTabButton.hidden = true;
@@ -276,11 +402,9 @@ function showDashboard() {
         createOrderSection.classList.remove('hidden');
         requesterBuildingBadge.textContent = `Building ${currentUser.building}`;
         navTabs.classList.add('hidden');
-        filtersBar.classList.add('hidden');
     } else {
         createOrderSection.classList.add('hidden');
         navTabs.classList.remove('hidden');
-        filtersBar.classList.remove('hidden');
         populateStatusFilter();
 
         if (currentUser.role === 'admin') {
@@ -290,7 +414,6 @@ function showDashboard() {
         }
     }
 
-    // Always default to Orders tab
     document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
     const ordersTabEl = document.getElementById('ordersTab');
     if (ordersTabEl) ordersTabEl.classList.remove('hidden');
@@ -298,7 +421,6 @@ function showDashboard() {
 
     loadBuildings();
     loadCostCenters();
-
     loadSuppliers().then(() => { populateSupplierFilter(); });
     loadOrders();
     if (currentUser.role !== 'requester') { loadQuotes(); }
@@ -348,7 +470,6 @@ async function loadCostCenters() {
         const res = await apiGet('/cost-centers');
         if (res.success) {
             costCentersState = res.costCenters;
-            // If requester, auto-render radios for their building
             if (currentUser && currentUser.role === 'requester') {
                 renderCostCenterRadios(currentUser.building);
             }
@@ -357,9 +478,7 @@ async function loadCostCenters() {
                 populateCCBuildingSelects();
             }
         }
-    } catch (err) {
-        console.error('loadCostCenters error:', err);
-    }
+    } catch (err) { console.error('loadCostCenters error:', err); }
 }
 
 function renderCostCenterRadios(buildingCode) {
@@ -380,18 +499,16 @@ function renderCostCenterRadios(buildingCode) {
     costCenterRadios.innerHTML = filtered.map(cc =>
         `<label class="radio-label">
             <input type="radio" name="costCenter" value="${cc.id}" required>
-            <span class="radio-text"><strong>${escapeHtml(cc.code)}</strong> &mdash; ${escapeHtml(cc.name)}</span>
+            <span class="radio-text"><strong>${escapeHtml(cc.code)}</strong> — ${escapeHtml(cc.name)}</span>
         </label>`
     ).join('');
 }
 
 function populateCCBuildingSelects() {
-    // Cost center form building select
     if (ccBuildingSelect) {
         ccBuildingSelect.innerHTML = '<option value="">Select Building</option>' +
             buildingsState.filter(b => b.active).map(b => `<option value="${b.code}">${escapeHtml(b.code)} - ${escapeHtml(b.name)}</option>`).join('');
     }
-    // Cost center filter building select
     if (ccFilterBuilding) {
         ccFilterBuilding.innerHTML = '<option value="">All Buildings</option>' +
             buildingsState.filter(b => b.active).map(b => `<option value="${b.code}">${escapeHtml(b.code)} - ${escapeHtml(b.name)}</option>`).join('');
@@ -511,7 +628,6 @@ async function handleDeleteCostCenter() {
 async function handleCreateOrder(e) {
     e.preventDefault();
 
-    // Validate cost center selection
     const selectedCC = document.querySelector('input[name="costCenter"]:checked');
     if (!selectedCC) {
         alert('Please select a Cost Center');
@@ -561,20 +677,13 @@ async function handleCreateOrder(e) {
 
 async function loadOrders() {
     try {
-        const params = {};
-        if (currentUser.role !== 'requester') {
-            params.status = filterStatus.value;
-            params.building = filterBuilding.value;
-            params.priority = filterPriority.value;
-            params.supplier_id = filterSupplier.value;
-            params.search = filterSearch.value.trim();
-        }
-        const res = await apiGet('/orders', params);
+        const res = await apiGet('/orders');
         if (res.success) {
             ordersState = res.orders;
+            filteredOrders = ordersState;
             selectedOrderIds.clear();
             updateSelectionUi();
-            renderOrdersTable();
+            applyFilters();
         }
     } catch (err) {
         console.error('loadOrders error:', err);
@@ -583,27 +692,36 @@ async function loadOrders() {
 }
 
 function renderOrdersTable() {
-    if (!ordersState.length) {
+    if (!filteredOrders.length) {
         ordersTable.innerHTML = '<p class="text-muted">No orders found.</p>';
         return;
     }
 
+    if (viewMode === 'grouped') {
+        renderGroupedOrders();
+    } else {
+        renderFlatOrders();
+    }
+}
+
+function renderFlatOrders() {
     const isAdminView = currentUser.role !== 'requester';
 
     let html = '<div class="table-wrapper"><table><thead><tr>';
     if (isAdminView) html += '<th class="sticky"><input type="checkbox" id="selectAllOrders"></th>';
     html += '<th>ID</th><th>Building</th><th>Cost Center</th><th>Item</th><th>Qty</th><th>Needed</th><th>Status</th>';
     if (isAdminView) {
-        html += '<th>Priority</th><th>Supplier</th><th>Unit</th><th>Total</th><th>Files</th><th>Requester</th>';
+        html += '<th>Priority</th><th>Delivery</th><th>Supplier</th><th>Unit</th><th>Total</th><th>Files</th><th>Requester</th>';
     } else {
-        html += '<th>Priority</th><th>Files</th>';
+        html += '<th>Priority</th><th>Delivery</th><th>Files</th>';
     }
     html += '<th></th></tr></thead><tbody>';
 
-    for (const order of ordersState) {
+    for (const order of filteredOrders) {
         const statusClass = 'status-' + order.status.toLowerCase().replace(/ /g, '-');
         const priorityClass = 'priority-' + (order.priority || 'Normal').toLowerCase();
         const hasFiles = order.files && order.files.length > 0;
+        const deliveryStatus = getDeliveryStatus(order);
 
         html += '<tr data-id="' + order.id + '">';
         if (isAdminView) {
@@ -612,20 +730,21 @@ function renderOrdersTable() {
         html += `<td>#${order.id}</td>`;
         html += `<td>${order.building}</td>`;
         html += `<td>${order.cost_center_code || '-'}</td>`;
-        html += `<td title="${escapeHtml(order.item_description)}">${escapeHtml(order.item_description.substring(0, 40))}${order.item_description.length > 40 ? '\u2026' : ''}</td>`;
+        html += `<td title="${escapeHtml(order.item_description)}">${escapeHtml(order.item_description.substring(0, 40))}${order.item_description.length > 40 ? '…' : ''}</td>`;
         html += `<td>${order.quantity}</td>`;
         html += `<td>${formatDate(order.date_needed)}</td>`;
         html += `<td><span class="status-badge ${statusClass}">${order.status}</span></td>`;
         html += `<td><span class="priority-pill ${priorityClass}">${order.priority || 'Normal'}</span></td>`;
+        html += `<td>${getDeliveryBadgeHtml(deliveryStatus)}</td>`;
 
         if (isAdminView) {
             html += `<td>${order.supplier_name || '-'}</td>`;
             html += `<td class="text-right">${fmtPrice(order.unit_price)}</td>`;
             html += `<td class="text-right">${fmtPrice(order.total_price)}</td>`;
-            html += `<td>${hasFiles ? '\ud83d\udcce ' + order.files.length : '-'}</td>`;
+            html += `<td>${hasFiles ? '📎 ' + order.files.length : '-'}</td>`;
             html += `<td>${order.requester_name}</td>`;
         } else {
-            html += `<td>${hasFiles ? '\ud83d\udcce ' + order.files.length : '-'}</td>`;
+            html += `<td>${hasFiles ? '📎 ' + order.files.length : '-'}</td>`;
         }
 
         html += `<td><button class="btn btn-secondary btn-sm btn-view-order" data-id="${order.id}">View</button></td>`;
@@ -634,15 +753,109 @@ function renderOrdersTable() {
     html += '</tbody></table></div>';
 
     ordersTable.innerHTML = html;
+    attachOrderEventListeners(isAdminView);
+}
 
-    if (currentUser.role !== 'requester') {
-        document.getElementById('selectAllOrders').addEventListener('change', e => {
-            const checked = e.target.checked;
-            selectedOrderIds.clear();
-            if (checked) { ordersState.forEach(o => selectedOrderIds.add(o.id)); }
-            document.querySelectorAll('.row-select').forEach(cb => { cb.checked = checked; });
-            updateSelectionUi();
+function renderGroupedOrders() {
+    const isAdminView = currentUser.role !== 'requester';
+    const grouped = {};
+
+    // Group by status
+    for (const order of filteredOrders) {
+        if (!grouped[order.status]) grouped[order.status] = [];
+        grouped[order.status].push(order);
+    }
+
+    let html = '';
+
+    for (const status of ORDER_STATUSES) {
+        if (!grouped[status] || grouped[status].length === 0) continue;
+
+        const statusClass = 'status-' + status.toLowerCase().replace(/ /g, '-');
+        html += `<div class="status-group">
+            <div class="status-group-header" data-status="${status}">
+                <div class="status-group-title">
+                    <span class="status-badge ${statusClass}">${status}</span>
+                    <span class="status-group-count">${grouped[status].length}</span>
+                </div>
+                <span class="status-group-chevron">▼</span>
+            </div>
+            <div class="status-group-body" data-status="${status}">`;
+
+        html += '<div class="table-wrapper"><table><thead><tr>';
+        if (isAdminView) html += '<th class="sticky"><input type="checkbox" class="select-all-group" data-status="${status}"></th>';
+        html += '<th>ID</th><th>Building</th><th>Cost Center</th><th>Item</th><th>Qty</th><th>Needed</th>';
+        if (isAdminView) {
+            html += '<th>Priority</th><th>Delivery</th><th>Supplier</th><th>Unit</th><th>Total</th><th>Files</th><th>Requester</th>';
+        } else {
+            html += '<th>Priority</th><th>Delivery</th><th>Files</th>';
+        }
+        html += '<th></th></tr></thead><tbody>';
+
+        for (const order of grouped[status]) {
+            const priorityClass = 'priority-' + (order.priority || 'Normal').toLowerCase();
+            const hasFiles = order.files && order.files.length > 0;
+            const deliveryStatus = getDeliveryStatus(order);
+
+            html += '<tr data-id="' + order.id + '">';
+            if (isAdminView) {
+                html += `<td class="sticky"><input type="checkbox" class="row-select" data-id="${order.id}"></td>`;
+            }
+            html += `<td>#${order.id}</td>`;
+            html += `<td>${order.building}</td>`;
+            html += `<td>${order.cost_center_code || '-'}</td>`;
+            html += `<td title="${escapeHtml(order.item_description)}">${escapeHtml(order.item_description.substring(0, 40))}${order.item_description.length > 40 ? '…' : ''}</td>`;
+            html += `<td>${order.quantity}</td>`;
+            html += `<td>${formatDate(order.date_needed)}</td>`;
+            html += `<td><span class="priority-pill ${priorityClass}">${order.priority || 'Normal'}</span></td>`;
+            html += `<td>${getDeliveryBadgeHtml(deliveryStatus)}</td>`;
+
+            if (isAdminView) {
+                html += `<td>${order.supplier_name || '-'}</td>`;
+                html += `<td class="text-right">${fmtPrice(order.unit_price)}</td>`;
+                html += `<td class="text-right">${fmtPrice(order.total_price)}</td>`;
+                html += `<td>${hasFiles ? '📎 ' + order.files.length : '-'}</td>`;
+                html += `<td>${order.requester_name}</td>`;
+            } else {
+                html += `<td>${hasFiles ? '📎 ' + order.files.length : '-'}</td>`;
+            }
+
+            html += `<td><button class="btn btn-secondary btn-sm btn-view-order" data-id="${order.id}">View</button></td>`;
+            html += '</tr>';
+        }
+
+        html += '</tbody></table></div></div></div>';
+    }
+
+    ordersTable.innerHTML = html;
+
+    // Attach collapse/expand handlers
+    document.querySelectorAll('.status-group-header').forEach(header => {
+        header.addEventListener('click', () => {
+            const status = header.dataset.status;
+            const body = document.querySelector(`.status-group-body[data-status="${status}"]`);
+            if (body) {
+                body.classList.toggle('collapsed');
+                header.classList.toggle('collapsed');
+            }
         });
+    });
+
+    attachOrderEventListeners(isAdminView);
+}
+
+function attachOrderEventListeners(isAdminView) {
+    if (isAdminView) {
+        const selectAll = document.getElementById('selectAllOrders');
+        if (selectAll) {
+            selectAll.addEventListener('change', e => {
+                const checked = e.target.checked;
+                selectedOrderIds.clear();
+                if (checked) { filteredOrders.forEach(o => selectedOrderIds.add(o.id)); }
+                document.querySelectorAll('.row-select').forEach(cb => { cb.checked = checked; });
+                updateSelectionUi();
+            });
+        }
 
         document.querySelectorAll('.row-select').forEach(cb => {
             cb.addEventListener('change', e => {
@@ -677,16 +890,18 @@ async function openOrderDetail(orderId) {
 function renderOrderDetail(o) {
     const statusClass = 'status-' + o.status.toLowerCase().replace(/ /g, '-');
     const priorityClass = 'priority-' + (o.priority || 'Normal').toLowerCase();
+    const deliveryStatus = getDeliveryStatus(o);
 
     let html = '';
     html += `<div class="detail-grid">
         <div><div class="detail-label">Order ID</div><div class="detail-value">#${o.id}</div></div>
         <div><div class="detail-label">Building</div><div class="detail-value">${o.building}</div></div>
-        <div><div class="detail-label">Cost Center</div><div class="detail-value">${o.cost_center_code ? `${o.cost_center_code} \u2014 ${o.cost_center_name}` : '-'}</div></div>
+        <div><div class="detail-label">Cost Center</div><div class="detail-value">${o.cost_center_code ? `${o.cost_center_code} — ${o.cost_center_name}` : '-'}</div></div>
         <div><div class="detail-label">Status</div><div class="detail-value"><span class="status-badge ${statusClass}">${o.status}</span></div></div>
         <div><div class="detail-label">Priority</div><div class="detail-value"><span class="priority-pill ${priorityClass}">${o.priority || 'Normal'}</span></div></div>
         <div><div class="detail-label">Date Needed</div><div class="detail-value">${formatDate(o.date_needed)}</div></div>
         <div><div class="detail-label">Expected Delivery</div><div class="detail-value">${o.expected_delivery_date ? formatDate(o.expected_delivery_date) : '-'}</div></div>
+        <div><div class="detail-label">Delivery Status</div><div class="detail-value">${getDeliveryBadgeHtml(deliveryStatus)}</div></div>
         <div><div class="detail-label">Requester</div><div class="detail-value">${o.requester_name}</div></div>
         <div><div class="detail-label">Supplier</div><div class="detail-value">${o.supplier_name || '-'}</div></div>
         <div><div class="detail-label">Unit Price</div><div class="detail-value">${fmtPrice(o.unit_price)}</div></div>
@@ -707,7 +922,6 @@ function renderOrderDetail(o) {
         html += `<div class="detail-section-title mt-1">Notes</div><div class="text-muted mt-1">${escapeHtml(o.notes)}</div>`;
     }
 
-    // Files
     html += '<div class="detail-section-title mt-2">Attachments</div>';
     if (o.files && o.files.length) {
         html += '<ul class="file-list">';
@@ -720,7 +934,6 @@ function renderOrderDetail(o) {
         html += '<div class="text-muted mt-1">No attachments.</div>';
     }
 
-    // History
     if (currentUser.role !== 'requester' && o.history && o.history.length) {
         html += '<div class="detail-section-title mt-2">History</div>';
         html += '<div class="text-muted" style="max-height: 120px; overflow-y: auto; font-size: 0.78rem;">';
@@ -730,7 +943,6 @@ function renderOrderDetail(o) {
         html += '</div>';
     }
 
-    // Edit section for admin/procurement
     if (currentUser.role !== 'requester') {
         html += '<hr class="mt-2" style="border-color: rgba(31,41,55,0.9); margin-bottom: 0.6rem;">';
         html += '<div class="detail-section-title">Update Order</div>';
@@ -796,7 +1008,7 @@ function renderQuoteDetail(q) {
     if (q.notes) html += `<div class="detail-section-title mt-1">Notes</div><div class="text-muted mt-1">${escapeHtml(q.notes)}</div>`;
     if (q.items && q.items.length) {
         html += '<div class="detail-section-title mt-2">Items</div><div class="table-wrapper"><table><thead><tr><th>Order</th><th>Building</th><th>Description</th><th>Qty</th><th>Unit</th><th>Total</th></tr></thead><tbody>';
-        for (const it of q.items) html += `<tr><td>#${it.order_id}</td><td>${it.building}</td><td>${escapeHtml(it.item_description.substring(0,40))}${it.item_description.length>40?'\u2026':''}</td><td>${it.quantity}</td><td class="text-right">${fmtPrice(it.unit_price)}</td><td class="text-right">${fmtPrice(it.total_price)}</td></tr>`;
+        for (const it of q.items) html += `<tr><td>#${it.order_id}</td><td>${it.building}</td><td>${escapeHtml(it.item_description.substring(0,40))}${it.item_description.length>40?'…':''}</td><td>${it.quantity}</td><td class="text-right">${fmtPrice(it.unit_price)}</td><td class="text-right">${fmtPrice(it.total_price)}</td></tr>`;
         html += '</tbody></table></div>';
     }
     html += '<div class="detail-section-title mt-2">Update Quote</div>';
@@ -1009,7 +1221,6 @@ async function handleSaveSupplier(e) {
     if (res.success) { alert('Supplier saved'); supplierFormCard.hidden = true; loadSuppliers(); populateSupplierFilter(); } else { alert('Failed to save supplier'); }
 }
 
-// Filters helpers
 function populateStatusFilter() {
     filterStatus.innerHTML = '<option value="">Status: All</option>' + ORDER_STATUSES.map(s => `<option value="${s}">${s}</option>`).join('');
 }
@@ -1017,7 +1228,6 @@ function populateSupplierFilter() {
     filterSupplier.innerHTML = '<option value="">Supplier: All</option>' + suppliersState.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
 }
 
-// Tabs
 function switchTab(tabId) {
     if (currentTab === tabId) return;
     document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabId));
@@ -1026,7 +1236,6 @@ function switchTab(tabId) {
     currentTab = tabId;
 }
 
-// Utils
 function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c] || c)); }
 function formatDate(dateStr) { if (!dateStr) return '-'; const d = new Date(dateStr); if (isNaN(d)) return dateStr; return d.toLocaleDateString(); }
 function formatDateTime(dateStr) { if (!dateStr) return '-'; const d = new Date(dateStr); if (isNaN(d)) return dateStr; return d.toLocaleString(); }

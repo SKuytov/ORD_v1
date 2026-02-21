@@ -135,8 +135,25 @@ function fmtPrice(val) {
 // Init
 window.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
+    setupDatePickers();
     checkAuth();
 });
+
+// ===================== DATE PICKER FULL-CLICK =====================
+// Makes every input.date-picker open the calendar on ANY click
+// (fallback for browsers where the CSS overlay trick doesn't work)
+function setupDatePickers() {
+    document.addEventListener('click', (e) => {
+        const dateInput = e.target.closest('input[type="date"].date-picker');
+        if (dateInput && typeof dateInput.showPicker === 'function') {
+            try {
+                dateInput.showPicker();
+            } catch (_) {
+                // showPicker can throw if already open or not user-initiated
+            }
+        }
+    });
+}
 
 function setupEventListeners() {
     loginForm.addEventListener('submit', handleLogin);
@@ -719,7 +736,7 @@ function renderOrderDetail(o) {
         html += '<div class="detail-section-title">Update Order</div>';
         html += `<div class="form-group mt-1"><label>Status</label><select id="detailStatus" class="form-control form-control-sm">${ORDER_STATUSES.map(s => `<option value="${s}" ${s === o.status ? 'selected' : ''}>${s}</option>`).join('')}</select></div>`;
         html += `<div class="form-group"><label>Supplier</label><select id="detailSupplier" class="form-control form-control-sm"><option value="">None</option>${suppliersState.map(s => `<option value="${s.id}" ${o.supplier_id === s.id ? 'selected' : ''}>${escapeHtml(s.name)}</option>`).join('')}</select></div>`;
-        html += `<div class="detail-grid"><div><div class="form-group"><label>Expected Delivery</label><input type="date" id="detailExpected" class="form-control form-control-sm" value="${o.expected_delivery_date ? o.expected_delivery_date.substring(0,10) : ''}"></div></div><div><div class="form-group"><label>Unit Price</label><input type="number" step="0.01" id="detailUnitPrice" class="form-control form-control-sm" value="${parseFloat(o.unit_price) || ''}"></div></div></div>`;
+        html += `<div class="detail-grid"><div><div class="form-group"><label>Expected Delivery</label><input type="date" id="detailExpected" class="form-control form-control-sm date-picker" value="${o.expected_delivery_date ? o.expected_delivery_date.substring(0,10) : ''}"></div></div><div><div class="form-group"><label>Unit Price</label><input type="number" step="0.01" id="detailUnitPrice" class="form-control form-control-sm" value="${parseFloat(o.unit_price) || ''}"></div></div></div>`;
         html += `<div class="form-group"><label>Total Price</label><input type="number" step="0.01" id="detailTotalPrice" class="form-control form-control-sm" value="${parseFloat(o.total_price) || ''}"></div>`;
         html += `<div class="form-actions"><button id="btnSaveOrder" class="btn btn-primary btn-sm">Save</button></div>`;
     }

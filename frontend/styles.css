@@ -175,37 +175,39 @@ textarea.form-control {
     resize: vertical;
 }
 
-/* ======================== */
-/* Date Picker - Dark Theme */
-/* ======================== */
+/* ===================================== */
+/* Date Picker - Full-field click to open */
+/* ===================================== */
 
-/* Make date input fully clickable with pure white icon */
 input[type="date"].date-picker {
     position: relative;
     cursor: pointer;
-    padding-right: 2.5rem;
     color-scheme: dark;
 }
 
-/* Pure white calendar icon */
+/*
+ * Stretch the native calendar-picker-indicator to cover the ENTIRE input.
+ * This makes clicking anywhere on the field open the calendar popup.
+ * The icon itself stays visible as a white calendar in the right side.
+ */
 input[type="date"].date-picker::-webkit-calendar-picker-indicator {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    height: auto;
+    margin: 0;
+    padding: 0;
     cursor: pointer;
+    background: transparent;
     filter: invert(1);
     opacity: 1;
-    width: 1.4rem;
-    height: 1.4rem;
-    padding: 2px;
-    border-radius: 4px;
-    transition: all 0.15s ease;
+    z-index: 1;
 }
 
-/* Icon hover - brightness boost + subtle glow */
-input[type="date"].date-picker::-webkit-calendar-picker-indicator:hover {
-    filter: invert(1) brightness(1.2);
-    background: rgba(56, 189, 248, 0.15);
-}
-
-/* Whole field hover - accent border glow */
+/* Hover glow on the whole field */
 input[type="date"].date-picker:hover {
     border-color: rgba(56, 189, 248, 0.6);
     box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.3);

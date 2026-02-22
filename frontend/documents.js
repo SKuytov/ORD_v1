@@ -1,9 +1,8 @@
 // frontend/documents.js - Multi-Order Document Management with Tabs
-// Phase 2: Many-to-Many Relationships
+// Works with MySQL backend
 
 let currentOrderId = null;
 let currentDocuments = [];
-let allOrders = []; // For order selection
 
 // Initialize tab switching in order detail panel
 function initializeOrderDetailTabs() {
@@ -105,8 +104,8 @@ function renderDocumentsSection() {
 }
 
 function renderDocumentCard(doc) {
-    const fileUrl = doc.file_path.replace('./', '/');
-    const fileIcon = getFileIcon(doc.file_type);
+    const fileUrl = doc.file_path.replace('backend/', '/');
+    const fileIcon = getFileIcon(doc.mime_type);
     const fileSize = formatFileSize(doc.file_size);
     const uploadDate = formatDateTime(doc.uploaded_at);
     
@@ -123,7 +122,7 @@ function renderDocumentCard(doc) {
     html += `<span>•</span>`;
     html += `<span>${uploadDate}</span>`;
     html += `<span>•</span>`;
-    html += `<span>by ${escapeHtml(doc.uploaded_by)}</span>`;
+    html += `<span>by ${escapeHtml(doc.uploaded_by_name || 'Unknown')}</span>`;
     html += `</div>`;
     
     if (doc.description) {
@@ -148,14 +147,14 @@ function renderDocumentCard(doc) {
     return html;
 }
 
-function getFileIcon(fileType) {
-    if (!fileType) return '📄';
+function getFileIcon(mimeType) {
+    if (!mimeType) return '📄';
     
-    if (fileType.includes('pdf')) return '📕';
-    if (fileType.includes('image')) return '🖼️';
-    if (fileType.includes('word')) return '📘';
-    if (fileType.includes('excel') || fileType.includes('spreadsheet')) return '📗';
-    if (fileType.includes('zip') || fileType.includes('rar')) return '📦';
+    if (mimeType.includes('pdf')) return '📕';
+    if (mimeType.includes('image')) return '🖼️';
+    if (mimeType.includes('word')) return '📘';
+    if (mimeType.includes('excel') || mimeType.includes('spreadsheet')) return '📗';
+    if (mimeType.includes('zip') || mimeType.includes('rar')) return '📦';
     
     return '📄';
 }
@@ -192,12 +191,17 @@ function openUploadDialog() {
     html += '<div class="form-group">';
     html += '<label for="docType">Document Type</label>';
     html += '<select id="docType" class="form-control">';
-    html += '<option value="general">General</option>';
+    html += '<option value="quote_request">Quote Request</option>';
+    html += '<option value="quote_pdf">Quote PDF</option>';
+    html += '<option value="proforma_invoice">Proforma Invoice</option>';
+    html += '<option value="purchase_order">Purchase Order</option>';
     html += '<option value="invoice">Invoice</option>';
     html += '<option value="delivery_note">Delivery Note</option>';
-    html += '<option value="quote">Quote</option>';
-    html += '<option value="technical">Technical Document</option>';
-    html += '<option value="photo">Photo</option>';
+    html += '<option value="signed_delivery_note">Signed Delivery Note</option>';
+    html += '<option value="packing_list">Packing List</option>';
+    html += '<option value="customs_declaration">Customs Declaration</option>';
+    html += '<option value="intrastat_declaration">Intrastat Declaration</option>';
+    html += '<option value="other">Other</option>';
     html += '</select>';
     html += '</div>';
     
@@ -215,9 +219,10 @@ function openUploadDialog() {
     // Pre-select current order
     for (const order of orders) {
         const checked = order.id === currentOrderId ? 'checked' : '';
+        const desc = order.item_description || 'No description';
         html += `<label class="checkbox-label">`;
         html += `<input type="checkbox" class="order-checkbox" value="${order.id}" ${checked}>`;
-        html += `<span>#${order.id} - ${escapeHtml(order.item_description.substring(0, 50))}${order.item_description.length > 50 ? '...' : ''}</span>`;
+        html += `<span>#${order.id} - ${escapeHtml(desc.substring(0, 50))}${desc.length > 50 ? '...' : ''}</span>`;
         html += `</label>`;
     }
     
@@ -275,7 +280,7 @@ async function uploadDocument() {
         const data = await res.json();
         
         if (data.success) {
-            alert('Document uploaded successfully!');
+            alert('✅ Document uploaded successfully!');
             closeUploadDialog();
             loadOrderDocuments(currentOrderId);
         } else {

@@ -1,140 +1,347 @@
-# PartPulse Order Management System
+# 📦 PartPulse Orders v2.2 - Document Management System
 
-A complete order management system for manufacturing facilities with role-based access control, email notifications, and file attachment support.
+**Industrial-grade Order & Document Management for Manufacturing**
 
-## Features
+[![Version](https://img.shields.io/badge/version-2.2.0-blue.svg)](https://github.com/SKuytov/ORD_v1)
+[![Status](https://img.shields.io/badge/status-production-brightgreen.svg)](https://github.com/SKuytov/ORD_v1)
+[![Phase](https://img.shields.io/badge/phase-1%20complete-success.svg)](https://github.com/SKuytov/ORD_v1)
 
-- **User Authentication**: JWT-based authentication with role management
-- **Order Management**: Create, track, and manage orders across multiple buildings
-- **File Attachments**: Upload and manage order-related documents
-- **Email Notifications**: Automated notifications for order creation and status updates
-- **Role-Based Access**: Admin, Procurement, and Requester roles with specific permissions
-- **Order History**: Complete audit trail of all order changes
-- **Status Tracking**: Multi-stage order status workflow
+---
 
-## Tech Stack
+## 🌟 What's New in v2.2
 
-**Backend:**
-- Node.js 18+
-- Express.js
-- MySQL 8.0+
-- JWT Authentication
-- Nodemailer
-- Multer (file uploads)
+### 📦 Phase 1: Document Management System (COMPLETE)
 
-**Frontend:**
-- HTML5
-- CSS3
-- Vanilla JavaScript
-- Responsive design
+A comprehensive solution for managing procurement documents, automating email generation, and tracking compliance deadlines.
 
-## Quick Start
+**Key Features:**
+- 📄 **Document Upload & Organization** - Upload quotes, invoices, delivery notes, etc.
+- ☑️ **Visual Document Checklist** - See what's missing at a glance
+- 📧 **Email Generation** - One-click quote request emails with Outlook integration
+- ⏰ **Action Tracking** - Set deadlines and flag documents requiring follow-up
+- 📈 **Status Workflow** - Pending → Processed → Sent to Accounting → Archived
+- 📊 **Audit Trail** - Full history of uploads, changes, and processing
 
-### Prerequisites
+---
 
-- Node.js 18.x or higher
-- MySQL 8.0 or higher
-- SMTP email account
+## 📦 Quick Overview
+
+### Core Order Management
+
+**For Requesters:**
+- Create orders with file attachments
+- Track order status in real-time
+- View delivery timelines
+- Access order documents
+
+**For Procurement/Admin:**
+- Manage all orders across buildings
+- Advanced filtering & grouping
+- Bulk operations
+- Quote management
+- **NEW:** Document management
+- **NEW:** Email automation
+
+**For Managers:**
+- Coming in Phase 2: Digital approvals
+
+---
+
+## 🚀 Getting Started
 
 ### Installation
 
-1. **Clone the repository**
 ```bash
+# Clone repository
 git clone https://github.com/SKuytov/ORD_v1.git
 cd ORD_v1
-```
 
-2. **Setup Database**
-```bash
-mysql -u root -p < database/schema.sql
-```
-
-3. **Configure Backend**
-```bash
+# Install backend dependencies
 cd backend
 npm install
+
+# Configure environment
 cp .env.example .env
-# Edit .env with your configuration
-```
+# Edit .env with your database credentials
 
-4. **Seed Default Users**
-```bash
-cd backend
-node ../database/seed-users.js
-```
+# Initialize database
+mysql -u root -p < migrations/001_initial_schema.sql
+mysql -u root -p < migrations/002_documents_table.sql
 
-5. **Start Server**
-```bash
+# Start server
 npm start
 ```
 
-6. **Access Application**
+### Quick Setup (Phase 1 Documents)
+
+See **[QUICK_START.md](./QUICK_START.md)** for 5-minute integration guide.
+
+---
+
+## 📚 Documentation
+
+| Document | Description |
+|----------|-------------|
+| **[QUICK_START.md](./QUICK_START.md)** | 5-minute setup guide |
+| **[PHASE1_INTEGRATION.md](./PHASE1_INTEGRATION.md)** | Detailed integration steps |
+| **[PHASE1_SUMMARY.md](./PHASE1_SUMMARY.md)** | Feature overview & roadmap |
+
+---
+
+## 🎯 Features
+
+### Order Management
+- ✅ Multi-building support
+- ✅ Cost center tracking
+- ✅ Priority levels (Normal, High, Urgent)
+- ✅ Status workflow (12 states)
+- ✅ File attachments
+- ✅ Real-time filtering
+- ✅ Flat & grouped views
+- ✅ Delivery timeline tracking
+- ✅ Order history log
+
+### Document Management ⭐ NEW
+- ✅ Multi-format uploads (PDF, Word, Excel, Images)
+- ✅ Document categorization (11 types)
+- ✅ Visual checklist
+- ✅ Action tracking with deadlines
+- ✅ Status workflow
+- ✅ Metadata & notes
+- ✅ Audit trail
+
+### Email Automation ⭐ NEW
+- ✅ One-click quote request generation
+- ✅ Auto-populated supplier details
+- ✅ Professional email templates
+- ✅ Copy to clipboard
+- ✅ Outlook integration (mailto:)
+
+### Supplier Management
+- ✅ Supplier database
+- ✅ Contact information
+- ✅ EU/country tracking (for Intrastat)
+- ✅ Active/inactive status
+
+### Quote Management
+- ✅ Multi-order quotes
+- ✅ Status tracking
+- ✅ Validity dates
+- ✅ Item-level pricing
+
+### User Management
+- ✅ Role-based access (Admin, Procurement, Requester)
+- ✅ Building-based permissions
+- ✅ JWT authentication
+- ✅ Password management
+
+### Buildings & Cost Centers
+- ✅ Multi-location support
+- ✅ Cost center management
+- ✅ Building-specific cost centers
+
+---
+
+## 🗺️ Roadmap
+
+### ✅ Phase 1: Document Management (COMPLETE)
+- Document upload & organization
+- Document checklist
+- Email generation
+- Action tracking
+- Status workflow
+
+### 🚧 Phase 2: Approval Workflow (Next)
+- Digital manager approvals
+- Approval dashboard
+- Email notifications
+- Approval history
+
+### 🗓️ Phase 3: EU Delivery & Intrastat Tracking
+- Auto-detect EU suppliers
+- 14-day deadline tracking
+- Intrastat report generation
+- Compliance alerts
+
+### 📝 Phase 4: Communication Logging
+- Email correspondence tracking
+- Supplier communication history
+- Automatic reminders
+- Search & filtering
+
+### 📊 Phase 5: Accounting Handoff
+- Batch document export
+- Accounting dashboard
+- One-click handoff
+- Status reporting
+
+### 🚀 Phase 6: Advanced Features
+- OCR invoice data extraction
+- Document templates
+- Bulk operations
+- Mobile app
+- AI-powered insights
+
+---
+
+## 💻 Tech Stack
+
+### Backend
+- **Node.js** + **Express.js** - REST API
+- **MySQL** - Database
+- **JWT** - Authentication
+- **Multer** - File uploads
+- **Nodemailer** - Email (future)
+
+### Frontend
+- **Vanilla JavaScript** - No framework bloat
+- **Modern CSS** - Responsive design
+- **Fetch API** - RESTful communication
+
+### Security
+- Helmet.js - Security headers
+- bcrypt - Password hashing
+- CORS - Cross-origin protection
+- Input validation
+- File type restrictions
+
+---
+
+## 📸 Screenshots
+
+### Order Management
+- Flat view with filtering
+- Grouped by status
+- Order detail panel
+- Real-time updates
+
+### Document Management ⭐ NEW
+- Upload interface
+- Document checklist
+- Document list with actions
+- Status badges
+
+### Email Generation ⭐ NEW
+- Email preview dialog
+- Copy to clipboard
+- Outlook integration
+- Supplier auto-fill
+
+---
+
+## ⚙️ Configuration
+
+### Environment Variables
+
+Create `backend/.env`:
+
+```env
+# Database
+DB_HOST=localhost
+DB_USER=your_user
+DB_PASSWORD=your_password
+DB_NAME=partpulse_orders
+
+# Server
+PORT=3000
+NODE_ENV=production
+
+# JWT
+JWT_SECRET=your_secret_key_here
+JWT_EXPIRES_IN=24h
+
+# Frontend
+FRONTEND_URL=http://localhost:3000
+
+# Company Info (for emails)
+COMPANY_NAME=Your Company
+COMPANY_PHONE=+359-xxx-xxx-xxx
 ```
-Open browser to http://localhost:3000
-```
 
-## Default Users
+---
 
-After running the seed script, default users are created:
+## 👥 User Roles
 
-| Username | Password | Role | Building |
-|----------|----------|------|----------|
-| admin | Admin123! | admin | - |
-| procurement1 | Proc123! | procurement | - |
-| tech.ct | Tech123! | requester | CT |
-| tech.cb | Tech123! | requester | CB |
-| tech.ww | Tech123! | requester | WW |
-| tech.ps | Tech123! | requester | PS |
-| tech.lt | Tech123! | requester | LT |
+| Role | Permissions |
+|------|-------------|
+| **Admin** | Full access: orders, users, buildings, cost centers, suppliers, documents |
+| **Procurement** | Manage orders, quotes, suppliers, documents |
+| **Requester** | Create orders, view own orders, view documents |
+| **Manager** | Phase 2: Approve quotes |
 
-**Warning: Change these passwords immediately in production!**
+---
 
-## Production Deployment (Proxmox + Tailscale)
+## 📊 Database Schema
 
-This application is designed to run on a Proxmox Ubuntu VM with Tailscale VPN for secure access by factory technicians.
+### Core Tables
+- `users` - User accounts
+- `buildings` - Building locations
+- `cost_centers` - Cost center definitions
+- `suppliers` - Supplier database
+- `orders` - Order records
+- `order_history` - Audit log
+- `quotes` - Quote records
+- `quote_items` - Quote line items
 
-### Quick Deploy
+### Document Management ⭐ NEW
+- `documents` - Document records & metadata
+- `eu_deliveries` - EU delivery tracking (Phase 3)
+- `communications` - Email logging (Phase 4)
 
-```bash
-# On your Ubuntu VM
-git clone https://github.com/SKuytov/ORD_v1.git /var/www/partpulse-orders
-cd /var/www/partpulse-orders/backend
-npm install --production
-cp .env.example .env
-# Edit .env with production values
+---
 
-# Initialize database
-mysql -u partpulse_user -p partpulse_orders < ../database/schema.sql
-node ../database/seed-users.js
+## 🔒 Security
 
-# Start with PM2
-pm2 start ../ecosystem.config.js
-pm2 save
-pm2 startup
-```
+- **Authentication**: JWT tokens
+- **Password Hashing**: bcrypt (10 rounds)
+- **File Upload**: Type & size validation
+- **SQL Injection**: Parameterized queries
+- **XSS Protection**: Input sanitization
+- **CORS**: Configured origins
+- **Helmet**: Security headers
 
-## API Endpoints
+---
 
-### Authentication
-- `POST /api/auth/login` - User login
-- `GET /api/auth/verify` - Verify JWT token
-- `POST /api/auth/logout` - User logout
+## 🤝 Contributing
 
-### Orders
-- `POST /api/orders` - Create new order
-- `GET /api/orders` - Get all orders (filtered by role)
-- `GET /api/orders/:id` - Get specific order
-- `PUT /api/orders/:id` - Update order
-- `DELETE /api/orders/:id` - Delete order (admin only)
-- `GET /api/orders/stats/overview` - Get order statistics
+This is a private project for PartPulse. For issues or feature requests:
 
-## License
+1. Open an issue
+2. Describe the problem/feature
+3. Include steps to reproduce (for bugs)
 
-MIT License - see LICENSE file for details
+---
 
-## Author
+## 📝 License
 
-**Stanislav Kuytov**
-- Email: s.kuytov@skuytov.eu
-- Website: https://skuytov.eu
-- GitHub: [@SKuytov](https://github.com/SKuytov)
+MIT License - See LICENSE file
+
+---
+
+## 📧 Contact
+
+**Developer**: Stanislav Kuytov  
+**Website**: [skuytov.eu](https://skuytov.eu)  
+**Project**: PartPulse Orders  
+**Version**: 2.2.0 (Phase 1 Complete)
+
+---
+
+## 🎉 Acknowledgments
+
+Built with ❤️ for manufacturing teams who deserve better tools.
+
+**Next up: Phase 2 - Digital Approval Workflow!** 🚀
+
+---
+
+## 💼 About PartPulse
+
+PartPulse is an industrial software suite for spare parts management, maintenance tracking, and procurement automation.
+
+**Other PartPulse Products:**
+- **PartPulse WMS** - Spare parts warehouse management
+- **PartPulse CMMS** - Maintenance management
+- **PartPulse Orders** - This system
+
+Visit [partpulse.eu](https://partpulse.eu) to learn more.

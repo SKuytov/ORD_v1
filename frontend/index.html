@@ -195,13 +195,15 @@
                         <h3 id="detailTitle">Order Details</h3>
                         <button id="btnCloseDetail" class="btn-icon">✕</button>
                     </div>
-                    <div id="orderDetailBody" class="side-panel-body"></div>
+                    <div id="orderDetailBody" class="side-panel-body">
+                        <!-- Order details will be rendered here by app.js -->
+                    </div>
+                    <!-- Documents Section (Phase 1) -->
+                    <div id="documentsSection" style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(148,163,184,0.2);">
+                        <!-- Documents UI renders here by documents.js -->
+                    </div>
                 </div>
             </section>
-
-            <div id="documentsSection" style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(148,163,184,0.2);">
-    <!-- Documents UI renders here -->
-</div>
             
             <!-- Quotes Tab -->
             <section id="quotesTab" class="tab-content hidden">
@@ -442,6 +444,6 @@
 <script src="app.js"></script>
 <!-- File Upload Enhancement Script -->
 <script src="js/order-form-enhanced.js"></script>
-    <script src="documents.js"></script>
+<script src="documents.js"></script>
 </body>
 </html>

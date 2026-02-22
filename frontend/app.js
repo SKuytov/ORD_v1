@@ -811,14 +811,14 @@ function renderFlatOrders() {
             html += `<td class="sticky"><input type="checkbox" class="row-select" data-id="${order.id}"></td>`;
         }
         html += `<td>#${order.id}</td>`;
-        html += `<td>${order.building}</td>`;
-        html += `<td>${order.cost_center_code || '-'}</td>`;
         html += `<td title="${escapeHtml(order.item_description)}">${escapeHtml(order.item_description.substring(0, 40))}${order.item_description.length > 40 ? '…' : ''}</td>`;
+        html += `<td>${order.cost_center_code || '-'}</td>`;
         html += `<td>${order.quantity}</td>`;
-        html += `<td>${formatDate(order.date_needed)}</td>`;
         html += `<td><span class="status-badge ${statusClass}">${order.status}</span></td>`;
         html += `<td><span class="priority-pill ${priorityClass}">${order.priority || 'Normal'}</span></td>`;
         html += `<td>${getDeliveryBadgeHtml(deliveryStatus)}</td>`;
+        html += `<td>${formatDate(order.date_needed)}</td>`;
+        html += `<td>${order.building}</td>`;
 
         if (isAdminView) {
             html += `<td>${order.supplier_name || '-'}</td>`;

@@ -54,7 +54,7 @@
                 <button class="tab" data-tab="quotesTab">Quotes</button>
                 <button class="tab" data-tab="approvalsTab" id="approvalsTabButton" hidden style="position: relative;">
                     Approvals
-                    <span id="approvalsBadge" class="badge-notification"></span>
+                    <span id="pendingApprovalBadge" class="badge-notification hidden"></span>
                 </button>
                 <button class="tab" data-tab="suppliersTab">Suppliers</button>
                 <button class="tab" data-tab="buildingsTab" id="buildingsTabButton" hidden>Buildings</button>
@@ -215,16 +215,32 @@
                 <div class="card">
                     <div class="card-header-row">
                         <h2>Approval Requests</h2>
-                        <div>
-                            <select id="approvalStatusFilter" class="form-control form-control-sm" style="width: 150px; display: inline-block;" onchange="loadApprovals({status: this.value})">
+                        <button id="btnRefreshApprovals" class="btn btn-secondary btn-sm" onclick="if(typeof loadApprovals === 'function') loadApprovals();">Refresh</button>
+                    </div>
+
+                    <!-- Approval Filters -->
+                    <div class="filters-container">
+                        <div class="filters-grid">
+                            <input type="text" id="approvalSearch" class="form-control form-control-sm" placeholder="🔍 Search approvals...">
+                            <select id="approvalStatusFilter" class="form-control form-control-sm">
                                 <option value="">All Statuses</option>
                                 <option value="pending" selected>Pending</option>
                                 <option value="approved">Approved</option>
                                 <option value="rejected">Rejected</option>
                             </select>
-                            <button id="btnRefreshApprovals" class="btn btn-secondary btn-sm" onclick="loadApprovals()">Refresh</button>
+                            <select id="approvalPriorityFilter" class="form-control form-control-sm">
+                                <option value="">Priority: All</option>
+                                <option value="Low">Low</option>
+                                <option value="Normal">Normal</option>
+                                <option value="High">High</option>
+                                <option value="Urgent">Urgent</option>
+                            </select>
+                        </div>
+                        <div class="filters-actions">
+                            <button id="btnClearApprovalFilters" class="btn-link btn-sm">Clear Filters</button>
                         </div>
                     </div>
+
                     <div id="approvalsTable"></div>
                 </div>
 
@@ -232,7 +248,7 @@
                 <div id="approvalDetailPanel" class="side-panel hidden">
                     <div class="side-panel-header">
                         <h3>Approval Request</h3>
-                        <button onclick="document.getElementById('approvalDetailPanel').classList.add('hidden')" class="btn-icon">✕</button>
+                        <button id="btnCloseApprovalDetail" class="btn-icon">✕</button>
                     </div>
                     <div id="approvalDetailBody" class="side-panel-body">
                         <!-- Approval details will be rendered here by approvals.js -->

@@ -1,4 +1,4 @@
-// frontend/app.js - PartPulse Orders v2.1 - Enhanced Filtering & Grouping
+// frontend/app.js - PartPulse Orders v2.2 - Document Management Integration
 
 const API_BASE = '/api';
 let currentUser = null;
@@ -1068,7 +1068,14 @@ async function openOrderDetail(orderId) {
         if (!res.success) return;
         renderOrderDetail(res.order);
         orderDetailPanel.classList.remove('hidden');
-    } catch { alert('Failed to load order details'); }
+        
+        // ⭐ LOAD DOCUMENTS FOR THIS ORDER (Phase 1 Integration)
+        if (typeof loadOrderDocuments === 'function') {
+            loadOrderDocuments(orderId);
+        }
+    } catch { 
+        alert('Failed to load order details'); 
+    }
 }
 
 function renderOrderDetail(o) {

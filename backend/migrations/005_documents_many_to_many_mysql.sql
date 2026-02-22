@@ -29,7 +29,7 @@ SELECT
 FROM documents
 WHERE order_id IS NOT NULL;
 
--- Add description column only if it doesn't exist (safe check)
+-- Add description column only if it doesn't exist
 SET @dbname = DATABASE();
 SET @tablename = 'documents';
 SET @columnname = 'description';
@@ -51,9 +51,30 @@ DEALLOCATE PREPARE alterStatement;
 -- Make order_id nullable (we'll use junction table instead)
 ALTER TABLE documents MODIFY order_id INT NULL;
 
--- Add indexes for better performance
-CREATE INDEX IF NOT EXISTS idx_documents_uploaded_at ON documents(uploaded_at DESC);
-CREATE INDEX IF NOT EXISTS idx_documents_type ON documents(document_type);
+-- Add indexes for better performance (with safe existence check)
+SET @idx1 = (
+    SELECT COUNT(*) 
+    FROM information_schema.STATISTICS 
+    WHERE TABLE_SCHEMA = DATABASE() 
+    AND TABLE_NAME = 'documents' 
+    AND INDEX_NAME = 'idx_documents_uploaded_at'
+);
+SET @sql1 = IF(@idx1 = 0, 'CREATE INDEX idx_documents_uploaded_at ON documents(uploaded_at DESC);', 'SELECT 1;');
+PREPARE stmt1 FROM @sql1;
+EXECUTE stmt1;
+DEALLOCATE PREPARE stmt1;
+
+SET @idx2 = (
+    SELECT COUNT(*) 
+    FROM information_schema.STATISTICS 
+    WHERE TABLE_SCHEMA = DATABASE() 
+    AND TABLE_NAME = 'documents' 
+    AND INDEX_NAME = 'idx_documents_type'
+);
+SET @sql2 = IF(@idx2 = 0, 'CREATE INDEX idx_documents_type ON documents(document_type);', 'SELECT 1;');
+PREPARE stmt2 FROM @sql2;
+EXECUTE stmt2;
+DEALLOCATE PREPARE stmt2;
 
 -- Verification queries
 SELECT 'Migration completed successfully!' AS status;

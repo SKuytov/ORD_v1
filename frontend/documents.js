@@ -3,6 +3,8 @@
 
 let currentOrderId = null;
 let currentDocuments = [];
+let uploadDialogOrders = []; // All orders available for linking
+let filteredUploadOrders = []; // Filtered subset
 
 // Initialize tab switching in order detail panel
 function initializeOrderDetailTabs() {
@@ -170,7 +172,8 @@ function formatFileSize(bytes) {
 // Open upload dialog with multi-order selection
 function openUploadDialog() {
     // Get current orders for selection
-    const orders = ordersState || [];
+    uploadDialogOrders = ordersState || [];
+    filteredUploadOrders = [...uploadDialogOrders];
     
     let html = '<div class="upload-dialog-overlay" id="uploadDialog">';
     html += '<div class="upload-dialog">';
@@ -211,21 +214,34 @@ function openUploadDialog() {
     html += '<textarea id="docDescription" class="form-control" rows="2" placeholder="Add notes about this document"></textarea>';
     html += '</div>';
     
-    // Order selection
+    // Order selection with filters
     html += '<div class="form-group">';
     html += '<label>Link to Orders (select multiple)</label>';
-    html += '<div class="order-selection-list">';
     
-    // Pre-select current order
-    for (const order of orders) {
-        const checked = order.id === currentOrderId ? 'checked' : '';
-        const desc = order.item_description || 'No description';
-        html += `<label class="checkbox-label">`;
-        html += `<input type="checkbox" class="order-checkbox" value="${order.id}" ${checked}>`;
-        html += `<span>#${order.id} - ${escapeHtml(desc.substring(0, 50))}${desc.length > 50 ? '...' : ''}</span>`;
-        html += `</label>`;
+    // Filter controls
+    html += '<div class="order-filters">';
+    html += '<input type="text" id="orderSearchInput" class="form-control form-control-sm" placeholder="Search by ID, description, part number..." oninput="filterUploadOrders()">';
+    html += '<select id="orderStatusFilter" class="form-control form-control-sm" onchange="filterUploadOrders()">';
+    html += '<option value="">All Statuses</option>';
+    html += '<option value="New">New</option>';
+    html += '<option value="Pending">Pending</option>';
+    html += '<option value="Quote Requested">Quote Requested</option>';
+    html += '<option value="Quote Received">Quote Received</option>';
+    html += '<option value="Approved">Approved</option>';
+    html += '<option value="Ordered">Ordered</option>';
+    html += '<option value="In Transit">In Transit</option>';
+    html += '<option value="Delivered">Delivered</option>';
+    html += '</select>';
+    html += '<select id="orderSupplierFilter" class="form-control form-control-sm" onchange="filterUploadOrders()">';
+    html += '<option value="">All Suppliers</option>';
+    for (const supplier of suppliersState || []) {
+        html += `<option value="${supplier.id}">${escapeHtml(supplier.name)}</option>`;
     }
+    html += '</select>';
+    html += '</div>';
     
+    html += '<div class="order-selection-list" id="orderSelectionList">';
+    html += renderOrderSelectionList();
     html += '</div>';
     html += '</div>';
     
@@ -238,6 +254,78 @@ function openUploadDialog() {
     html += '</div>';
     
     document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function filterUploadOrders() {
+    const searchTerm = document.getElementById('orderSearchInput')?.value.toLowerCase() || '';
+    const statusFilter = document.getElementById('orderStatusFilter')?.value || '';
+    const supplierFilter = document.getElementById('orderSupplierFilter')?.value || '';
+    
+    filteredUploadOrders = uploadDialogOrders.filter(order => {
+        // Search filter
+        if (searchTerm) {
+            const searchFields = [
+                order.id?.toString() || '',
+                order.item_description || '',
+                order.part_number || '',
+                order.category || '',
+                order.supplier_name || ''
+            ].join(' ').toLowerCase();
+            
+            if (!searchFields.includes(searchTerm)) return false;
+        }
+        
+        // Status filter
+        if (statusFilter && order.status !== statusFilter) return false;
+        
+        // Supplier filter
+        if (supplierFilter && order.supplier_id !== parseInt(supplierFilter, 10)) return false;
+        
+        return true;
+    });
+    
+    // Re-render list
+    const listContainer = document.getElementById('orderSelectionList');
+    if (listContainer) {
+        listContainer.innerHTML = renderOrderSelectionList();
+    }
+}
+
+function renderOrderSelectionList() {
+    if (filteredUploadOrders.length === 0) {
+        return '<p class="text-muted" style="padding: 0.5rem; text-align: center;">No orders match the filters</p>';
+    }
+    
+    let html = '';
+    for (const order of filteredUploadOrders) {
+        const checked = order.id === currentOrderId ? 'checked' : '';
+        const desc = order.item_description || 'No description';
+        const statusClass = 'status-' + (order.status || 'new').toLowerCase().replace(/ /g, '-');
+        const supplier = order.supplier_name || '-';
+        const costCenter = order.cost_center_code || '-';
+        
+        html += `<label class="order-checkbox-label">`;
+        html += `<input type="checkbox" class="order-checkbox" value="${order.id}" ${checked}>`;
+        html += `<div class="order-checkbox-content">`;
+        html += `<div class="order-checkbox-main">`;
+        html += `<span class="order-id">#${order.id}</span>`;
+        html += `<span class="status-badge ${statusClass}">${order.status}</span>`;
+        html += `<span class="order-desc">${escapeHtml(desc.substring(0, 60))}${desc.length > 60 ? '...' : ''}</span>`;
+        html += `</div>`;
+        html += `<div class="order-checkbox-meta">`;
+        html += `<span>Supplier: ${escapeHtml(supplier)}</span>`;
+        html += `<span>•</span>`;
+        html += `<span>CC: ${escapeHtml(costCenter)}</span>`;
+        if (order.part_number) {
+            html += `<span>•</span>`;
+            html += `<span>PN: ${escapeHtml(order.part_number)}</span>`;
+        }
+        html += `</div>`;
+        html += `</div>`;
+        html += `</label>`;
+    }
+    
+    return html;
 }
 
 function closeUploadDialog() {
@@ -334,4 +422,5 @@ if (typeof window !== 'undefined') {
     window.closeUploadDialog = closeUploadDialog;
     window.uploadDocument = uploadDocument;
     window.unlinkDocument = unlinkDocument;
+    window.filterUploadOrders = filterUploadOrders;
 }

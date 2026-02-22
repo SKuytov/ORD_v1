@@ -29,14 +29,29 @@ SELECT
 FROM documents
 WHERE order_id IS NOT NULL;
 
--- Add description column if it doesn't exist
-ALTER TABLE documents 
-ADD COLUMN IF NOT EXISTS description TEXT AFTER notes;
+-- Add description column only if it doesn't exist (safe check)
+SET @dbname = DATABASE();
+SET @tablename = 'documents';
+SET @columnname = 'description';
+SET @preparedStatement = (
+    SELECT IF(
+        COUNT(*) = 0,
+        CONCAT('ALTER TABLE ', @tablename, ' ADD COLUMN ', @columnname, ' TEXT AFTER notes;'),
+        'SELECT 1;'
+    )
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = @dbname
+    AND TABLE_NAME = @tablename
+    AND COLUMN_NAME = @columnname
+);
+PREPARE alterStatement FROM @preparedStatement;
+EXECUTE alterStatement;
+DEALLOCATE PREPARE alterStatement;
 
 -- Make order_id nullable (we'll use junction table instead)
 ALTER TABLE documents MODIFY order_id INT NULL;
 
--- Add index for better performance
+-- Add indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_documents_uploaded_at ON documents(uploaded_at DESC);
 CREATE INDEX IF NOT EXISTS idx_documents_type ON documents(document_type);
 

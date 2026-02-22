@@ -106,7 +106,6 @@ function renderDocumentsSection() {
 }
 
 function renderDocumentCard(doc) {
-    const fileUrl = doc.file_path.replace('backend/', '/');
     const fileIcon = getFileIcon(doc.mime_type);
     const fileSize = formatFileSize(doc.file_size);
     const uploadDate = formatDateTime(doc.uploaded_at);
@@ -137,7 +136,8 @@ function renderDocumentCard(doc) {
     
     html += '</div>';
     html += '<div class="document-actions">';
-    html += `<a href="${fileUrl}" download="${escapeHtml(doc.file_name)}" class="btn-icon" title="Download">⬇</a>`;
+    // Use dedicated download API route instead of direct file access
+    html += `<button class="btn-icon" onclick="downloadDocument(${doc.id}, '${escapeHtml(doc.file_name)}')" title="Download">⬇</button>`;
     
     if (currentUser && currentUser.role !== 'requester') {
         html += `<button class="btn-icon btn-danger" onclick="unlinkDocument(${doc.id})" title="Remove from this order">🗑</button>`;
@@ -147,6 +147,38 @@ function renderDocumentCard(doc) {
     html += '</div>';
     
     return html;
+}
+
+// Download document using dedicated API route
+async function downloadDocument(documentId, fileName) {
+    try {
+        const res = await fetch(`${API_BASE}/documents/${documentId}/download`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        
+        if (!res.ok) {
+            alert('Failed to download document');
+            return;
+        }
+        
+        // Get the blob from response
+        const blob = await res.blob();
+        
+        // Create download link
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        
+        // Cleanup
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+    } catch (err) {
+        console.error('Download error:', err);
+        alert('Failed to download document');
+    }
 }
 
 function getFileIcon(mimeType) {
@@ -423,4 +455,5 @@ if (typeof window !== 'undefined') {
     window.uploadDocument = uploadDocument;
     window.unlinkDocument = unlinkDocument;
     window.filterUploadOrders = filterUploadOrders;
+    window.downloadDocument = downloadDocument;
 }

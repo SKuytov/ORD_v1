@@ -427,10 +427,22 @@ function showDashboard() {
         createOrderSection.classList.remove('hidden');
         requesterBuildingBadge.textContent = `Building ${currentUser.building}`;
         navTabs.classList.add('hidden');
+        
+        // HIDE ORDER ACTIONS CONTAINER FOR REQUESTERS
+        const orderActionsContainer = document.getElementById('orderActionsContainer');
+        if (orderActionsContainer) {
+            orderActionsContainer.style.display = 'none';
+        }
     } else {
         createOrderSection.classList.add('hidden');
         navTabs.classList.remove('hidden');
         populateStatusFilter();
+        
+        // SHOW ORDER ACTIONS CONTAINER FOR ADMIN/PROCUREMENT
+        const orderActionsContainer = document.getElementById('orderActionsContainer');
+        if (orderActionsContainer) {
+            orderActionsContainer.style.display = 'flex';
+        }
 
         if (currentUser.role === 'admin') {
             if (usersTabButton) usersTabButton.hidden = false;

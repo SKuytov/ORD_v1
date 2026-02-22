@@ -1,120 +1,204 @@
-// frontend/approvals.js - Phase 3: Approval Workflow UI
+// frontend/approvals.js - Manager Approval Interface
 
 let approvalsState = [];
-let currentApproval = null;
-let pendingApprovalsCount = 0;
+let filteredApprovals = [];
+let selectedApprovalId = null;
 
-// ========================================
-// INITIALIZATION
-// ========================================
+// Filter state for approvals
+let approvalFilterState = {
+    status: 'pending', // Default to showing pending approvals
+    search: '',
+    priority: ''
+};
 
-function initializeApprovals() {
-    // Only load for managers, admin, and procurement
-    if (currentUser && currentUser.role !== 'requester') {
-        loadPendingApprovalsCount();
-        
-        // Refresh count every 60 seconds
-        setInterval(loadPendingApprovalsCount, 60000);
-    }
-}
+// DOM Elements
+const approvalsTable = document.getElementById('approvalsTable');
+const approvalDetailPanel = document.getElementById('approvalDetailPanel');
+const approvalDetailBody = document.getElementById('approvalDetailBody');
+const btnCloseApprovalDetail = document.getElementById('btnCloseApprovalDetail');
+const approvalStatusFilter = document.getElementById('approvalStatusFilter');
+const approvalPriorityFilter = document.getElementById('approvalPriorityFilter');
+const approvalSearchInput = document.getElementById('approvalSearch');
+const btnClearApprovalFilters = document.getElementById('btnClearApprovalFilters');
+const pendingApprovalBadge = document.getElementById('pendingApprovalBadge');
 
-// ========================================
-// LOAD PENDING COUNT (FOR BADGE)
-// ========================================
-
-async function loadPendingApprovalsCount() {
-    try {
-        const res = await apiGet('/approvals/pending-count');
-        if (res.success) {
-            pendingApprovalsCount = res.count || 0;
-            updateApprovalsBadge();
-        }
-    } catch (err) {
-        console.error('Error loading pending approvals count:', err);
-    }
-}
-
-function updateApprovalsBadge() {
-    const badge = document.getElementById('approvalsBadge');
-    if (!badge) return;
-    
-    if (pendingApprovalsCount > 0) {
-        badge.textContent = pendingApprovalsCount;
-        badge.style.display = 'inline-block';
-    } else {
-        badge.style.display = 'none';
-    }
-}
-
-// ========================================
-// LOAD APPROVALS LIST
-// ========================================
-
-async function loadApprovals(filters = {}) {
-    try {
-        const res = await apiGet('/approvals', filters);
-        if (res.success) {
-            approvalsState = res.approvals || [];
-            renderApprovalsTable();
-        }
-    } catch (err) {
-        console.error('Error loading approvals:', err);
-        const approvalsTable = document.getElementById('approvalsTable');
-        if (approvalsTable) {
-            approvalsTable.innerHTML = '<p class="text-danger">Failed to load approvals</p>';
-        }
-    }
-}
-
-function renderApprovalsTable() {
-    const approvalsTable = document.getElementById('approvalsTable');
-    if (!approvalsTable) return;
-    
-    if (!approvalsState.length) {
-        approvalsTable.innerHTML = '<p class="text-muted">No approval requests found.</p>';
+// Initialize approvals when DOM is ready
+function initApprovals() {
+    if (!approvalDetailPanel) {
+        console.warn('Approval detail panel not found in DOM');
         return;
     }
-    
-    let html = '<div class="table-wrapper"><table><thead><tr>';
-    html += '<th>ID</th>';
-    html += '<th>Order</th>';
-    html += '<th>Item</th>';
-    html += '<th>Supplier</th>';
-    html += '<th>Cost</th>';
-    html += '<th>Priority</th>';
-    html += '<th>Requested By</th>';
-    html += '<th>Requested</th>';
-    html += '<th>Status</th>';
-    html += '<th></th>';
-    html += '</tr></thead><tbody>';
-    
-    for (const approval of approvalsState) {
-        const statusClass = 'approval-status-' + approval.status;
-        const priorityClass = 'priority-' + (approval.priority || 'Normal').toLowerCase();
-        const requestedDate = formatDateTime(approval.requested_at);
-        
-        html += `<tr data-id="${approval.id}">`;
-        html += `<td>#${approval.id}</td>`;
-        html += `<td><a href="#" onclick="viewOrderFromApproval(${approval.order_id}); return false;">#${approval.order_id}</a></td>`;
-        html += `<td title="${escapeHtml(approval.item_description)}">${escapeHtml((approval.item_description || '').substring(0, 40))}${approval.item_description?.length > 40 ? '...' : ''}</td>`;
-        html += `<td>${escapeHtml(approval.supplier_name || '-')}</td>`;
-        html += `<td class="text-right">${approval.estimated_cost ? '$' + parseFloat(approval.estimated_cost).toFixed(2) : '-'}</td>`;
-        html += `<td><span class="priority-pill ${priorityClass}">${approval.priority || 'Normal'}</span></td>`;
-        html += `<td>${escapeHtml(approval.requested_by_name || '-')}</td>`;
-        html += `<td>${requestedDate}</td>`;
-        html += `<td><span class="approval-badge ${statusClass}">${approval.status.toUpperCase()}</span></td>`;
-        html += `<td><button class="btn btn-secondary btn-sm" onclick="openApprovalDetail(${approval.id})">Review</button></td>`;
-        html += '</tr>';
+
+    // Setup event listeners
+    if (btnCloseApprovalDetail) {
+        btnCloseApprovalDetail.addEventListener('click', () => {
+            approvalDetailPanel.classList.add('hidden');
+        });
     }
-    
-    html += '</tbody></table></div>';
-    approvalsTable.innerHTML = html;
+
+    if (approvalStatusFilter) {
+        approvalStatusFilter.addEventListener('change', () => {
+            approvalFilterState.status = approvalStatusFilter.value;
+            applyApprovalFilters();
+        });
+    }
+
+    if (approvalPriorityFilter) {
+        approvalPriorityFilter.addEventListener('change', () => {
+            approvalFilterState.priority = approvalPriorityFilter.value;
+            applyApprovalFilters();
+        });
+    }
+
+    if (approvalSearchInput) {
+        approvalSearchInput.addEventListener('input', () => {
+            approvalFilterState.search = approvalSearchInput.value.trim();
+            applyApprovalFilters();
+        });
+    }
+
+    if (btnClearApprovalFilters) {
+        btnClearApprovalFilters.addEventListener('click', clearApprovalFilters);
+    }
+
+    console.log('Approvals module initialized');
 }
 
-// ========================================
-// OPEN APPROVAL DETAIL (MANAGER VIEW)
-// ========================================
+// Load approvals from API
+async function loadApprovals() {
+    try {
+        const params = {};
+        if (approvalFilterState.status) {
+            params.status = approvalFilterState.status;
+        }
 
+        const res = await apiGet('/approvals', params);
+        if (res.success) {
+            approvalsState = res.approvals;
+            filteredApprovals = approvalsState;
+            applyApprovalFilters();
+            updatePendingBadge();
+        }
+    } catch (err) {
+        console.error('loadApprovals error:', err);
+        if (approvalsTable) {
+            approvalsTable.innerHTML = '<p class="text-muted">Failed to load approvals.</p>';
+        }
+    }
+}
+
+// Update pending approval count badge
+async function updatePendingBadge() {
+    try {
+        const res = await apiGet('/approvals/pending-count');
+        if (res.success && pendingApprovalBadge) {
+            if (res.count > 0) {
+                pendingApprovalBadge.textContent = res.count;
+                pendingApprovalBadge.classList.remove('hidden');
+            } else {
+                pendingApprovalBadge.classList.add('hidden');
+            }
+        }
+    } catch (err) {
+        console.error('Error updating pending badge:', err);
+    }
+}
+
+// Apply filters to approvals
+function applyApprovalFilters() {
+    filteredApprovals = approvalsState.filter(approval => {
+        // Status filter
+        if (approvalFilterState.status && approval.status !== approvalFilterState.status) {
+            return false;
+        }
+
+        // Priority filter
+        if (approvalFilterState.priority && approval.priority !== approvalFilterState.priority) {
+            return false;
+        }
+
+        // Search filter
+        if (approvalFilterState.search) {
+            const term = approvalFilterState.search.toLowerCase();
+            const searchFields = [
+                approval.item_description || '',
+                approval.building || '',
+                approval.cost_center_code || '',
+                approval.supplier_name || '',
+                approval.requested_by_name || '',
+                approval.comments || ''
+            ].join(' ').toLowerCase();
+
+            if (!searchFields.includes(term)) return false;
+        }
+
+        return true;
+    });
+
+    renderApprovalsTable();
+}
+
+// Clear approval filters
+function clearApprovalFilters() {
+    approvalFilterState = { status: 'pending', search: '', priority: '' };
+    if (approvalStatusFilter) approvalStatusFilter.value = 'pending';
+    if (approvalPriorityFilter) approvalPriorityFilter.value = '';
+    if (approvalSearchInput) approvalSearchInput.value = '';
+    applyApprovalFilters();
+}
+
+// Render approvals table
+function renderApprovalsTable() {
+    if (!approvalsTable) return;
+
+    if (!filteredApprovals.length) {
+        approvalsTable.innerHTML = '<p class="text-muted">No approvals found.</p>';
+        return;
+    }
+
+    let html = '<div class="table-wrapper"><table><thead><tr>';
+    html += '<th>Order ID</th>';
+    html += '<th>Item</th>';
+    html += '<th>Building</th>';
+    html += '<th>Supplier</th>';
+    html += '<th>Est. Cost</th>';
+    html += '<th>Priority</th>';
+    html += '<th>Status</th>';
+    html += '<th>Requested By</th>';
+    html += '<th>Requested</th>';
+    html += '<th></th>';
+    html += '</tr></thead><tbody>';
+
+    for (const approval of filteredApprovals) {
+        const statusClass = `approval-status-${approval.status}`;
+        const priorityClass = `priority-${(approval.priority || 'Normal').toLowerCase()}`;
+
+        html += `<tr data-id="${approval.id}">`;
+        html += `<td>#${approval.order_id}</td>`;
+        html += `<td title="${escapeHtml(approval.item_description)}">${escapeHtml(approval.item_description.substring(0, 40))}${approval.item_description.length > 40 ? '…' : ''}</td>`;
+        html += `<td>${approval.building}</td>`;
+        html += `<td>${approval.supplier_name || '-'}</td>`;
+        html += `<td class="text-right">${approval.estimated_cost ? fmtPrice(approval.estimated_cost) : '-'}</td>`;
+        html += `<td><span class="priority-pill ${priorityClass}">${approval.priority || 'Normal'}</span></td>`;
+        html += `<td><span class="approval-badge ${statusClass}">${capitalizeFirst(approval.status)}</span></td>`;
+        html += `<td>${approval.requested_by_name}</td>`;
+        html += `<td>${formatDateTime(approval.requested_at)}</td>`;
+        html += `<td><button class="btn btn-secondary btn-sm btn-view-approval" data-id="${approval.id}">Review</button></td>`;
+        html += '</tr>';
+    }
+
+    html += '</tbody></table></div>';
+    approvalsTable.innerHTML = html;
+
+    // Attach event listeners to review buttons
+    document.querySelectorAll('.btn-view-approval').forEach(btn => {
+        btn.addEventListener('click', () => {
+            openApprovalDetail(parseInt(btn.dataset.id, 10));
+        });
+    });
+}
+
+// Open approval detail panel
 async function openApprovalDetail(approvalId) {
     try {
         const res = await apiGet(`/approvals/${approvalId}`);
@@ -122,156 +206,142 @@ async function openApprovalDetail(approvalId) {
             alert('Failed to load approval details');
             return;
         }
-        
-        currentApproval = res.approval;
-        renderApprovalDetailPanel();
-        
-        const panel = document.getElementById('approvalDetailPanel');
-        if (panel) panel.classList.remove('hidden');
+
+        selectedApprovalId = approvalId;
+        renderApprovalDetail(res.approval);
+        approvalDetailPanel.classList.remove('hidden');
     } catch (err) {
         console.error('Error loading approval detail:', err);
         alert('Failed to load approval details');
     }
 }
 
-function renderApprovalDetailPanel() {
-    const body = document.getElementById('approvalDetailBody');
-    if (!body || !currentApproval) return;
-    
-    const a = currentApproval;
-    const statusClass = 'approval-status-' + a.status;
-    const priorityClass = 'priority-' + (a.priority || 'Normal').toLowerCase();
-    
+// Render approval detail
+function renderApprovalDetail(approval) {
+    const statusClass = `approval-status-${approval.status}`;
+    const priorityClass = `priority-${(approval.priority || 'Normal').toLowerCase()}`;
+    const isPending = approval.status === 'pending';
+
     let html = '';
-    
-    // Header info
-    html += `<div class="detail-grid">`;
-    html += `<div><div class="detail-label">Approval ID</div><div class="detail-value">#${a.id}</div></div>`;
-    html += `<div><div class="detail-label">Order ID</div><div class="detail-value"><a href="#" onclick="viewOrderFromApproval(${a.order_id}); return false;">#${a.order_id}</a></div></div>`;
-    html += `<div><div class="detail-label">Status</div><div class="detail-value"><span class="approval-badge ${statusClass}">${a.status.toUpperCase()}</span></div></div>`;
-    html += `<div><div class="detail-label">Priority</div><div class="detail-value"><span class="priority-pill ${priorityClass}">${a.priority || 'Normal'}</span></div></div>`;
+
+    // Header section
+    html += `<div class="approval-detail-header">`;
+    html += `<h3>Approval Request #${approval.id}</h3>`;
+    html += `<span class="approval-badge ${statusClass}">${capitalizeFirst(approval.status)}</span>`;
     html += `</div>`;
-    
-    // Order details
-    html += `<div class="detail-section-title mt-2">Order Details</div>`;
+
+    // Main details
     html += `<div class="detail-grid">`;
-    html += `<div><div class="detail-label">Item</div><div class="detail-value">${escapeHtml(a.item_description || '-')}</div></div>`;
-    html += `<div><div class="detail-label">Part Number</div><div class="detail-value">${escapeHtml(a.part_number || '-')}</div></div>`;
-    html += `<div><div class="detail-label">Quantity</div><div class="detail-value">${a.quantity || '-'}</div></div>`;
-    html += `<div><div class="detail-label">Building</div><div class="detail-value">${a.building || '-'}</div></div>`;
-    html += `<div><div class="detail-label">Cost Center</div><div class="detail-value">${a.cost_center_code || '-'}</div></div>`;
-    html += `<div><div class="detail-label">Supplier</div><div class="detail-value">${escapeHtml(a.supplier_name || '-')}</div></div>`;
-    html += `<div><div class="detail-label">Estimated Cost</div><div class="detail-value">${a.estimated_cost ? '$' + parseFloat(a.estimated_cost).toFixed(2) : '-'}</div></div>`;
+    html += `<div><div class="detail-label">Order ID</div><div class="detail-value">#${approval.order_id}</div></div>`;
+    html += `<div><div class="detail-label">Building</div><div class="detail-value">${approval.building}</div></div>`;
+    html += `<div><div class="detail-label">Cost Center</div><div class="detail-value">${approval.cost_center_code ? `${approval.cost_center_code} — ${approval.cost_center_name}` : '-'}</div></div>`;
+    html += `<div><div class="detail-label">Supplier</div><div class="detail-value">${approval.supplier_name || '-'}</div></div>`;
+    html += `<div><div class="detail-label">Priority</div><div class="detail-value"><span class="priority-pill ${priorityClass}">${approval.priority || 'Normal'}</span></div></div>`;
+    html += `<div><div class="detail-label">Estimated Cost</div><div class="detail-value">${approval.estimated_cost ? fmtPrice(approval.estimated_cost) : '-'}</div></div>`;
+    html += `<div><div class="detail-label">Requested By</div><div class="detail-value">${approval.requested_by_name}</div></div>`;
+    html += `<div><div class="detail-label">Requested At</div><div class="detail-value">${formatDateTime(approval.requested_at)}</div></div>`;
     html += `</div>`;
-    
-    // Request info
-    html += `<div class="detail-section-title mt-2">Request Information</div>`;
-    html += `<div class="detail-grid">`;
-    html += `<div><div class="detail-label">Requested By</div><div class="detail-value">${escapeHtml(a.requested_by_name || '-')}</div></div>`;
-    html += `<div><div class="detail-label">Requested At</div><div class="detail-value">${formatDateTime(a.requested_at)}</div></div>`;
-    if (a.assigned_to_name) {
-        html += `<div><div class="detail-label">Assigned To</div><div class="detail-value">${escapeHtml(a.assigned_to_name)}</div></div>`;
+
+    // Item description
+    html += `<div class="detail-section-title mt-2">Item Description</div>`;
+    html += `<div class="text-muted mt-1">${escapeHtml(approval.item_description)}</div>`;
+
+    if (approval.part_number) {
+        html += `<div class="detail-grid mt-1">`;
+        html += `<div><div class="detail-label">Part Number</div><div class="detail-value">${escapeHtml(approval.part_number)}</div></div>`;
+        html += `<div><div class="detail-label">Quantity</div><div class="detail-value">${approval.quantity}</div></div>`;
+        html += `</div>`;
     }
-    html += `</div>`;
-    
-    if (a.comments) {
-        html += `<div class="detail-section-title mt-1">Comments</div>`;
-        html += `<div class="text-muted mt-1">${escapeHtml(a.comments)}</div>`;
+
+    // Order notes
+    if (approval.order_notes) {
+        html += `<div class="detail-section-title mt-2">Order Notes</div>`;
+        html += `<div class="text-muted mt-1">${escapeHtml(approval.order_notes)}</div>`;
     }
-    
-    // Quote document preview
-    if (a.quote_document_id) {
+
+    // Request comments
+    if (approval.comments) {
+        html += `<div class="detail-section-title mt-2">Request Comments</div>`;
+        html += `<div class="text-muted mt-1">${escapeHtml(approval.comments)}</div>`;
+    }
+
+    // Quote document
+    if (approval.quote_document_id) {
         html += `<div class="detail-section-title mt-2">Quote Document</div>`;
-        html += `<div class="quote-preview-container">`;
-        html += `<p class="text-muted"><strong>File:</strong> ${escapeHtml(a.quote_file_name)}</p>`;
-        html += `<button class="btn btn-secondary btn-sm" onclick="downloadDocument(${a.quote_document_id}, '${escapeHtml(a.quote_file_name)}')">⬇ Download Quote</button>`;
-        html += `</div>`;
+        const quotePath = approval.quote_file_path.replace('./', '/');
+        html += `<div class="mt-1"><a class="file-link" href="${quotePath}" target="_blank" rel="noopener">📄 ${escapeHtml(approval.quote_file_name)}</a></div>`;
     }
-    
-    // Approval/Rejection actions (only for pending)
-    if (a.status === 'pending' && (currentUser.role === 'manager' || currentUser.role === 'admin')) {
-        html += `<div class="detail-section-title mt-2">Manager Decision</div>`;
-        html += `<div class="approval-actions">`;
-        html += `<button class="btn btn-success" onclick="openApproveDialog()"><span style="font-size:1.2em;">✓</span> Approve</button>`;
-        html += `<button class="btn btn-danger" onclick="openRejectDialog()"><span style="font-size:1.2em;">✗</span> Reject</button>`;
-        html += `</div>`;
-    }
-    
-    // Decision info (if already decided)
-    if (a.status !== 'pending') {
+
+    // Approval decision (if decided)
+    if (approval.status !== 'pending') {
         html += `<div class="detail-section-title mt-2">Decision</div>`;
         html += `<div class="detail-grid">`;
-        html += `<div><div class="detail-label">Decided By</div><div class="detail-value">${escapeHtml(a.approved_by_name || '-')}</div></div>`;
-        html += `<div><div class="detail-label">Decided At</div><div class="detail-value">${formatDateTime(a.approved_at)}</div></div>`;
+        html += `<div><div class="detail-label">Decision By</div><div class="detail-value">${approval.approved_by_name || '-'}</div></div>`;
+        html += `<div><div class="detail-label">Decision At</div><div class="detail-value">${formatDateTime(approval.approved_at)}</div></div>`;
         html += `</div>`;
-        
-        if (a.status === 'rejected' && a.rejection_reason) {
-            html += `<div class="detail-section-title mt-1">Rejection Reason</div>`;
-            html += `<div class="text-danger mt-1">${escapeHtml(a.rejection_reason)}</div>`;
+
+        if (approval.rejection_reason) {
+            html += `<div class="mt-1"><strong>Rejection Reason:</strong><br><span class="text-muted">${escapeHtml(approval.rejection_reason)}</span></div>`;
         }
     }
-    
+
     // History
-    if (a.history && a.history.length > 0) {
+    if (approval.history && approval.history.length > 0) {
         html += `<div class="detail-section-title mt-2">History</div>`;
-        html += `<div class="approval-history">`;
-        for (const h of a.history) {
-            html += `<div class="history-item">`;
-            html += `<div class="history-time">${formatDateTime(h.performed_at)}</div>`;
-            html += `<div class="history-action"><strong>${h.action.toUpperCase()}</strong> by ${escapeHtml(h.performed_by_name || 'Unknown')}</div>`;
-            if (h.comments) {
-                html += `<div class="history-comments">${escapeHtml(h.comments)}</div>`;
-            }
-            html += `</div>`;
+        html += `<div class="text-muted" style="max-height: 120px; overflow-y: auto; font-size: 0.78rem;">`;
+        for (const h of approval.history) {
+            html += `<div>[${formatDateTime(h.performed_at)}] <strong>${escapeHtml(h.performed_by_name || 'System')}</strong> ${h.action} — ${escapeHtml(h.comments || '')}</div>`;
         }
         html += `</div>`;
     }
-    
-    body.innerHTML = html;
+
+    // Action buttons (only if pending and user is manager/admin)
+    if (isPending && currentUser && (currentUser.role === 'manager' || currentUser.role === 'admin')) {
+        html += `<hr class="mt-2" style="border-color: rgba(31,41,55,0.9); margin-bottom: 0.6rem;">`;
+        html += `<div class="detail-section-title">Your Decision</div>`;
+        html += `<div class="form-group mt-1">`;
+        html += `<label>Comments / Rejection Reason</label>`;
+        html += `<textarea id="approvalDecisionComments" class="form-control form-control-sm" rows="3" placeholder="Add your comments or rejection reason (required for rejection)"></textarea>`;
+        html += `</div>`;
+        html += `<div class="form-actions" style="display: flex; gap: 0.5rem;">`;
+        html += `<button id="btnApproveRequest" class="btn btn-success btn-sm">✓ Approve</button>`;
+        html += `<button id="btnRejectRequest" class="btn btn-danger btn-sm">✗ Reject</button>`;
+        html += `</div>`;
+    }
+
+    approvalDetailBody.innerHTML = html;
+
+    // Attach action button listeners
+    const btnApprove = document.getElementById('btnApproveRequest');
+    const btnReject = document.getElementById('btnRejectRequest');
+
+    if (btnApprove) {
+        btnApprove.addEventListener('click', () => handleApprove(approval.id));
+    }
+
+    if (btnReject) {
+        btnReject.addEventListener('click', () => handleReject(approval.id));
+    }
 }
 
-// ========================================
-// APPROVE DIALOG
-// ========================================
+// Handle approve action
+async function handleApprove(approvalId) {
+    const comments = document.getElementById('approvalDecisionComments').value.trim();
 
-function openApproveDialog() {
-    const html = `
-        <div class="dialog-overlay" id="approveDialog">
-            <div class="dialog-box">
-                <h3>Approve Quote Request</h3>
-                <p>Are you sure you want to approve this quote for Order #${currentApproval.order_id}?</p>
-                <div class="form-group mt-1">
-                    <label>Comments (optional)</label>
-                    <textarea id="approveComments" class="form-control" rows="3" placeholder="Add any notes about this approval..."></textarea>
-                </div>
-                <div class="dialog-actions">
-                    <button class="btn btn-secondary" onclick="closeApproveDialog()">Cancel</button>
-                    <button class="btn btn-success" onclick="submitApprove()">✓ Approve</button>
-                </div>
-            </div>
-        </div>
-    `;
-    document.body.insertAdjacentHTML('beforeend', html);
-}
+    if (!confirm('Are you sure you want to APPROVE this request?')) {
+        return;
+    }
 
-function closeApproveDialog() {
-    const dialog = document.getElementById('approveDialog');
-    if (dialog) dialog.remove();
-}
-
-async function submitApprove() {
-    const comments = document.getElementById('approveComments')?.value.trim();
-    
     try {
-        const res = await apiPut(`/approvals/${currentApproval.id}/approve`, { comments });
+        const res = await apiPut(`/approvals/${approvalId}/approve`, { comments });
+
         if (res.success) {
-            alert('✅ Approval granted!');
-            closeApproveDialog();
-            loadApprovals();
-            loadPendingApprovalsCount();
-            
-            const panel = document.getElementById('approvalDetailPanel');
-            if (panel) panel.classList.add('hidden');
+            alert('✓ Approval granted successfully!');
+            approvalDetailPanel.classList.add('hidden');
+            loadApprovals(); // Reload list
+            if (typeof loadOrders === 'function') {
+                loadOrders(); // Refresh orders if on that tab
+            }
         } else {
             alert('Failed to approve: ' + (res.message || 'Unknown error'));
         }
@@ -281,53 +351,29 @@ async function submitApprove() {
     }
 }
 
-// ========================================
-// REJECT DIALOG
-// ========================================
+// Handle reject action
+async function handleReject(approvalId) {
+    const rejectionReason = document.getElementById('approvalDecisionComments').value.trim();
 
-function openRejectDialog() {
-    const html = `
-        <div class="dialog-overlay" id="rejectDialog">
-            <div class="dialog-box">
-                <h3>Reject Quote Request</h3>
-                <p class="text-danger">Please provide a reason for rejecting Order #${currentApproval.order_id}.</p>
-                <div class="form-group mt-1">
-                    <label>Rejection Reason <span class="text-danger">*</span></label>
-                    <textarea id="rejectReason" class="form-control" rows="4" placeholder="Explain why this quote cannot be approved..." required></textarea>
-                </div>
-                <div class="dialog-actions">
-                    <button class="btn btn-secondary" onclick="closeRejectDialog()">Cancel</button>
-                    <button class="btn btn-danger" onclick="submitReject()">✗ Reject</button>
-                </div>
-            </div>
-        </div>
-    `;
-    document.body.insertAdjacentHTML('beforeend', html);
-}
-
-function closeRejectDialog() {
-    const dialog = document.getElementById('rejectDialog');
-    if (dialog) dialog.remove();
-}
-
-async function submitReject() {
-    const rejection_reason = document.getElementById('rejectReason')?.value.trim();
-    
-    if (!rejection_reason) {
+    if (!rejectionReason) {
         alert('Please provide a rejection reason');
         return;
     }
-    
+
+    if (!confirm('Are you sure you want to REJECT this request?\n\nThis will put the order on hold.')) {
+        return;
+    }
+
     try {
-        const res = await apiPut(`/approvals/${currentApproval.id}/reject`, { rejection_reason });
+        const res = await apiPut(`/approvals/${approvalId}/reject`, { rejection_reason: rejectionReason });
+
         if (res.success) {
-            alert('❌ Approval rejected');
-            closeRejectDialog();
-            loadApprovals();
-            loadPendingApprovalsCount();
-            
-            const panel = document.getElementById('approvalDetailPanel');
-            if (panel) panel.classList.add('hidden');
+            alert('✗ Request rejected');
+            approvalDetailPanel.classList.add('hidden');
+            loadApprovals(); // Reload list
+            if (typeof loadOrders === 'function') {
+                loadOrders(); // Refresh orders if on that tab
+            }
         } else {
             alert('Failed to reject: ' + (res.message || 'Unknown error'));
         }
@@ -337,144 +383,15 @@ async function submitReject() {
     }
 }
 
-// ========================================
-// SUBMIT FOR APPROVAL (FROM ORDER DETAIL)
-// ========================================
-
-function openSubmitForApprovalDialog(orderId) {
-    // Get available managers
-    const managers = usersState.filter(u => u.role === 'manager' && u.active);
-    const managersOptions = managers.map(m => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('');
-    
-    // Get suppliers
-    const suppliersOptions = suppliersState.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
-    
-    const html = `
-        <div class="dialog-overlay" id="submitApprovalDialog">
-            <div class="dialog-box" style="max-width: 500px;">
-                <h3>Submit for Approval</h3>
-                <p>Request manager approval for Order #${orderId}</p>
-                
-                <div class="form-group">
-                    <label>Assign to Manager</label>
-                    <select id="approvalManager" class="form-control">
-                        <option value="">Auto-assign</option>
-                        ${managersOptions}
-                    </select>
-                </div>
-                
-                <div class="form-group">
-                    <label>Supplier</label>
-                    <select id="approvalSupplier" class="form-control">
-                        <option value="">Select Supplier</option>
-                        ${suppliersOptions}
-                    </select>
-                </div>
-                
-                <div class="form-group">
-                    <label>Estimated Cost</label>
-                    <input type="number" id="approvalCost" class="form-control" step="0.01" placeholder="0.00">
-                </div>
-                
-                <div class="form-group">
-                    <label>Priority</label>
-                    <select id="approvalPriority" class="form-control">
-                        <option value="Normal">Normal</option>
-                        <option value="High">High</option>
-                        <option value="Urgent">Urgent</option>
-                        <option value="Low">Low</option>
-                    </select>
-                </div>
-                
-                <div class="form-group">
-                    <label>Comments</label>
-                    <textarea id="approvalComments" class="form-control" rows="3" placeholder="Additional notes for the manager..."></textarea>
-                </div>
-                
-                <div class="dialog-actions">
-                    <button class="btn btn-secondary" onclick="closeSubmitApprovalDialog()">Cancel</button>
-                    <button class="btn btn-primary" onclick="submitApprovalRequest(${orderId})">📤 Submit</button>
-                </div>
-            </div>
-        </div>
-    `;
-    document.body.insertAdjacentHTML('beforeend', html);
+// Helper: Capitalize first letter
+function capitalizeFirst(str) {
+    if (!str) return '';
+    return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-function closeSubmitApprovalDialog() {
-    const dialog = document.getElementById('submitApprovalDialog');
-    if (dialog) dialog.remove();
-}
-
-async function submitApprovalRequest(orderId) {
-    const assigned_to = document.getElementById('approvalManager')?.value || null;
-    const supplier_id = document.getElementById('approvalSupplier')?.value || null;
-    const estimated_cost = document.getElementById('approvalCost')?.value || null;
-    const priority = document.getElementById('approvalPriority')?.value || 'Normal';
-    const comments = document.getElementById('approvalComments')?.value.trim() || null;
-    
-    const payload = {
-        order_id: orderId,
-        assigned_to: assigned_to ? parseInt(assigned_to, 10) : null,
-        supplier_id: supplier_id ? parseInt(supplier_id, 10) : null,
-        estimated_cost: estimated_cost ? parseFloat(estimated_cost) : null,
-        priority,
-        comments
-    };
-    
-    try {
-        const res = await apiPost('/approvals', payload);
-        if (res.success) {
-            alert('✅ Approval request submitted!');
-            closeSubmitApprovalDialog();
-            
-            // Reload order to show updated status
-            if (typeof loadOrders === 'function') {
-                loadOrders();
-            }
-        } else {
-            alert('Failed to submit approval request: ' + (res.message || 'Unknown error'));
-        }
-    } catch (err) {
-        console.error('Error submitting approval request:', err);
-        alert('Failed to submit approval request');
-    }
-}
-
-// ========================================
-// HELPER: View order from approval
-// ========================================
-
-function viewOrderFromApproval(orderId) {
-    // Switch to orders tab
-    switchTab('ordersTab');
-    
-    // Open order detail
-    if (typeof openOrderDetail === 'function') {
-        openOrderDetail(orderId);
-    }
-    
-    // Close approval panel
-    const panel = document.getElementById('approvalDetailPanel');
-    if (panel) panel.classList.add('hidden');
-}
-
-// ========================================
-// GLOBAL EXPOSURE
-// ========================================
-
-if (typeof window !== 'undefined') {
-    window.initializeApprovals = initializeApprovals;
-    window.loadApprovals = loadApprovals;
-    window.openApprovalDetail = openApprovalDetail;
-    window.openApproveDialog = openApproveDialog;
-    window.closeApproveDialog = closeApproveDialog;
-    window.submitApprove = submitApprove;
-    window.openRejectDialog = openRejectDialog;
-    window.closeRejectDialog = closeRejectDialog;
-    window.submitReject = submitReject;
-    window.openSubmitForApprovalDialog = openSubmitForApprovalDialog;
-    window.closeSubmitApprovalDialog = closeSubmitApprovalDialog;
-    window.submitApprovalRequest = submitApprovalRequest;
-    window.viewOrderFromApproval = viewOrderFromApproval;
+// Initialize when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initApprovals);
+} else {
+    initApprovals();
 }

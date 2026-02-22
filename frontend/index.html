@@ -8,6 +8,7 @@
     <!-- File Upload Enhancement Styles -->
     <link rel="stylesheet" href="css/order-form-enhanced.css">
     <link rel="stylesheet" href="documents.css">
+    <link rel="stylesheet" href="approvals.css">
     <script src="upload-progress.js"></script>
 </head>
 <body>
@@ -51,6 +52,10 @@
             <div id="navTabs" class="tabs hidden">
                 <button class="tab active" data-tab="ordersTab">Orders</button>
                 <button class="tab" data-tab="quotesTab">Quotes</button>
+                <button class="tab" data-tab="approvalsTab" id="approvalsTabButton" hidden style="position: relative;">
+                    Approvals
+                    <span id="approvalsBadge" class="badge-notification"></span>
+                </button>
                 <button class="tab" data-tab="suppliersTab">Suppliers</button>
                 <button class="tab" data-tab="buildingsTab" id="buildingsTabButton" hidden>Buildings</button>
                 <button class="tab" data-tab="costCentersTab" id="costCentersTabButton" hidden>Cost Centers</button>
@@ -198,9 +203,39 @@
                     <div id="orderDetailBody" class="side-panel-body">
                         <!-- Order details will be rendered here by app.js -->
                     </div>
-                    <!-- Documents Section (Phase 1) -->
-                    <div id="documentsSection" style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(148,163,184,0.2);">
+                    <!-- Documents Section (Phase 2) -->
+                    <div id="documentsSection" style="display:none; margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(148,163,184,0.2);">
                         <!-- Documents UI renders here by documents.js -->
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Approvals Tab (Phase 3) -->
+            <section id="approvalsTab" class="tab-content hidden">
+                <div class="card">
+                    <div class="card-header-row">
+                        <h2>Approval Requests</h2>
+                        <div>
+                            <select id="approvalStatusFilter" class="form-control form-control-sm" style="width: 150px; display: inline-block;" onchange="loadApprovals({status: this.value})">
+                                <option value="">All Statuses</option>
+                                <option value="pending" selected>Pending</option>
+                                <option value="approved">Approved</option>
+                                <option value="rejected">Rejected</option>
+                            </select>
+                            <button id="btnRefreshApprovals" class="btn btn-secondary btn-sm" onclick="loadApprovals()">Refresh</button>
+                        </div>
+                    </div>
+                    <div id="approvalsTable"></div>
+                </div>
+
+                <!-- Approval Detail Panel -->
+                <div id="approvalDetailPanel" class="side-panel hidden">
+                    <div class="side-panel-header">
+                        <h3>Approval Request</h3>
+                        <button onclick="document.getElementById('approvalDetailPanel').classList.add('hidden')" class="btn-icon">✕</button>
+                    </div>
+                    <div id="approvalDetailBody" class="side-panel-body">
+                        <!-- Approval details will be rendered here by approvals.js -->
                     </div>
                 </div>
             </section>
@@ -409,6 +444,7 @@
                                 <select id="userRoleSelect" class="form-control" required>
                                     <option value="admin">Admin</option>
                                     <option value="procurement">Procurement</option>
+                                    <option value="manager">Manager</option>
                                     <option value="requester">Requester</option>
                                 </select>
                             </div>
@@ -445,5 +481,6 @@
 <!-- File Upload Enhancement Script -->
 <script src="js/order-form-enhanced.js"></script>
 <script src="documents.js"></script>
+<script src="approvals.js"></script>
 </body>
 </html>

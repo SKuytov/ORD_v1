@@ -4,6 +4,7 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;
+const fsSync = require('fs');
 const pool = require('../config/database');
 const { authenticateToken } = require('../middleware/auth');
 
@@ -39,6 +40,65 @@ const upload = multer({
         } else {
             cb(new Error('Invalid file type. Allowed: PDF, images, Office docs, archives'));
         }
+    }
+});
+
+// ========== GET: Download document file ==========
+router.get('/:documentId/download', authenticateToken, async (req, res) => {
+    try {
+        const { documentId } = req.params;
+
+        // Get document info from database
+        const [documents] = await pool.query(
+            'SELECT file_path, file_name, mime_type, file_size FROM documents WHERE id = ?',
+            [documentId]
+        );
+
+        if (documents.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Document not found'
+            });
+        }
+
+        const document = documents[0];
+        const filePath = document.file_path;
+
+        // Check if file exists
+        try {
+            await fs.access(filePath);
+        } catch (err) {
+            console.error('File not found on disk:', filePath);
+            return res.status(404).json({
+                success: false,
+                message: 'File not found on server'
+            });
+        }
+
+        // Set proper headers for download
+        res.setHeader('Content-Type', document.mime_type || 'application/octet-stream');
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(document.file_name)}"`);
+        res.setHeader('Content-Length', document.file_size);
+
+        // Stream the file
+        const fileStream = fsSync.createReadStream(filePath);
+        fileStream.pipe(res);
+
+        fileStream.on('error', (err) => {
+            console.error('Error streaming file:', err);
+            if (!res.headersSent) {
+                res.status(500).json({
+                    success: false,
+                    message: 'Error streaming file'
+                });
+            }
+        });
+    } catch (error) {
+        console.error('Error downloading document:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to download document'
+        });
     }
 });
 

@@ -792,13 +792,31 @@ function renderFlatOrders() {
 
     let html = '<div class="table-wrapper"><table><thead><tr>';
     if (isAdminView) html += '<th class="sticky"><input type="checkbox" id="selectAllOrders"></th>';
-    html += '<th>ID</th><th>Building</th><th>Cost Center</th><th>Item</th><th>Qty</th><th>Needed</th><th>Status</th>';
+    
+    // NEW COLUMN ORDER: ID, View Button, Item, Cost Center, Qty, Status, Priority, Files, Requester, Delivery, Needed, Supplier, Building, Unit, Total
+    html += '<th>ID</th>';
+    html += '<th></th>'; // View button column
+    html += '<th>Item</th>';
+    html += '<th>Cost Center</th>';
+    html += '<th>Qty</th>';
+    html += '<th>Status</th>';
+    html += '<th>Priority</th>';
+    html += '<th>Files</th>';
+    
     if (isAdminView) {
-        html += '<th>Priority</th><th>Delivery</th><th>Supplier</th><th>Unit</th><th>Total</th><th>Files</th><th>Requester</th>';
+        html += '<th>Requester</th>';
+        html += '<th>Delivery</th>';
+        html += '<th>Needed</th>';
+        html += '<th>Supplier</th>';
+        html += '<th>Building</th>';
+        html += '<th>Unit</th>';
+        html += '<th>Total</th>';
     } else {
-        html += '<th>Priority</th><th>Delivery</th><th>Files</th>';
+        html += '<th>Delivery</th>';
+        html += '<th>Needed</th>';
     }
-    html += '<th></th></tr></thead><tbody>';
+    
+    html += '</tr></thead><tbody>';
 
     for (const order of filteredOrders) {
         const statusClass = 'status-' + order.status.toLowerCase().replace(/ /g, '-');
@@ -807,30 +825,64 @@ function renderFlatOrders() {
         const deliveryStatus = getDeliveryStatus(order);
 
         html += '<tr data-id="' + order.id + '">';
+        
         if (isAdminView) {
             html += `<td class="sticky"><input type="checkbox" class="row-select" data-id="${order.id}"></td>`;
         }
+        
+        // ID
         html += `<td>#${order.id}</td>`;
+        
+        // View Button (moved here!)
+        html += `<td><button class="btn btn-secondary btn-sm btn-view-order" data-id="${order.id}">View</button></td>`;
+        
+        // Item
         html += `<td title="${escapeHtml(order.item_description)}">${escapeHtml(order.item_description.substring(0, 40))}${order.item_description.length > 40 ? '…' : ''}</td>`;
+        
+        // Cost Center
         html += `<td>${order.cost_center_code || '-'}</td>`;
+        
+        // Qty
         html += `<td>${order.quantity}</td>`;
+        
+        // Status
         html += `<td><span class="status-badge ${statusClass}">${order.status}</span></td>`;
+        
+        // Priority
         html += `<td><span class="priority-pill ${priorityClass}">${order.priority || 'Normal'}</span></td>`;
-        html += `<td>${getDeliveryBadgeHtml(deliveryStatus)}</td>`;
-        html += `<td>${formatDate(order.date_needed)}</td>`;
-        html += `<td>${order.building}</td>`;
+        
+        // Files
+        html += `<td>${hasFiles ? '📎 ' + order.files.length : '-'}</td>`;
 
         if (isAdminView) {
-            html += `<td>${order.supplier_name || '-'}</td>`;
-            html += `<td class="text-right">${fmtPrice(order.unit_price)}</td>`;
-            html += `<td class="text-right">${fmtPrice(order.total_price)}</td>`;
-            html += `<td>${hasFiles ? '📎 ' + order.files.length : '-'}</td>`;
+            // Requester
             html += `<td>${order.requester_name}</td>`;
+            
+            // Delivery
+            html += `<td>${getDeliveryBadgeHtml(deliveryStatus)}</td>`;
+            
+            // Needed
+            html += `<td>${formatDate(order.date_needed)}</td>`;
+            
+            // Supplier
+            html += `<td>${order.supplier_name || '-'}</td>`;
+            
+            // Building
+            html += `<td>${order.building}</td>`;
+            
+            // Unit
+            html += `<td class="text-right">${fmtPrice(order.unit_price)}</td>`;
+            
+            // Total
+            html += `<td class="text-right">${fmtPrice(order.total_price)}</td>`;
         } else {
-            html += `<td>${hasFiles ? '📎 ' + order.files.length : '-'}</td>`;
+            // Delivery
+            html += `<td>${getDeliveryBadgeHtml(deliveryStatus)}</td>`;
+            
+            // Needed
+            html += `<td>${formatDate(order.date_needed)}</td>`;
         }
 
-        html += `<td><button class="btn btn-secondary btn-sm btn-view-order" data-id="${order.id}">View</button></td>`;
         html += '</tr>';
     }
     html += '</tbody></table></div>';
@@ -867,13 +919,30 @@ function renderGroupedOrders() {
 
         html += '<div class="table-wrapper"><table><thead><tr>';
         if (isAdminView) html += '<th class="sticky"><input type="checkbox" class="select-all-group" data-status="${status}"></th>';
-        html += '<th>ID</th><th>Building</th><th>Cost Center</th><th>Item</th><th>Qty</th><th>Needed</th>';
+        
+        // NEW COLUMN ORDER (without Status since we're grouped by status)
+        html += '<th>ID</th>';
+        html += '<th></th>'; // View button column
+        html += '<th>Item</th>';
+        html += '<th>Cost Center</th>';
+        html += '<th>Qty</th>';
+        html += '<th>Priority</th>';
+        html += '<th>Files</th>';
+        
         if (isAdminView) {
-            html += '<th>Priority</th><th>Delivery</th><th>Supplier</th><th>Unit</th><th>Total</th><th>Files</th><th>Requester</th>';
+            html += '<th>Requester</th>';
+            html += '<th>Delivery</th>';
+            html += '<th>Needed</th>';
+            html += '<th>Supplier</th>';
+            html += '<th>Building</th>';
+            html += '<th>Unit</th>';
+            html += '<th>Total</th>';
         } else {
-            html += '<th>Priority</th><th>Delivery</th><th>Files</th>';
+            html += '<th>Delivery</th>';
+            html += '<th>Needed</th>';
         }
-        html += '<th></th></tr></thead><tbody>';
+        
+        html += '</tr></thead><tbody>';
 
         for (const order of grouped[status]) {
             const priorityClass = 'priority-' + (order.priority || 'Normal').toLowerCase();
@@ -881,29 +950,61 @@ function renderGroupedOrders() {
             const deliveryStatus = getDeliveryStatus(order);
 
             html += '<tr data-id="' + order.id + '">';
+            
             if (isAdminView) {
                 html += `<td class="sticky"><input type="checkbox" class="row-select" data-id="${order.id}"></td>`;
             }
+            
+            // ID
             html += `<td>#${order.id}</td>`;
-            html += `<td>${order.building}</td>`;
-            html += `<td>${order.cost_center_code || '-'}</td>`;
+            
+            // View Button (moved here!)
+            html += `<td><button class="btn btn-secondary btn-sm btn-view-order" data-id="${order.id}">View</button></td>`;
+            
+            // Item
             html += `<td title="${escapeHtml(order.item_description)}">${escapeHtml(order.item_description.substring(0, 40))}${order.item_description.length > 40 ? '…' : ''}</td>`;
+            
+            // Cost Center
+            html += `<td>${order.cost_center_code || '-'}</td>`;
+            
+            // Qty
             html += `<td>${order.quantity}</td>`;
-            html += `<td>${formatDate(order.date_needed)}</td>`;
+            
+            // Priority
             html += `<td><span class="priority-pill ${priorityClass}">${order.priority || 'Normal'}</span></td>`;
-            html += `<td>${getDeliveryBadgeHtml(deliveryStatus)}</td>`;
+            
+            // Files
+            html += `<td>${hasFiles ? '📎 ' + order.files.length : '-'}</td>`;
 
             if (isAdminView) {
-                html += `<td>${order.supplier_name || '-'}</td>`;
-                html += `<td class="text-right">${fmtPrice(order.unit_price)}</td>`;
-                html += `<td class="text-right">${fmtPrice(order.total_price)}</td>`;
-                html += `<td>${hasFiles ? '📎 ' + order.files.length : '-'}</td>`;
+                // Requester
                 html += `<td>${order.requester_name}</td>`;
+                
+                // Delivery
+                html += `<td>${getDeliveryBadgeHtml(deliveryStatus)}</td>`;
+                
+                // Needed
+                html += `<td>${formatDate(order.date_needed)}</td>`;
+                
+                // Supplier
+                html += `<td>${order.supplier_name || '-'}</td>`;
+                
+                // Building
+                html += `<td>${order.building}</td>`;
+                
+                // Unit
+                html += `<td class="text-right">${fmtPrice(order.unit_price)}</td>`;
+                
+                // Total
+                html += `<td class="text-right">${fmtPrice(order.total_price)}</td>`;
             } else {
-                html += `<td>${hasFiles ? '📎 ' + order.files.length : '-'}</td>`;
+                // Delivery
+                html += `<td>${getDeliveryBadgeHtml(deliveryStatus)}</td>`;
+                
+                // Needed
+                html += `<td>${formatDate(order.date_needed)}</td>`;
             }
 
-            html += `<td><button class="btn btn-secondary btn-sm btn-view-order" data-id="${order.id}">View</button></td>`;
             html += '</tr>';
         }
 

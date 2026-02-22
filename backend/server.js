@@ -52,7 +52,7 @@ app.get('/api/health', (req, res) => {
         status: 'OK',
         timestamp: new Date().toISOString(),
         environment: process.env.NODE_ENV,
-        version: '2.2.0' // Updated version for Phase 1 Document Management
+        version: '2.3.0' // Phase 2: Multi-Order Document Management (MySQL)
     });
 });
 
@@ -72,10 +72,10 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`PartPulse Orders Server v2.2 running on port ${PORT}`);
+    console.log(`PartPulse Orders Server v2.3 running on port ${PORT}`);
     console.log(`Environment: ${process.env.NODE_ENV}`);
     console.log(`Frontend URL: ${process.env.FRONTEND_URL}`);
-    console.log(`Document Management: ENABLED`);
+    console.log(`Document Management: Phase 2 - Multi-Order (MySQL)`);
 });
 
 module.exports = app;

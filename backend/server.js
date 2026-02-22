@@ -13,6 +13,7 @@ const quoteRoutes = require('./routes/quotes');
 const userRoutes = require('./routes/users');
 const buildingRoutes = require('./routes/buildings');
 const costCenterRoutes = require('./routes/costCenters');
+const documentsRoutes = require('./routes/documents');
 const testRoutes = require('./routes/test');
 
 const app = express();
@@ -42,6 +43,7 @@ app.use('/api/quotes', quoteRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/buildings', buildingRoutes);
 app.use('/api/cost-centers', costCenterRoutes);
+app.use('/api/documents', documentsRoutes);
 app.use('/api/test', testRoutes);
 
 // Health check
@@ -50,7 +52,7 @@ app.get('/api/health', (req, res) => {
         status: 'OK',
         timestamp: new Date().toISOString(),
         environment: process.env.NODE_ENV,
-        version: '2.1.0'
+        version: '2.2.0' // Updated version for Phase 1 Document Management
     });
 });
 
@@ -70,9 +72,10 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`PartPulse Orders Server v2.1 running on port ${PORT}`);
+    console.log(`PartPulse Orders Server v2.2 running on port ${PORT}`);
     console.log(`Environment: ${process.env.NODE_ENV}`);
     console.log(`Frontend URL: ${process.env.FRONTEND_URL}`);
+    console.log(`Document Management: ENABLED`);
 });
 
 module.exports = app;

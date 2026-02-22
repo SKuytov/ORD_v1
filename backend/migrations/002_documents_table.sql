@@ -138,10 +138,55 @@ CREATE TABLE IF NOT EXISTS communications (
     INDEX idx_sent_at (sent_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Add supplier country field if not exists (for Intrastat tracking)
-ALTER TABLE suppliers 
-ADD COLUMN IF NOT EXISTS country VARCHAR(2) COMMENT 'ISO 2-letter country code' AFTER address,
-ADD COLUMN IF NOT EXISTS is_eu BOOLEAN DEFAULT FALSE COMMENT 'Is supplier in EU?' AFTER country;
+-- Add supplier country fields (safe method - checks if column exists)
+SET @dbname = DATABASE();
+SET @tablename = 'suppliers';
+SET @columnname = 'country';
+SET @preparedStatement = (
+    SELECT IF(
+        COUNT(*) = 0,
+        CONCAT('ALTER TABLE ', @tablename, ' ADD COLUMN ', @columnname, ' VARCHAR(2) COMMENT "ISO 2-letter country code" AFTER address;'),
+        'SELECT "Column country already exists" AS Info;'
+    )
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = @dbname
+    AND TABLE_NAME = @tablename
+    AND COLUMN_NAME = @columnname
+);
+PREPARE alterIfNotExists FROM @preparedStatement;
+EXECUTE alterIfNotExists;
+DEALLOCATE PREPARE alterIfNotExists;
 
--- Add index for quick EU supplier lookup
-CREATE INDEX IF NOT EXISTS idx_is_eu ON suppliers(is_eu);
+-- Add is_eu column
+SET @columnname = 'is_eu';
+SET @preparedStatement = (
+    SELECT IF(
+        COUNT(*) = 0,
+        CONCAT('ALTER TABLE ', @tablename, ' ADD COLUMN ', @columnname, ' BOOLEAN DEFAULT FALSE COMMENT "Is supplier in EU?" AFTER country;'),
+        'SELECT "Column is_eu already exists" AS Info;'
+    )
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = @dbname
+    AND TABLE_NAME = @tablename
+    AND COLUMN_NAME = @columnname
+);
+PREPARE alterIfNotExists FROM @preparedStatement;
+EXECUTE alterIfNotExists;
+DEALLOCATE PREPARE alterIfNotExists;
+
+-- Add index for quick EU supplier lookup (safe method)
+SET @indexname = 'idx_is_eu';
+SET @preparedStatement = (
+    SELECT IF(
+        COUNT(*) = 0,
+        CONCAT('CREATE INDEX ', @indexname, ' ON ', @tablename, '(is_eu);'),
+        'SELECT "Index idx_is_eu already exists" AS Info;'
+    )
+    FROM INFORMATION_SCHEMA.STATISTICS
+    WHERE TABLE_SCHEMA = @dbname
+    AND TABLE_NAME = @tablename
+    AND INDEX_NAME = @indexname
+);
+PREPARE createIndexIfNotExists FROM @preparedStatement;
+EXECUTE createIndexIfNotExists;
+DEALLOCATE PREPARE createIndexIfNotExists;

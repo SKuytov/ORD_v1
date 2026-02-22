@@ -1,4 +1,4 @@
-// frontend/app.js - PartPulse Orders v2.2 - Document Management Integration
+// frontend/app.js - PartPulse Orders v2.3 - Manager Role Support
 
 const API_BASE = '/api';
 let currentUser = null;
@@ -57,11 +57,13 @@ const selectedCount = document.getElementById('selectedCount');
 const orderActionsBar = document.getElementById('orderActionsBar');
 const btnCreateQuote = document.getElementById('btnCreateQuote');
 
-const quotesTable = document.getElementById('quotesTable');
+const quotesTable = document.getElementById('quotesTab') ? document.getElementById('quotesTable') : null;
 const quoteDetailPanel = document.getElementById('quoteDetailPanel');
 const quoteDetailBody = document.getElementById('quoteDetailBody');
 const btnCloseQuoteDetail = document.getElementById('btnCloseQuoteDetail');
 const btnRefreshQuotes = document.getElementById('btnRefreshQuotes');
+
+const approvalsTabButton = document.getElementById('approvalsTabButton');
 
 const suppliersTable = document.getElementById('suppliersTable');
 const supplierFormCard = document.getElementById('supplierFormCard');
@@ -202,14 +204,14 @@ function setupEventListeners() {
     if (btnViewGrouped) btnViewGrouped.addEventListener('click', () => setViewMode('grouped'));
 
     btnCloseDetail.addEventListener('click', () => { orderDetailPanel.classList.add('hidden'); });
-    btnCloseQuoteDetail.addEventListener('click', () => { quoteDetailPanel.classList.add('hidden'); });
+    if (btnCloseQuoteDetail) btnCloseQuoteDetail.addEventListener('click', () => { quoteDetailPanel.classList.add('hidden'); });
 
-    btnCreateQuote.addEventListener('click', openCreateQuoteDialog);
-    btnRefreshQuotes.addEventListener('click', loadQuotes);
+    if (btnCreateQuote) btnCreateQuote.addEventListener('click', openCreateQuoteDialog);
+    if (btnRefreshQuotes) btnRefreshQuotes.addEventListener('click', loadQuotes);
 
-    btnNewSupplier.addEventListener('click', () => openSupplierForm());
-    btnCancelSupplier.addEventListener('click', () => { supplierFormCard.hidden = true; });
-    supplierForm.addEventListener('submit', handleSaveSupplier);
+    if (btnNewSupplier) btnNewSupplier.addEventListener('click', () => openSupplierForm());
+    if (btnCancelSupplier) btnCancelSupplier.addEventListener('click', () => { supplierFormCard.hidden = true; });
+    if (supplierForm) supplierForm.addEventListener('submit', handleSaveSupplier);
 
     if (btnNewBuilding) btnNewBuilding.addEventListener('click', () => openBuildingForm());
     if (btnCancelBuilding) btnCancelBuilding.addEventListener('click', () => { buildingFormCard.hidden = true; });
@@ -417,28 +419,60 @@ function showDashboard() {
     loginScreen.classList.add('hidden');
     dashboardScreen.classList.remove('hidden');
     userName.textContent = currentUser.name;
-    userRoleBadge.textContent = currentUser.role === 'admin' ? 'Admin' : currentUser.role === 'procurement' ? 'Procurement' : `Requester · ${currentUser.building}`;
+    
+    // ⭐ FIX: Proper role badge display including manager
+    if (currentUser.role === 'admin') {
+        userRoleBadge.textContent = 'Admin';
+    } else if (currentUser.role === 'procurement') {
+        userRoleBadge.textContent = 'Procurement';
+    } else if (currentUser.role === 'manager') {
+        userRoleBadge.textContent = 'Manager';
+    } else {
+        userRoleBadge.textContent = `Requester · ${currentUser.building || ''}`;
+    }
 
+    // Hide admin-only tabs by default
     if (usersTabButton) usersTabButton.hidden = true;
     if (buildingsTabButton) buildingsTabButton.hidden = true;
     if (costCentersTabButton) costCentersTabButton.hidden = true;
+    if (approvalsTabButton) approvalsTabButton.hidden = true;
 
     if (currentUser.role === 'requester') {
+        // REQUESTER: Show order creation form, hide navigation tabs
         createOrderSection.classList.remove('hidden');
         requesterBuildingBadge.textContent = `Building ${currentUser.building}`;
         navTabs.classList.add('hidden');
         
-        // HIDE ORDER ACTIONS CONTAINER FOR REQUESTERS
         const orderActionsContainer = document.getElementById('orderActionsContainer');
         if (orderActionsContainer) {
             orderActionsContainer.style.display = 'none';
         }
-    } else {
+    } else if (currentUser.role === 'manager') {
+        // ⭐ MANAGER: Show navigation with approvals tab, read-only orders view
         createOrderSection.classList.add('hidden');
         navTabs.classList.remove('hidden');
         populateStatusFilter();
         
-        // SHOW ORDER ACTIONS CONTAINER FOR ADMIN/PROCUREMENT
+        // Show approvals tab for managers
+        if (approvalsTabButton) approvalsTabButton.hidden = false;
+        
+        // Hide order actions (quote creation) for managers
+        const orderActionsContainer = document.getElementById('orderActionsContainer');
+        if (orderActionsContainer) {
+            orderActionsContainer.style.display = 'none';
+        }
+        
+        // Initialize approvals if function exists
+        if (typeof loadApprovals === 'function') {
+            loadApprovals();
+        }
+    } else {
+        // ADMIN / PROCUREMENT: Full access
+        createOrderSection.classList.add('hidden');
+        navTabs.classList.remove('hidden');
+        populateStatusFilter();
+        
+        // Show order actions container for admin/procurement
         const orderActionsContainer = document.getElementById('orderActionsContainer');
         if (orderActionsContainer) {
             orderActionsContainer.style.display = 'flex';
@@ -451,6 +485,7 @@ function showDashboard() {
         }
     }
 
+    // Show orders tab by default
     document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
     const ordersTabEl = document.getElementById('ordersTab');
     if (ordersTabEl) ordersTabEl.classList.remove('hidden');
@@ -789,9 +824,10 @@ function renderOrdersTable() {
 
 function renderFlatOrders() {
     const isAdminView = currentUser.role !== 'requester';
+    const canSelectOrders = currentUser.role === 'admin' || currentUser.role === 'procurement';
 
     let html = '<div class="table-wrapper"><table><thead><tr>';
-    if (isAdminView) html += '<th class="sticky"><input type="checkbox" id="selectAllOrders"></th>';
+    if (canSelectOrders) html += '<th class="sticky"><input type="checkbox" id="selectAllOrders"></th>';
     
     // NEW COLUMN ORDER: ID, View Button, Item, Cost Center, Qty, Status, Priority, Files, Requester, Delivery, Needed, Supplier, Building, Unit, Total
     html += '<th>ID</th>';
@@ -826,7 +862,7 @@ function renderFlatOrders() {
 
         html += '<tr data-id="' + order.id + '">';
         
-        if (isAdminView) {
+        if (canSelectOrders) {
             html += `<td class="sticky"><input type="checkbox" class="row-select" data-id="${order.id}"></td>`;
         }
         
@@ -888,11 +924,12 @@ function renderFlatOrders() {
     html += '</tbody></table></div>';
 
     ordersTable.innerHTML = html;
-    attachOrderEventListeners(isAdminView);
+    attachOrderEventListeners(canSelectOrders);
 }
 
 function renderGroupedOrders() {
     const isAdminView = currentUser.role !== 'requester';
+    const canSelectOrders = currentUser.role === 'admin' || currentUser.role === 'procurement';
     const grouped = {};
 
     // Group by status
@@ -918,7 +955,7 @@ function renderGroupedOrders() {
             <div class="status-group-body" data-status="${status}">`;
 
         html += '<div class="table-wrapper"><table><thead><tr>';
-        if (isAdminView) html += '<th class="sticky"><input type="checkbox" class="select-all-group" data-status="${status}"></th>';
+        if (canSelectOrders) html += '<th class="sticky"><input type="checkbox" class="select-all-group" data-status="${status}"></th>';
         
         // NEW COLUMN ORDER (without Status since we're grouped by status)
         html += '<th>ID</th>';
@@ -951,7 +988,7 @@ function renderGroupedOrders() {
 
             html += '<tr data-id="' + order.id + '">';
             
-            if (isAdminView) {
+            if (canSelectOrders) {
                 html += `<td class="sticky"><input type="checkbox" class="row-select" data-id="${order.id}"></td>`;
             }
             
@@ -1025,11 +1062,11 @@ function renderGroupedOrders() {
         });
     });
 
-    attachOrderEventListeners(isAdminView);
+    attachOrderEventListeners(canSelectOrders);
 }
 
-function attachOrderEventListeners(isAdminView) {
-    if (isAdminView) {
+function attachOrderEventListeners(canSelectOrders) {
+    if (canSelectOrders) {
         const selectAll = document.getElementById('selectAllOrders');
         if (selectAll) {
             selectAll.addEventListener('change', e => {
@@ -1069,7 +1106,7 @@ async function openOrderDetail(orderId) {
         renderOrderDetail(res.order);
         orderDetailPanel.classList.remove('hidden');
         
-        // ⭐ LOAD DOCUMENTS FOR THIS ORDER (Phase 1 Integration)
+        // ⭐ LOAD DOCUMENTS FOR THIS ORDER (Phase 2 Integration)
         if (typeof loadOrderDocuments === 'function') {
             loadOrderDocuments(orderId);
         }
@@ -1125,7 +1162,7 @@ function renderOrderDetail(o) {
         html += '<div class="text-muted mt-1">No attachments.</div>';
     }
 
-    if (currentUser.role !== 'requester' && o.history && o.history.length) {
+    if (currentUser.role !== 'requester' && currentUser.role !== 'manager' && o.history && o.history.length) {
         html += '<div class="detail-section-title mt-2">History</div>';
         html += '<div class="text-muted" style="max-height: 120px; overflow-y: auto; font-size: 0.78rem;">';
         for (const h of o.history) {
@@ -1134,7 +1171,8 @@ function renderOrderDetail(o) {
         html += '</div>';
     }
 
-    if (currentUser.role !== 'requester') {
+    // Only admin/procurement can edit orders
+    if (currentUser.role === 'admin' || currentUser.role === 'procurement') {
         html += '<hr class="mt-2" style="border-color: rgba(31,41,55,0.9); margin-bottom: 0.6rem;">';
         html += '<div class="detail-section-title">Update Order</div>';
         html += `<div class="form-group mt-1"><label>Status</label><select id="detailStatus" class="form-control form-control-sm">${ORDER_STATUSES.map(s => `<option value="${s}" ${s === o.status ? 'selected' : ''}>${s}</option>`).join('')}</select></div>`;
@@ -1169,10 +1207,11 @@ async function loadQuotes() {
     try {
         const res = await apiGet('/quotes');
         if (res.success) { quotesState = res.quotes; renderQuotesTable(); }
-    } catch { quotesTable.innerHTML = '<p>Failed to load quotes.</p>'; }
+    } catch { if (quotesTable) quotesTable.innerHTML = '<p>Failed to load quotes.</p>'; }
 }
 
 function renderQuotesTable() {
+    if (!quotesTable) return;
     if (!quotesState.length) { quotesTable.innerHTML = '<p class="text-muted">No quotes yet.</p>'; return; }
     let html = '<div class="table-wrapper"><table><thead><tr><th>Quote #</th><th>Supplier</th><th>Status</th><th>Items</th><th>Total</th><th>Valid Until</th><th>Created</th><th></th></tr></thead><tbody>';
     for (const q of quotesState) {

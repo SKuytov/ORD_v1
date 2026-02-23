@@ -1,6 +1,6 @@
 {
   "name": "partpulse-orders-backend",
-  "version": "1.0.0",
+  "version": "2.6.0",
   "description": "Order Management System Backend for PartPulse",
   "main": "server.js",
   "scripts": {
@@ -22,7 +22,8 @@
     "cors": "^2.8.5",
     "express-validator": "^7.0.1",
     "helmet": "^7.1.0",
-    "compression": "^1.7.4"
+    "compression": "^1.7.4",
+    "exceljs": "^4.4.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"

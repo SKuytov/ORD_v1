@@ -1,6 +1,7 @@
 // backend/supplier-ai.js - AI-Powered Supplier Recommendations
 
 const pool = require('./config/database');
+const brandRules = require('./supplier-brand-rules'); // ⭐ NEW: Brand intelligence
 
 /**
  * Generate supplier suggestions for an order using AI-like heuristics
@@ -58,6 +59,18 @@ async function getSupplierSuggestions(orderId) {
             return [];
         }
         
+        // ⭐ NEW: Apply brand detection rules FIRST
+        console.log('\n🏷️  Checking for brand matches...');
+        const brandResults = await brandRules.applyBrandRules(
+            order.item_description || '',
+            order.part_number || '',
+            suppliers
+        );
+        
+        if (brandResults.detectedBrands.length > 0) {
+            console.log(`  ✅ Detected brands: ${brandResults.detectedBrands.join(', ')}`);
+        }
+        
         // 4. Score each supplier based on historical data from BOTH tables
         const suggestions = [];
         
@@ -66,11 +79,18 @@ async function getSupplierSuggestions(orderId) {
             let score = 0;
             let matchReasons = [];
             
-            // ⭐ A. Check TRAINING_ORDERS table (uses different column names!)
+            // ⭐ PRIORITY: Brand match bonus (applied FIRST for highest priority)
+            if (brandResults.supplierBonuses[supplier.id]) {
+                const brandBonus = brandResults.supplierBonuses[supplier.id];
+                score += brandBonus;
+                matchReasons.push(`🏷️  BRAND MATCH: ${brandResults.detectedBrands.join(', ')}`);
+                console.log(`    🏆 BRAND BONUS: +${brandBonus} (${brandResults.detectedBrands.join(', ')})`);
+            }
+            
+            // A. Check TRAINING_ORDERS table (uses different column names!)
             let trainingMatches = 0;
             try {
                 for (const keyword of keywords) {
-                    // training_orders uses 'description' not 'item_description'
                     const [trainingRows] = await pool.query(`
                         SELECT COUNT(*) as match_count
                         FROM training_orders
@@ -98,7 +118,7 @@ async function getSupplierSuggestions(orderId) {
                 console.log(`    ⚠️ Training table query failed:`, trainingError.message);
             }
             
-            // ⭐ B. Check ORDERS table (current system data)
+            // B. Check ORDERS table (current system data)
             let orderMatches = 0;
             for (const keyword of keywords) {
                 const [historyRows] = await pool.query(`
@@ -126,7 +146,7 @@ async function getSupplierSuggestions(orderId) {
                 console.log(`    ✅ Orders score: +${points} (${orderMatches} matches)`);
             }
             
-            // C. Check exact part number matches (orders table only, training may not have it)
+            // C. Check exact part number matches (orders table only)
             if (partNumber) {
                 const [partRows] = await pool.query(
                     'SELECT COUNT(*) as count FROM orders WHERE supplier_id = ? AND LOWER(part_number) = ?',
@@ -143,7 +163,6 @@ async function getSupplierSuggestions(orderId) {
             
             // D. Check category matches (BOTH tables)
             if (category) {
-                // Training data (if table exists and has category)
                 let trainingCatCount = 0;
                 try {
                     const [trainingCatRows] = await pool.query(
@@ -268,7 +287,7 @@ function extractKeywords(text) {
  */
 function calculateConfidence(score) {
     if (score <= 0) return 0;
-    if (score >= 150) return 95;
+    if (score >= 200) return 95;  // ⭐ Adjusted for brand bonus
     
     const confidence = Math.min(95, 25 + (Math.log(score + 1) * 18));
     return Math.round(confidence);

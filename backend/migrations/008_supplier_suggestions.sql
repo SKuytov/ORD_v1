@@ -19,11 +19,40 @@ CREATE TABLE IF NOT EXISTS supplier_selection_log (
     KEY idx_selected_at (selected_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Add specialization field to suppliers table if it doesn't exist
-ALTER TABLE suppliers 
-ADD COLUMN IF NOT EXISTS specialization VARCHAR(200) NULL COMMENT 'Supplier specialization/expertise area'
-AFTER notes;
+-- Add specialization field to suppliers table (safe: checks if column exists first)
+SET @col_exists = (
+    SELECT COUNT(*) 
+    FROM INFORMATION_SCHEMA.COLUMNS 
+    WHERE TABLE_SCHEMA = DATABASE() 
+    AND TABLE_NAME = 'suppliers' 
+    AND COLUMN_NAME = 'specialization'
+);
 
--- Add index on suppliers.specialization for faster matching
-ALTER TABLE suppliers
-ADD INDEX IF NOT EXISTS idx_specialization (specialization);
+SET @query = IF(
+    @col_exists = 0,
+    'ALTER TABLE suppliers ADD COLUMN specialization VARCHAR(200) NULL COMMENT "Supplier specialization/expertise area" AFTER notes',
+    'SELECT "Column specialization already exists" AS message'
+);
+
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Add index on suppliers.specialization for faster matching (safe: checks if index exists first)
+SET @idx_exists = (
+    SELECT COUNT(*) 
+    FROM INFORMATION_SCHEMA.STATISTICS 
+    WHERE TABLE_SCHEMA = DATABASE() 
+    AND TABLE_NAME = 'suppliers' 
+    AND INDEX_NAME = 'idx_specialization'
+);
+
+SET @query = IF(
+    @idx_exists = 0,
+    'ALTER TABLE suppliers ADD INDEX idx_specialization (specialization)',
+    'SELECT "Index idx_specialization already exists" AS message'
+);
+
+PREPARE stmt FROM @query;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;

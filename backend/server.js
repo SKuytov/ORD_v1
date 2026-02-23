@@ -16,6 +16,7 @@ const buildingRoutes = require('./routes/buildings');
 const costCenterRoutes = require('./routes/costCenters');
 const documentsRoutes = require('./routes/documents');
 const approvalsRoutes = require('./routes/approvals');
+const autocompleteRoutes = require('./routes/autocomplete');
 const testRoutes = require('./routes/test');
 
 const app = express();
@@ -40,7 +41,7 @@ app.use(express.static(path.join(__dirname, '../frontend')));
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/orders', orderRoutes);
-app.use('/api/order-assignments', orderAssignmentRoutes); // ⭐ NEW: Assignment system
+app.use('/api/order-assignments', orderAssignmentRoutes); // ⭐ Assignment system
 app.use('/api/suppliers', supplierRoutes);
 app.use('/api/quotes', quoteRoutes);
 app.use('/api/users', userRoutes);
@@ -48,6 +49,7 @@ app.use('/api/buildings', buildingRoutes);
 app.use('/api/cost-centers', costCenterRoutes);
 app.use('/api/documents', documentsRoutes);
 app.use('/api/approvals', approvalsRoutes);
+app.use('/api/autocomplete', autocompleteRoutes); // ⭐ NEW: Intelligent autocomplete
 app.use('/api/test', testRoutes);
 
 // Health check
@@ -56,7 +58,7 @@ app.get('/api/health', (req, res) => {
         status: 'OK',
         timestamp: new Date().toISOString(),
         environment: process.env.NODE_ENV,
-        version: '2.5.0' // Phase 4: Procurement Workflow Enhancement
+        version: '2.5.1' // Phase 5: Enhanced Requester Experience
     });
 });
 
@@ -76,10 +78,10 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`PartPulse Orders Server v2.5 running on port ${PORT}`);
+    console.log(`PartPulse Orders Server v2.5.1 running on port ${PORT}`);
     console.log(`Environment: ${process.env.NODE_ENV}`);
     console.log(`Frontend URL: ${process.env.FRONTEND_URL}`);
-    console.log(`Features: Document Management + Approval Workflow + Procurement Enhancement (Phase 4)`);
+    console.log(`Features: Smart Autocomplete + Document Management + Approvals + Procurement`);
 });
 
 module.exports = app;

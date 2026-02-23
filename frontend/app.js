@@ -1,4 +1,4 @@
-@@ -1,1543 +1,21 @@
+///@@ -1,1543 +1,21 @@
 // frontend/app.js - PartPulse Orders v2.5 - Professional Supplier Selector
 
 const API_BASE = '/api';

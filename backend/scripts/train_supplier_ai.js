@@ -30,14 +30,14 @@ function truncateText(text, maxLength = 50) {
 }
 
 function abbreviateBuilding(sheetName) {
-    // Abbreviate common long sheet names to fit in building column (max 20 chars)
+    // Abbreviate common long sheet names to fit in building column (max 15 chars to be safe)
     const abbreviations = {
-        'Cotton Tape and Sliver': 'CT&Sliver',
-        'Cotton Buds and Pads': 'CB&Pads',
+        'Cotton Tape and Sliver': 'CTS',
+        'Cotton Buds and Pads': 'CBP',
         'Wet Wipes': 'WW',
-        'Paper Sticks, Plastics': 'PS&Plastics',
+        'Paper Sticks, Plastics': 'PSP',
         'Paper Sticks': 'PS',
-        'Plastics': 'Plastics'
+        'Plastics': 'PL'
     };
     
     // Check for exact match
@@ -45,8 +45,8 @@ function abbreviateBuilding(sheetName) {
         return abbreviations[sheetName];
     }
     
-    // Otherwise truncate to 20 chars
-    return truncateText(sheetName, 20);
+    // Otherwise truncate to 15 chars
+    return truncateText(sheetName, 15);
 }
 
 async function trainSupplierAI(excelFilePath) {
@@ -111,13 +111,16 @@ async function trainSupplierAI(excelFilePath) {
             
             // Use abbreviated sheet name as building
             const building = abbreviateBuilding(sheetName);
-            console.log(`   Building code: "${building}"`);
+            console.log(`   Building code: "${building}" (${building.length} chars)`);
             
             let processedCount = 0;
             let skippedCount = 0;
+            let skipReasons = { noDesc: 0, noSupplier: 0, notFound: 0 };
             
             // Process each row
-            for (const row of data) {
+            for (let i = 0; i < data.length; i++) {
+                const row = data[i];
+                
                 // Extract fields - try multiple column name variations
                 const itemDescription = 
                     row['Описание артикул'] || 
@@ -144,14 +147,15 @@ async function trainSupplierAI(excelFilePath) {
                     '';
                 
                 // Skip rows without item description or supplier
-                if (!itemDescription || !supplierName || supplierName.trim() === '') {
+                if (!itemDescription || itemDescription.trim().length < 3) {
                     skippedCount++;
+                    skipReasons.noDesc++;
                     continue;
                 }
                 
-                // Skip if item is too short (probably header row)
-                if (itemDescription.trim().length < 3) {
+                if (!supplierName || supplierName.trim() === '') {
                     skippedCount++;
+                    skipReasons.noSupplier++;
                     continue;
                 }
                 
@@ -163,6 +167,7 @@ async function trainSupplierAI(excelFilePath) {
                 if (!supplierId) {
                     newSuppliersFound.add(supplierName.trim());
                     skippedCount++;
+                    skipReasons.notFound++;
                     continue;
                 }
                 
@@ -174,54 +179,65 @@ async function trainSupplierAI(excelFilePath) {
                     ? `${itemDescription.trim()} [${costCenterTruncated}]`
                     : itemDescription.trim();
                 
-                // Create a virtual order for training
-                // Insert into orders table
-                const [orderResult] = await connection.execute(
-                    `INSERT INTO orders (
-                        item_description, 
-                        building, 
-                        quantity, 
-                        date_needed, 
-                        status, 
-                        requester_id,
-                        requester_name,
-                        requester_email,
-                        supplier_id
-                    ) VALUES (?, ?, ?, NOW(), ?, ?, ?, ?, ?)`,
-                    [
-                        truncateText(fullDescription, 500), // Truncate full description
-                        building,
-                        1,
-                        'Delivered', // Mark as delivered for training
-                        adminUserId,
-                        adminUserName,
-                        adminUserEmail,
-                        supplierId
-                    ]
-                );
-                
-                const orderId = orderResult.insertId;
-                
-                // Log supplier selection for training
-                await connection.execute(
-                    `INSERT INTO supplier_selection_log (
-                        order_id, 
-                        supplier_id, 
-                        selected_by_user_id, 
-                        from_suggestion
-                    ) VALUES (?, ?, ?, ?)`,
-                    [orderId, supplierId, adminUserId, false]
-                );
-                
-                processedCount++;
-                
-                if (processedCount % 50 === 0) {
-                    process.stdout.write(`   ⏳ Processed ${processedCount}...\r`);
+                try {
+                    // Create a virtual order for training
+                    // Insert into orders table
+                    const [orderResult] = await connection.execute(
+                        `INSERT INTO orders (
+                            item_description, 
+                            building, 
+                            quantity, 
+                            date_needed, 
+                            status, 
+                            requester_id,
+                            requester_name,
+                            requester_email,
+                            supplier_id
+                        ) VALUES (?, ?, ?, NOW(), ?, ?, ?, ?, ?)`,
+                        [
+                            truncateText(fullDescription, 500), // Truncate full description
+                            building,
+                            1,
+                            'Delivered', // Mark as delivered for training
+                            adminUserId,
+                            adminUserName,
+                            adminUserEmail,
+                            supplierId
+                        ]
+                    );
+                    
+                    const orderId = orderResult.insertId;
+                    
+                    // Log supplier selection for training
+                    await connection.execute(
+                        `INSERT INTO supplier_selection_log (
+                            order_id, 
+                            supplier_id, 
+                            selected_by_user_id, 
+                            from_suggestion
+                        ) VALUES (?, ?, ?, ?)`,
+                        [orderId, supplierId, adminUserId, false]
+                    );
+                    
+                    processedCount++;
+                    
+                    if (processedCount % 50 === 0) {
+                        process.stdout.write(`   ⏳ Processed ${processedCount}...\r`);
+                    }
+                } catch (err) {
+                    console.error(`\n   ❌ Error on row ${i + 3} (Excel row ${i + 4}):`);
+                    console.error(`      Building: "${building}" (${building.length} chars)`);
+                    console.error(`      Item: "${itemDescription.substring(0, 50)}..."`);
+                    console.error(`      Supplier: "${supplierName}"`);
+                    throw err;
                 }
             }
             
             console.log(`   ✅ Processed: ${processedCount} orders`);
             console.log(`   ⏭️  Skipped: ${skippedCount} rows`);
+            if (skippedCount > 0) {
+                console.log(`      (no desc: ${skipReasons.noDesc}, no supplier: ${skipReasons.noSupplier}, not found: ${skipReasons.notFound})`);
+            }
             
             totalProcessed += processedCount;
             totalSkipped += skippedCount;

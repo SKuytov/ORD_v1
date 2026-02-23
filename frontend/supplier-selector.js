@@ -15,15 +15,22 @@ let supplierSelectorState = {
 // ============================================================================
 
 async function openSupplierSelector(orderId, currentSupplierId = null) {
+    console.log('🏢 Opening supplier selector for order', orderId, 'current supplier:', currentSupplierId);
+    
     supplierSelectorState.currentOrderId = orderId;
     supplierSelectorState.selectedSupplierId = currentSupplierId;
     
-    // Load suppliers
-    await loadSuppliersForSelection();
-    
-    // Create modal
-    const modal = createSupplierSelectorModal();
+    // Create modal first (with loading state)
+    const modal = createSupplierSelectorModal(true);
     document.body.appendChild(modal);
+    
+    // Load suppliers THEN render
+    await loadSuppliersForSelection();
+    renderSupplierCards();
+    updateSupplierStats();
+    
+    // Attach event listeners AFTER modal is in DOM
+    attachSupplierSelectorEvents(modal);
     
     // Focus search
     setTimeout(() => {
@@ -35,7 +42,7 @@ async function openSupplierSelector(orderId, currentSupplierId = null) {
 // Create Modal UI
 // ============================================================================
 
-function createSupplierSelectorModal() {
+function createSupplierSelectorModal(isLoading = false) {
     const overlay = document.createElement('div');
     overlay.id = 'supplierSelectorOverlay';
     overlay.style.cssText = `
@@ -100,15 +107,15 @@ function createSupplierSelectorModal() {
             
             <!-- Quick Stats -->
             <div id="supplierStats" style="display: flex; gap: 1rem; margin-top: 0.75rem; font-size: 0.85rem; color: #94a3b8;">
-                <span id="totalSuppliersCount">0 suppliers</span>
-                <span id="activeSuppliersCount">0 active</span>
+                <span id="totalSuppliersCount">${isLoading ? 'Loading...' : '0 suppliers'}</span>
+                <span id="activeSuppliersCount">${isLoading ? '' : '0 active'}</span>
             </div>
         </div>
         
         <!-- Supplier List -->
         <div id="supplierListContainer" style="flex: 1; overflow-y: auto; padding: 1rem;">
             <div id="supplierGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem;">
-                <!-- Supplier cards will be rendered here -->
+                ${isLoading ? '<div style="text-align: center; padding: 3rem; color: #94a3b8;">Loading suppliers...</div>' : ''}
             </div>
             <div id="noSuppliersMessage" style="display: none; text-align: center; padding: 3rem; color: #64748b;">
                 <div style="font-size: 3rem; margin-bottom: 1rem;">📭</div>
@@ -133,12 +140,6 @@ function createSupplierSelectorModal() {
     
     overlay.appendChild(modal);
     
-    // Attach event listeners
-    attachSupplierSelectorEvents(overlay);
-    
-    // Render suppliers
-    renderSupplierCards();
-    
     return overlay;
 }
 
@@ -147,26 +148,37 @@ function createSupplierSelectorModal() {
 // ============================================================================
 
 async function loadSuppliersForSelection() {
+    console.log('📡 Loading suppliers from API...');
+    
     try {
         const res = await apiGet('/suppliers');
         
-        if (res.success) {
+        console.log('📦 Suppliers response:', res);
+        
+        if (res.success && res.suppliers) {
             supplierSelectorState.allSuppliers = res.suppliers;
             supplierSelectorState.filteredSuppliers = res.suppliers;
             
-            // Update stats
-            const total = res.suppliers.length;
-            const active = res.suppliers.filter(s => s.active).length;
-            
-            const totalEl = document.getElementById('totalSuppliersCount');
-            const activeEl = document.getElementById('activeSuppliersCount');
-            
-            if (totalEl) totalEl.textContent = `${total} supplier${total !== 1 ? 's' : ''}`;
-            if (activeEl) activeEl.textContent = `${active} active`;
+            console.log(`✅ Loaded ${res.suppliers.length} suppliers`);
+        } else {
+            console.error('❌ Invalid response from suppliers API:', res);
+            showNotification('Failed to load suppliers', 'error');
         }
     } catch (error) {
-        console.error('Failed to load suppliers:', error);
+        console.error('❌ Failed to load suppliers:', error);
+        showNotification('Failed to load suppliers', 'error');
     }
+}
+
+function updateSupplierStats() {
+    const total = supplierSelectorState.allSuppliers.length;
+    const active = supplierSelectorState.allSuppliers.filter(s => s.active).length;
+    
+    const totalEl = document.getElementById('totalSuppliersCount');
+    const activeEl = document.getElementById('activeSuppliersCount');
+    
+    if (totalEl) totalEl.textContent = `${total} supplier${total !== 1 ? 's' : ''}`;
+    if (activeEl) activeEl.textContent = `${active} active`;
 }
 
 // ============================================================================
@@ -177,9 +189,14 @@ function renderSupplierCards() {
     const grid = document.getElementById('supplierGrid');
     const noMessage = document.getElementById('noSuppliersMessage');
     
-    if (!grid) return;
+    if (!grid) {
+        console.error('❌ supplierGrid element not found!');
+        return;
+    }
     
     const suppliers = supplierSelectorState.filteredSuppliers;
+    
+    console.log(`🎨 Rendering ${suppliers.length} supplier cards`);
     
     if (suppliers.length === 0) {
         grid.style.display = 'none';
@@ -196,7 +213,10 @@ function renderSupplierCards() {
     suppliers.forEach(supplier => {
         const card = document.getElementById(`supplierCard_${supplier.id}`);
         if (card) {
-            card.addEventListener('click', () => selectSupplier(supplier.id, supplier.name));
+            card.addEventListener('click', () => {
+                console.log('🖱️ Clicked supplier:', supplier.id, supplier.name);
+                selectSupplier(supplier.id, supplier.name);
+            });
         }
     });
 }
@@ -292,6 +312,8 @@ function createSupplierCard(supplier) {
 // ============================================================================
 
 function selectSupplier(supplierId, supplierName) {
+    console.log('✅ Supplier selected:', supplierId, supplierName);
+    
     supplierSelectorState.selectedSupplierId = supplierId;
     
     // Update UI
@@ -321,54 +343,97 @@ function selectSupplier(supplierId, supplierName) {
 // ============================================================================
 
 function attachSupplierSelectorEvents(overlay) {
+    console.log('🔗 Attaching event listeners to supplier selector');
+    
     // Close button
     const closeBtn = document.getElementById('btnCloseSupplierSelector');
     if (closeBtn) {
-        closeBtn.onclick = () => closeSupplierSelector(overlay);
+        console.log('✅ Close button found');
+        closeBtn.onclick = () => {
+            console.log('🚪 Close button clicked');
+            closeSupplierSelector();
+        };
+    } else {
+        console.error('❌ Close button not found!');
     }
     
     // Cancel button
     const cancelBtn = document.getElementById('btnCancelSupplierSelection');
     if (cancelBtn) {
-        cancelBtn.onclick = () => closeSupplierSelector(overlay);
+        console.log('✅ Cancel button found');
+        cancelBtn.onclick = () => {
+            console.log('❌ Cancel button clicked');
+            closeSupplierSelector();
+        };
+    } else {
+        console.error('❌ Cancel button not found!');
     }
     
     // Confirm button
     const confirmBtn = document.getElementById('btnConfirmSupplierSelection');
     if (confirmBtn) {
-        confirmBtn.onclick = () => confirmSupplierSelection(overlay);
+        console.log('✅ Confirm button found');
+        confirmBtn.onclick = () => {
+            console.log('💾 Confirm button clicked');
+            confirmSupplierSelection();
+        };
+    } else {
+        console.error('❌ Confirm button not found!');
     }
     
     // Search input
     const searchInput = document.getElementById('supplierSearchInput');
     if (searchInput) {
-        searchInput.oninput = (e) => filterSuppliers(e.target.value);
+        console.log('✅ Search input found');
+        searchInput.oninput = (e) => {
+            console.log('🔍 Search:', e.target.value);
+            filterSuppliers(e.target.value);
+        };
+    } else {
+        console.error('❌ Search input not found!');
     }
     
     // Recent filter
     const recentBtn = document.getElementById('btnFilterRecent');
     if (recentBtn) {
-        recentBtn.onclick = () => toggleRecentFilter(recentBtn);
+        console.log('✅ Recent filter button found');
+        recentBtn.onclick = () => {
+            console.log('⏱️ Recent filter toggled');
+            toggleRecentFilter(recentBtn);
+        };
+    } else {
+        console.error('❌ Recent filter button not found!');
     }
     
     // Add new supplier
     const addBtn = document.getElementById('btnAddNewSupplier');
     if (addBtn) {
-        addBtn.onclick = () => openQuickAddSupplier();
+        console.log('✅ Add supplier button found');
+        addBtn.onclick = () => {
+            console.log('➕ Add new supplier clicked');
+            openQuickAddSupplier();
+        };
+    } else {
+        console.error('❌ Add supplier button not found!');
     }
     
     // Close on overlay click
     overlay.onclick = (e) => {
-        if (e.target === overlay) closeSupplierSelector(overlay);
+        if (e.target === overlay) {
+            console.log('🚪 Overlay clicked, closing');
+            closeSupplierSelector();
+        }
     };
     
     // Keyboard shortcuts
-    document.addEventListener('keydown', function escHandler(e) {
+    const escHandler = (e) => {
         if (e.key === 'Escape') {
-            closeSupplierSelector(overlay);
+            console.log('⌨️ ESC pressed, closing');
+            closeSupplierSelector();
             document.removeEventListener('keydown', escHandler);
         }
-    });
+    };
+    document.addEventListener('keydown', escHandler);
 }
 
 function filterSuppliers(searchTerm) {
@@ -423,15 +488,24 @@ function toggleRecentFilter(btn) {
     filterSuppliers(supplierSelectorState.searchTerm);
 }
 
-function closeSupplierSelector(overlay) {
-    document.body.removeChild(overlay);
+function closeSupplierSelector() {
+    const overlay = document.getElementById('supplierSelectorOverlay');
+    if (overlay) {
+        console.log('🚪 Closing supplier selector');
+        document.body.removeChild(overlay);
+    }
 }
 
-async function confirmSupplierSelection(overlay) {
+async function confirmSupplierSelection() {
     const supplierId = supplierSelectorState.selectedSupplierId;
     const orderId = supplierSelectorState.currentOrderId;
     
-    if (!supplierId || !orderId) return;
+    console.log('💾 Confirming supplier selection:', { orderId, supplierId });
+    
+    if (!supplierId || !orderId) {
+        console.error('❌ Missing orderId or supplierId');
+        return;
+    }
     
     try {
         // Update order with selected supplier
@@ -439,9 +513,11 @@ async function confirmSupplierSelection(overlay) {
             supplier_id: supplierId
         });
         
+        console.log('📡 Update response:', res);
+        
         if (res.success) {
             showNotification('✅ Supplier assigned successfully', 'success');
-            closeSupplierSelector(overlay);
+            closeSupplierSelector();
             
             // Reload order detail if open
             if (typeof openOrderDetail === 'function') {
@@ -456,15 +532,16 @@ async function confirmSupplierSelection(overlay) {
             showNotification('❌ ' + (res.message || 'Failed to assign supplier'), 'error');
         }
     } catch (error) {
-        console.error('Failed to assign supplier:', error);
+        console.error('❌ Failed to assign supplier:', error);
         showNotification('❌ Failed to assign supplier', 'error');
     }
 }
 
 function openQuickAddSupplier() {
-    // Close current modal and open supplier form
-    const overlay = document.getElementById('supplierSelectorOverlay');
-    if (overlay) closeSupplierSelector(overlay);
+    console.log('➕ Opening quick add supplier form');
+    
+    // Close current modal
+    closeSupplierSelector();
     
     // Switch to suppliers tab and open form
     if (typeof switchTab === 'function') {
@@ -474,7 +551,12 @@ function openQuickAddSupplier() {
     // Trigger new supplier form
     setTimeout(() => {
         const newBtn = document.getElementById('btnNewSupplier');
-        if (newBtn) newBtn.click();
+        if (newBtn) {
+            console.log('✅ Triggering new supplier form');
+            newBtn.click();
+        } else {
+            console.error('❌ btnNewSupplier not found');
+        }
     }, 300);
 }
 
@@ -504,7 +586,11 @@ function showNotification(message, type = 'info') {
     
     setTimeout(() => {
         notification.style.animation = 'slideOut 0.3s ease';
-        setTimeout(() => document.body.removeChild(notification), 300);
+        setTimeout(() => {
+            if (notification.parentNode) {
+                document.body.removeChild(notification);
+            }
+        }, 300);
     }, 3000);
 }
 

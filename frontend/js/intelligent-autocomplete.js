@@ -123,8 +123,8 @@ class IntelligentAutocomplete {
 
     async fetchSuggestions(query) {
         try {
-            // Check if user is logged in
-            const token = localStorage.getItem('token');
+            // ⭐ FIX: Use the correct localStorage key
+            const token = localStorage.getItem('authToken');
             if (!token) {
                 console.warn('Autocomplete: No auth token found. User may not be logged in.');
                 return;
@@ -151,6 +151,8 @@ class IntelligentAutocomplete {
 
             const data = await response.json();
             this.suggestions = data.suggestions || [];
+
+            console.log(`🔍 Autocomplete: Found ${this.suggestions.length} suggestions for "${query}"`);
 
             if (this.suggestions.length > 0) {
                 this.renderSuggestions();
@@ -221,6 +223,8 @@ class IntelligentAutocomplete {
         this.input.value = suggestion.text;
         this.hideSuggestions();
 
+        console.log('✅ Autocomplete: Selected "' + suggestion.text + '"');
+
         // Trigger input event so other listeners know the value changed
         this.input.dispatchEvent(new Event('input', { bubbles: true }));
         this.input.dispatchEvent(new Event('change', { bubbles: true }));
@@ -274,18 +278,13 @@ class IntelligentAutocomplete {
     }
 }
 
-// Initialize autocomplete on form fields
+// ⭐ FIX: Initialize autocomplete properly
 function initializeOrderFormAutocomplete() {
     console.log('🔍 Initializing intelligent autocomplete...');
     
-    // Wait for DOM to be ready
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initializeOrderFormAutocomplete);
-        return;
-    }
-
-    // Check if user is logged in (has token)
-    if (!localStorage.getItem('token')) {
+    // Check if user is logged in (has authToken)
+    const token = localStorage.getItem('authToken');
+    if (!token) {
         console.log('🔒 Autocomplete: Waiting for user login...');
         return;
     }
@@ -369,32 +368,28 @@ function initializeOrderFormAutocomplete() {
     }
 }
 
-// Don't auto-initialize - wait for user to login first
-// Instead, initialize after successful login
-console.log('📚 Intelligent Autocomplete module loaded');
+// ⭐ FIX: Hook into existing showDashboard function
+// Store reference to original showDashboard
+const originalShowDashboard = window.showDashboard;
 
-// Listen for login success event
-if (window.app) {
-    // Hook into existing login success handler
-    const originalHandleLogin = window.app.handleLogin;
-    if (originalHandleLogin) {
-        window.app.handleLogin = async function(e) {
-            const result = await originalHandleLogin.call(this, e);
-            // Initialize autocomplete after successful login
-            setTimeout(initializeOrderFormAutocomplete, 500);
-            return result;
-        };
-    }
-}
-
-// Also re-initialize when switching tabs (for SPA behavior)
-if (window.app && window.app.switchTab) {
-    const originalSwitchTab = window.app.switchTab;
-    window.app.switchTab = function(tabId) {
-        originalSwitchTab.call(this, tabId);
-        setTimeout(initializeOrderFormAutocomplete, 100);
+if (typeof originalShowDashboard === 'function') {
+    window.showDashboard = function() {
+        // Call original function
+        originalShowDashboard();
+        
+        // Initialize autocomplete after dashboard is shown
+        // Only for requesters (they have the create order form visible)
+        setTimeout(() => {
+            console.log('🎯 Autocomplete: Dashboard loaded, checking for forms...');
+            initializeOrderFormAutocomplete();
+        }, 500);
     };
+    console.log('✅ Autocomplete hooked into showDashboard()');
+} else {
+    console.warn('⚠️ showDashboard() not found - autocomplete may not initialize properly');
 }
 
 // Manual initialization function (can be called from console for debugging)
 window.initAutocomplete = initializeOrderFormAutocomplete;
+
+console.log('📚 Intelligent Autocomplete module loaded');

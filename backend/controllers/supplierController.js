@@ -1,5 +1,6 @@
 // backend/controllers/supplierController.js
 const db = require('../config/database');
+const supplierAI = require('../supplier-ai'); // ⭐ NEW: AI module
 
 exports.getSuppliers = async (req, res) => {
     try {
@@ -10,6 +11,34 @@ exports.getSuppliers = async (req, res) => {
     } catch (error) {
         console.error('Get suppliers error:', error);
         res.status(500).json({ success: false, message: 'Failed to retrieve suppliers' });
+    }
+};
+
+// ⭐ NEW: Get AI-powered supplier suggestions for an order
+exports.getSupplierSuggestions = async (req, res) => {
+    try {
+        const { orderId } = req.params;
+        
+        if (!orderId || isNaN(orderId)) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Valid order ID is required' 
+            });
+        }
+        
+        const suggestions = await supplierAI.getSupplierSuggestions(parseInt(orderId));
+        
+        res.json({
+            success: true,
+            suggestions,
+            count: suggestions.length
+        });
+    } catch (error) {
+        console.error('Get supplier suggestions error:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Failed to generate supplier suggestions' 
+        });
     }
 };
 

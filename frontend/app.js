@@ -1122,6 +1122,9 @@ function renderOrderDetail(o) {
     const statusClass = 'status-' + o.status.toLowerCase().replace(/ /g, '-');
     const priorityClass = 'priority-' + (o.priority || 'Normal').toLowerCase();
     const deliveryStatus = getDeliveryStatus(o);
+    
+    // ⭐ SECURITY: Check if current user can see sensitive data
+    const canSeeSensitiveData = currentUser.role !== 'requester';
 
     let html = '';
     html += `<div class="detail-grid">
@@ -1133,11 +1136,17 @@ function renderOrderDetail(o) {
         <div><div class="detail-label">Date Needed</div><div class="detail-value">${formatDate(o.date_needed)}</div></div>
         <div><div class="detail-label">Expected Delivery</div><div class="detail-value">${o.expected_delivery_date ? formatDate(o.expected_delivery_date) : '-'}</div></div>
         <div><div class="detail-label">Delivery Status</div><div class="detail-value">${getDeliveryBadgeHtml(deliveryStatus)}</div></div>
-        <div><div class="detail-label">Requester</div><div class="detail-value">${o.requester_name}</div></div>
+        <div><div class="detail-label">Requester</div><div class="detail-value">${o.requester_name}</div></div>`;
+    
+    // ⭐ HIDE SUPPLIER AND PRICES FROM REQUESTERS
+    if (canSeeSensitiveData) {
+        html += `
         <div><div class="detail-label">Supplier</div><div class="detail-value">${o.supplier_name || '-'}</div></div>
         <div><div class="detail-label">Unit Price</div><div class="detail-value">${fmtPrice(o.unit_price)}</div></div>
-        <div><div class="detail-label">Total Price</div><div class="detail-value">${fmtPrice(o.total_price)}</div></div>
-    </div>`;
+        <div><div class="detail-label">Total Price</div><div class="detail-value">${fmtPrice(o.total_price)}</div></div>`;
+    }
+    
+    html += `</div>`;
 
     html += `<div class="detail-section-title">Item Description</div>
         <div class="text-muted mt-1">${escapeHtml(o.item_description)}</div>`;
@@ -1153,16 +1162,19 @@ function renderOrderDetail(o) {
         html += `<div class="detail-section-title mt-1">Notes</div><div class="text-muted mt-1">${escapeHtml(o.notes)}</div>`;
     }
 
-    html += '<div class="detail-section-title mt-2">Attachments</div>';
-    if (o.files && o.files.length) {
-        html += '<ul class="file-list">';
-        for (const f of o.files) {
-            const url = f.file_path.replace('./', '/');
-            html += `<li><a class="file-link" href="${url}" target="_blank" rel="noopener">${escapeHtml(f.file_name)}</a><span class="text-muted">${formatFileSize(f.file_size)}</span></li>`;
+    // ⭐ HIDE ATTACHMENTS/DOCUMENTS FROM REQUESTERS (contains invoices and sensitive docs)
+    if (canSeeSensitiveData) {
+        html += '<div class="detail-section-title mt-2">Attachments</div>';
+        if (o.files && o.files.length) {
+            html += '<ul class="file-list">';
+            for (const f of o.files) {
+                const url = f.file_path.replace('./', '/');
+                html += `<li><a class="file-link" href="${url}" target="_blank" rel="noopener">${escapeHtml(f.file_name)}</a><span class="text-muted">${formatFileSize(f.file_size)}</span></li>`;
+            }
+            html += '</ul>';
+        } else {
+            html += '<div class="text-muted mt-1">No attachments.</div>';
         }
-        html += '</ul>';
-    } else {
-        html += '<div class="text-muted mt-1">No attachments.</div>';
     }
 
     if (currentUser.role !== 'requester' && currentUser.role !== 'manager' && o.history && o.history.length) {

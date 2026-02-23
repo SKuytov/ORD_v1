@@ -8,6 +8,12 @@ let filteredUploadOrders = []; // Filtered subset
 
 // Initialize tab switching in order detail panel
 function initializeOrderDetailTabs() {
+    // ⭐ SECURITY: Hide Documents tab from requesters
+    if (currentUser && currentUser.role === 'requester') {
+        // Don't create tabs for requesters
+        return;
+    }
+    
     const tabsHtml = `
         <div class="detail-tabs" id="detailTabs">
             <button class="detail-tab active" data-tab="details" id="tabDetails">Order Details</button>
@@ -48,6 +54,11 @@ function switchDetailTab(tabName) {
 
 // Load documents for a specific order
 async function loadOrderDocuments(orderId) {
+    // ⭐ SECURITY: Block requesters from loading documents
+    if (currentUser && currentUser.role === 'requester') {
+        return; // Exit silently
+    }
+    
     currentOrderId = orderId;
     
     // Initialize tabs if not already done

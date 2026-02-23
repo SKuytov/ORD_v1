@@ -11,18 +11,39 @@ router.get('/',
     supplierController.getSuppliers
 );
 
-// ⭐ NEW: Get AI-powered supplier suggestions for an order
+// ⭐ Get AI-powered supplier suggestions for an order
 router.get('/suggestions/:orderId',
     authenticateToken,
     authorizeRoles('admin', 'procurement'),
     supplierController.getSupplierSuggestions
 );
 
-// ⭐ NEW: Get brand rules configuration
+// ⭐ Get brand rules configuration
 router.get('/brand-rules',
     authenticateToken,
     authorizeRoles('admin', 'procurement'),
     supplierController.getBrandRules
+);
+
+// ⭐ NEW: Create/Update brand rule
+router.post('/brand-rules',
+    authenticateToken,
+    authorizeRoles('admin'),
+    supplierController.createOrUpdateBrandRule
+);
+
+// ⭐ NEW: Delete brand rule
+router.delete('/brand-rules/:brandName',
+    authenticateToken,
+    authorizeRoles('admin'),
+    supplierController.deleteBrandRule
+);
+
+// ⭐ NEW: Auto-learn brand patterns from historical data
+router.post('/brand-rules/learn',
+    authenticateToken,
+    authorizeRoles('admin'),
+    supplierController.learnBrandPatterns
 );
 
 // Create supplier

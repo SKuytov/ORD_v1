@@ -17,12 +17,10 @@ const dbConfig = {
     port: process.env.DB_PORT || 3306
 };
 
-function truncateBuilding(building) {
-    if (!building) return 'Training Data';
+function truncateText(text, maxLength = 50) {
+    if (!text) return '';
     
-    // Truncate to 50 characters max to fit database column
-    const maxLength = 50;
-    const trimmed = building.trim();
+    const trimmed = text.trim();
     
     if (trimmed.length <= maxLength) {
         return trimmed;
@@ -40,7 +38,12 @@ async function trainSupplierAI(excelFilePath) {
         // Read Excel file
         const workbook = xlsx.readFile(excelFilePath);
         
-        console.log(`✅ Found ${workbook.SheetNames.length} sheets: ${workbook.SheetNames.join(', ')}\n`);
+        // Filter out utility sheets (Statistics, Reference, Sheet1, Sheet2, etc.)
+        const dataSheets = workbook.SheetNames.filter(name => 
+            !name.match(/^(Statistics|Reference|Sheet\d+)$/i)
+        );
+        
+        console.log(`✅ Found ${dataSheets.length} data sheets: ${dataSheets.join(', ')}\n`);
         
         // Get existing suppliers map
         const [suppliers] = await connection.execute(
@@ -70,7 +73,7 @@ async function trainSupplierAI(excelFilePath) {
         let newSuppliersFound = new Set();
         
         // Process each sheet
-        for (const sheetName of workbook.SheetNames) {
+        for (const sheetName of dataSheets) {
             console.log(`\n📄 Processing sheet: ${sheetName}`);
             console.log('='.repeat(60));
             
@@ -78,6 +81,9 @@ async function trainSupplierAI(excelFilePath) {
             const data = xlsx.utils.sheet_to_json(sheet);
             
             console.log(`   Loaded ${data.length} rows`);
+            
+            // Use sheet name as building (truncate if needed)
+            const building = truncateText(sheetName, 50);
             
             let processedCount = 0;
             let skippedCount = 0;
@@ -97,10 +103,11 @@ async function trainSupplierAI(excelFilePath) {
                     row['Supplier'] || 
                     '';
                     
-                const building = 
+                // Машина = Machine/Cost Center (not building)
+                const costCenter = 
                     row['Машина'] || 
                     row['Machine'] ||
-                    row['Building'] || 
+                    row['Cost Center'] || 
                     '';
                 
                 const status = 
@@ -131,8 +138,13 @@ async function trainSupplierAI(excelFilePath) {
                     continue;
                 }
                 
-                // Truncate building name to fit database column
-                const buildingTruncated = truncateBuilding(building);
+                // Truncate cost center if needed
+                const costCenterTruncated = truncateText(costCenter, 100);
+                
+                // Create item description with cost center for better matching
+                const fullDescription = costCenterTruncated 
+                    ? `${itemDescription.trim()} [${costCenterTruncated}]`
+                    : itemDescription.trim();
                 
                 // Create a virtual order for training
                 // Insert into orders table
@@ -147,8 +159,8 @@ async function trainSupplierAI(excelFilePath) {
                         supplier_id
                     ) VALUES (?, ?, ?, NOW(), ?, ?, ?)`,
                     [
-                        itemDescription.trim(),
-                        buildingTruncated,
+                        truncateText(fullDescription, 500), // Truncate full description
+                        building,
                         1,
                         'Delivered', // Mark as delivered for training
                         adminUserId,

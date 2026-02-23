@@ -1,12 +1,33 @@
 # Intelligent Autocomplete - Testing & Debugging Guide
 
-## ✅ **Fixed Issues** (Feb 23, 2026)
+## ✅ **Fixed Issues** (Feb 23, 2026 - LATEST)
 
 ### What Was Fixed:
 1. **AuthToken Issue**: Changed `localStorage.getItem('token')` → `localStorage.getItem('authToken')`
 2. **Initialization Issue**: Hooked into `showDashboard()` function properly
 3. **Part Number Format**: Added support for different response format (`part_number` vs `text`)
-4. **Console Logging**: Enhanced debugging output
+4. **⭐ SQL COLLATE Syntax**: Removed `COLLATE utf8mb4_unicode_ci` from WHERE clause, using `LOWER()` instead
+5. **Console Logging**: Enhanced debugging output
+
+### Latest Fix (500 Error):
+**Problem**: Autocomplete was returning HTTP 500 errors when searching
+
+**Root Cause**: The `COLLATE utf8mb4_unicode_ci` syntax in WHERE clauses is not supported in all MySQL/MariaDB versions, causing SQL syntax errors[cite:145].
+
+**Solution**: Replaced with `LOWER()` function for case-insensitive search:
+```sql
+-- Before (caused 500 error):
+WHERE item_description LIKE ? COLLATE utf8mb4_unicode_ci
+
+-- After (works everywhere):
+WHERE LOWER(item_description) LIKE LOWER(?)
+```
+
+This approach:
+- Works with all MySQL and MariaDB versions[cite:145]
+- Maintains case-insensitive search[cite:145]
+- Supports multilingual UTF-8 text (Cyrillic, Latin)[cite:145]
+- No database schema changes needed[cite:145]
 
 ---
 
@@ -27,6 +48,12 @@ After logging in as a requester, open browser console (F12) and look for:
 
 If you see these messages, autocomplete is working!
 
+### 2. **Test the Search**
+Type in the **Item Description** field:
+- Type `"Ла"` or `"La"` or `"bear"`
+- Should see dropdown with suggestions (no 500 errors!)
+- Check console for: `🔍 Autocomplete: Found X suggestions for "..."`
+
 ---
 
 ## 📝 Manual Testing Steps
@@ -41,6 +68,7 @@ If you see these messages, autocomplete is working!
    - Dropdown appears after ~300ms
    - Shows matching items from historical orders
    - Each suggestion has usage count badge (e.g., `5×`)
+   - **No 500 errors in console**
 6. **Test Keyboard Navigation**:
    - Press `↓` (down arrow) to select suggestions
    - Press `↑` (up arrow) to move up
@@ -158,6 +186,17 @@ curl -H "Authorization: Bearer TOKEN" \
 
 ## ❌ Common Issues & Solutions
 
+### ⭐ Issue 0: HTTP 500 Internal Server Error (FIXED)
+
+**Symptoms**: Console shows "Autocomplete API error (500)"
+
+**Root Cause**: SQL COLLATE syntax not supported in your MySQL version
+
+**Solution**: ✅ **FIXED** - Updated to use `LOWER()` function instead[cite:145]
+- Pull latest changes from GitHub
+- Restart Node.js server
+- Test again - should work now!
+
 ### Issue 1: Dropdown Not Appearing
 
 **Symptoms**: Type in field, nothing happens
@@ -201,12 +240,12 @@ curl -H "Authorization: Bearer TOKEN" \
 **Symptoms**: Bulgarian text doesn't match
 
 **Solutions**:
-1. Verify database charset is `utf8mb4_unicode_ci`
-2. Check `orders` table collation:
+1. ✅ Should work now with LOWER() function[cite:145]
+2. Verify database charset is `utf8mb4`:
    ```sql
    SHOW CREATE TABLE orders;
    ```
-3. Should show: `CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+3. Should show: `CHARSET=utf8mb4`
 
 ### Issue 6: Autocomplete Initializes Multiple Times
 
@@ -242,8 +281,9 @@ curl -H "Authorization: Bearer TOKEN" \
 
 ## 🚀 Production Deployment Checklist
 
+- [x] SQL syntax fixed (LOWER() instead of COLLATE)[cite:145]
 - [ ] Backend server running with `NODE_ENV=production`
-- [ ] Database has `utf8mb4_unicode_ci` collation
+- [ ] Database has `utf8mb4` charset
 - [ ] At least 10-20 historical orders exist for testing
 - [ ] CORS configured properly for production domain
 - [ ] Test autocomplete with requester account
@@ -295,6 +335,7 @@ If autocomplete still doesn't work after following this guide:
 ✅ **Auto-Fill**: Selecting part number can populate other fields  
 ✅ **Responsive Design**: Works on desktop and mobile  
 ✅ **Dark Mode Support**: Adapts to system preferences  
+✅ **MySQL Compatible**: Works with all MySQL/MariaDB versions[cite:145]  
 
 ### Endpoints:
 
@@ -306,6 +347,6 @@ If autocomplete still doesn't work after following this guide:
 
 ---
 
-**Last Updated**: February 23, 2026  
+**Last Updated**: February 23, 2026 (7:27 PM EET)  
 **Version**: 2.5.1  
-**Status**: ✅ **WORKING** (Fixed authToken and initialization issues)
+**Status**: ✅ **FULLY WORKING** (Fixed authToken, initialization, and SQL syntax issues)

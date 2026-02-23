@@ -1171,6 +1171,24 @@ function renderOrderDetail(o) {
         html += '</div>';
     }
 
+    // ⭐ NEW: Phase 1 - Smart Supplier Suggestions (BEFORE Update Order section)
+    if (currentUser.role === 'admin' || currentUser.role === 'procurement') {
+        html += '<hr class="mt-2" style="border-color: rgba(31,41,55,0.9); margin-bottom: 0.6rem;">';
+        html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">';
+        html += '<div>';
+        html += '<div class="detail-section-title" style="margin:0;">💡 Suggested Suppliers</div>';
+        html += '<div style="font-size:0.75rem;color:#94a3b8;margin-top:0.2rem;">AI-powered recommendations based on item description and history</div>';
+        html += '</div>';
+        
+        // Option to open full supplier selector
+        if (typeof openSupplierSelector === 'function') {
+            html += '<button class="btn btn-secondary btn-sm" onclick="openSupplierSelector(' + o.id + ', ' + (o.supplier_id || 'null') + ')" style="white-space:nowrap;">🏢 Browse All</button>';
+        }
+        
+        html += '</div>';
+        html += '<div id="supplierSuggestionsContainer"></div>';
+    }
+
     // Only admin/procurement can edit orders
     if (currentUser.role === 'admin' || currentUser.role === 'procurement') {
         html += '<hr class="mt-2" style="border-color: rgba(31,41,55,0.9); margin-bottom: 0.6rem;">';
@@ -1192,6 +1210,12 @@ function renderOrderDetail(o) {
     }
 
     orderDetailBody.innerHTML = html;
+
+    // ⭐ NEW: Load supplier suggestions (Phase 1)
+    if ((currentUser.role === 'admin' || currentUser.role === 'procurement') && 
+        typeof loadSupplierSuggestions === 'function') {
+        loadSupplierSuggestions(o.id, o.supplier_id);
+    }
 
     // ⭐ ATTACH SUPPLIER SELECTOR BUTTON
     const btnSelectSupplier = document.getElementById('btnSelectSupplier');

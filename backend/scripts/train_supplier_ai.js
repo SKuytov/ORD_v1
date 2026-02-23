@@ -25,11 +25,8 @@ async function trainSupplierAI(excelFilePath) {
         
         // Read Excel file
         const workbook = xlsx.readFile(excelFilePath);
-        const sheetName = workbook.SheetNames[0]; // Use first sheet
-        const sheet = workbook.Sheets[sheetName];
-        const data = xlsx.utils.sheet_to_json(sheet);
         
-        console.log(`✅ Loaded ${data.length} rows from sheet: ${sheetName}`);
+        console.log(`✅ Found ${workbook.SheetNames.length} sheets: ${workbook.SheetNames.join(', ')}\n`);
         
         // Get existing suppliers map
         const [suppliers] = await connection.execute(
@@ -41,7 +38,7 @@ async function trainSupplierAI(excelFilePath) {
             supplierMap[s.name.toLowerCase().trim()] = s.id;
         });
         
-        console.log(`📦 Found ${suppliers.length} suppliers in database`);
+        console.log(`📦 Found ${suppliers.length} suppliers in database\n`);
         
         // Get admin user ID (for training data attribution)
         const [adminUsers] = await connection.execute(
@@ -54,79 +51,121 @@ async function trainSupplierAI(excelFilePath) {
         
         const adminUserId = adminUsers[0].id;
         
-        let processedCount = 0;
-        let skippedCount = 0;
-        let newSuppliersFound = [];
+        let totalProcessed = 0;
+        let totalSkipped = 0;
+        let newSuppliersFound = new Set();
         
-        // Process each row
-        for (const row of data) {
-            // Extract fields (adjust column names based on your Excel)
-            const itemDescription = row['Описание артикул'] || row['Item Description'] || '';
-            const supplierName = row['Доставчик'] || row['Supplier'] || '';
-            const building = row['Машина'] || row['Building'] || '';
-            const status = row['Status'] || '';
+        // Process each sheet
+        for (const sheetName of workbook.SheetNames) {
+            console.log(`\n📄 Processing sheet: ${sheetName}`);
+            console.log('='.repeat(60));
             
-            // Skip rows without item description or supplier
-            if (!itemDescription || !supplierName || supplierName.trim() === '') {
-                skippedCount++;
-                continue;
-            }
+            const sheet = workbook.Sheets[sheetName];
+            const data = xlsx.utils.sheet_to_json(sheet);
             
-            // Find supplier ID
-            const supplierKey = supplierName.toLowerCase().trim();
-            let supplierId = supplierMap[supplierKey];
+            console.log(`   Loaded ${data.length} rows`);
             
-            // If supplier not found, track it
-            if (!supplierId) {
-                if (!newSuppliersFound.includes(supplierName)) {
-                    newSuppliersFound.push(supplierName);
+            let processedCount = 0;
+            let skippedCount = 0;
+            
+            // Process each row
+            for (const row of data) {
+                // Extract fields - try multiple column name variations
+                const itemDescription = 
+                    row['Описание артикул'] || 
+                    row['Описание'] ||
+                    row['Item Description'] || 
+                    row['Description'] ||
+                    '';
+                    
+                const supplierName = 
+                    row['Доставчик'] || 
+                    row['Supplier'] || 
+                    '';
+                    
+                const building = 
+                    row['Машина'] || 
+                    row['Machine'] ||
+                    row['Building'] || 
+                    '';
+                
+                const status = 
+                    row['Статус'] ||
+                    row['Status'] || 
+                    '';
+                
+                // Skip rows without item description or supplier
+                if (!itemDescription || !supplierName || supplierName.trim() === '') {
+                    skippedCount++;
+                    continue;
                 }
-                skippedCount++;
-                continue;
+                
+                // Skip if item is too short (probably header row)
+                if (itemDescription.trim().length < 3) {
+                    skippedCount++;
+                    continue;
+                }
+                
+                // Find supplier ID (case-insensitive match)
+                const supplierKey = supplierName.toLowerCase().trim();
+                let supplierId = supplierMap[supplierKey];
+                
+                // If supplier not found, track it
+                if (!supplierId) {
+                    newSuppliersFound.add(supplierName.trim());
+                    skippedCount++;
+                    continue;
+                }
+                
+                // Create a virtual order for training
+                // Insert into orders table
+                const [orderResult] = await connection.execute(
+                    `INSERT INTO orders (
+                        item_description, 
+                        building, 
+                        quantity, 
+                        date_needed, 
+                        status, 
+                        requester_id, 
+                        supplier_id,
+                        created_at
+                    ) VALUES (?, ?, ?, NOW(), ?, ?, ?, NOW())`,
+                    [
+                        itemDescription.trim(),
+                        building || 'Historical Data',
+                        1,
+                        'Delivered', // Mark as delivered for training
+                        adminUserId,
+                        supplierId
+                    ]
+                );
+                
+                const orderId = orderResult.insertId;
+                
+                // Log supplier selection for training
+                await connection.execute(
+                    `INSERT INTO supplier_selection_log (
+                        order_id, 
+                        supplier_id, 
+                        selected_by_user_id, 
+                        from_suggestion,
+                        selected_at
+                    ) VALUES (?, ?, ?, ?, NOW())`,
+                    [orderId, supplierId, adminUserId, false]
+                );
+                
+                processedCount++;
+                
+                if (processedCount % 50 === 0) {
+                    process.stdout.write(`   ⏳ Processed ${processedCount}...\r`);
+                }
             }
             
-            // Create a virtual order for training
-            // Insert into orders table
-            const [orderResult] = await connection.execute(
-                `INSERT INTO orders (
-                    item_description, 
-                    building, 
-                    quantity, 
-                    date_needed, 
-                    status, 
-                    requester_id, 
-                    supplier_id,
-                    created_at
-                ) VALUES (?, ?, ?, NOW(), ?, ?, ?, NOW())`,
-                [
-                    itemDescription,
-                    building || 'Historical Data',
-                    1,
-                    'Delivered', // Mark as delivered for training
-                    adminUserId,
-                    supplierId
-                ]
-            );
+            console.log(`   ✅ Processed: ${processedCount} orders`);
+            console.log(`   ⏭️  Skipped: ${skippedCount} rows`);
             
-            const orderId = orderResult.insertId;
-            
-            // Log supplier selection for training
-            await connection.execute(
-                `INSERT INTO supplier_selection_log (
-                    order_id, 
-                    supplier_id, 
-                    selected_by_user_id, 
-                    from_suggestion,
-                    selected_at
-                ) VALUES (?, ?, ?, ?, NOW())`,
-                [orderId, supplierId, adminUserId, false]
-            );
-            
-            processedCount++;
-            
-            if (processedCount % 50 === 0) {
-                console.log(`⏳ Processed ${processedCount} orders...`);
-            }
+            totalProcessed += processedCount;
+            totalSkipped += skippedCount;
         }
         
         // Update supplier statistics
@@ -143,19 +182,23 @@ async function trainSupplierAI(excelFilePath) {
                 )
         `);
         
-        console.log('\n✅ Training Complete!');
-        console.log(`📈 Processed: ${processedCount} orders`);
-        console.log(`⏭️  Skipped: ${skippedCount} rows (missing data)`);
+        console.log('\n' + '='.repeat(60));
+        console.log('✅ Training Complete!');
+        console.log('='.repeat(60));
+        console.log(`📈 Total Processed: ${totalProcessed} orders`);
+        console.log(`⏭️  Total Skipped: ${totalSkipped} rows (missing data)`);
         
-        if (newSuppliersFound.length > 0) {
-            console.log(`\n⚠️  Found ${newSuppliersFound.length} suppliers not in database:`);
-            newSuppliersFound.slice(0, 10).forEach(name => {
+        if (newSuppliersFound.size > 0) {
+            const newSuppliers = Array.from(newSuppliersFound);
+            console.log(`\n⚠️  Found ${newSuppliers.length} suppliers not in database:`);
+            newSuppliers.slice(0, 15).forEach(name => {
                 console.log(`   - ${name}`);
             });
-            if (newSuppliersFound.length > 10) {
-                console.log(`   ... and ${newSuppliersFound.length - 10} more`);
+            if (newSuppliers.length > 15) {
+                console.log(`   ... and ${newSuppliers.length - 15} more`);
             }
             console.log('\n💡 Add these suppliers to your database first, then re-run training.');
+            console.log('   You can add them via the Suppliers page in the UI.');
         }
         
     } catch (error) {

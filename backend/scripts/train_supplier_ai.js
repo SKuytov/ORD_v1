@@ -29,6 +29,26 @@ function truncateText(text, maxLength = 50) {
     return trimmed.substring(0, maxLength - 3) + '...';
 }
 
+function abbreviateBuilding(sheetName) {
+    // Abbreviate common long sheet names to fit in building column (max 20 chars)
+    const abbreviations = {
+        'Cotton Tape and Sliver': 'CT&Sliver',
+        'Cotton Buds and Pads': 'CB&Pads',
+        'Wet Wipes': 'WW',
+        'Paper Sticks, Plastics': 'PS&Plastics',
+        'Paper Sticks': 'PS',
+        'Plastics': 'Plastics'
+    };
+    
+    // Check for exact match
+    if (abbreviations[sheetName]) {
+        return abbreviations[sheetName];
+    }
+    
+    // Otherwise truncate to 20 chars
+    return truncateText(sheetName, 20);
+}
+
 async function trainSupplierAI(excelFilePath) {
     const connection = await mysql.createConnection(dbConfig);
     
@@ -82,8 +102,9 @@ async function trainSupplierAI(excelFilePath) {
             
             console.log(`   Loaded ${data.length} rows`);
             
-            // Use sheet name as building (truncate if needed)
-            const building = truncateText(sheetName, 50);
+            // Use abbreviated sheet name as building
+            const building = abbreviateBuilding(sheetName);
+            console.log(`   Building code: "${building}"`);
             
             let processedCount = 0;
             let skippedCount = 0;

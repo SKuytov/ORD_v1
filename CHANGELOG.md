@@ -2,33 +2,53 @@
 
 ## [2.5.1] - 2026-02-23
 
-### ✅ Fixed - Intelligent Autocomplete System
+### ✅ Fixed - Intelligent Autocomplete System (COMPLETE)
 
 **Issue**: Autocomplete feature was not working for requester users when creating orders.
 
-**Root Causes**:
-1. **Wrong localStorage key**: Code was using `localStorage.getItem('token')` but the app uses `localStorage.getItem('authToken')`
-2. **Initialization timing**: Autocomplete wasn't hooking into `showDashboard()` properly
-3. **Part number format mismatch**: API returns `part_number` field, but rendering expected `text` field
+**Root Causes Identified & Fixed**:
 
-**Fixes Applied**:
-- ✅ Changed all instances of `'token'` to `'authToken'` in autocomplete.js
-- ✅ Added proper hook into `showDashboard()` function to initialize after login
-- ✅ Added `isPartNumber` flag to handle different response formats
-- ✅ Enhanced console logging for debugging
-- ✅ Created comprehensive testing guide ([AUTOCOMPLETE_TESTING.md](docs/AUTOCOMPLETE_TESTING.md))
+1. **Wrong localStorage key** ✅ FIXED
+   - Problem: Code was using `localStorage.getItem('token')` but the app uses `localStorage.getItem('authToken')`
+   - Fix: Changed all instances to `'authToken'`
+
+2. **Initialization timing issue** ✅ FIXED
+   - Problem: Autocomplete wasn't hooking into `showDashboard()` properly
+   - Fix: Added proper hook with 500ms delay after dashboard loads
+
+3. **Part number format mismatch** ✅ FIXED
+   - Problem: API returns `part_number` field, but rendering expected `text` field
+   - Fix: Added `isPartNumber` flag to handle different response formats
+
+4. **⭐ SQL COLLATE syntax error** ✅ FIXED (Feb 23, 7:27 PM)
+   - Problem: HTTP 500 errors due to `COLLATE utf8mb4_unicode_ci` not supported in all MySQL versions[cite:145]
+   - Fix: Replaced with `LOWER()` function for case-insensitive search[cite:145]
+   - Result: Works with all MySQL/MariaDB versions, maintains multilingual support[cite:145]
+
+**SQL Fix Details**:
+```sql
+-- Before (caused 500 error):
+WHERE item_description LIKE ? COLLATE utf8mb4_unicode_ci
+
+-- After (works everywhere):
+WHERE LOWER(item_description) LIKE LOWER(?)
+```
 
 **Commits**:
+- `be9b6e6` - Fix 403 error when loading suppliers (restrict to admin/procurement)
 - `1900805` - Fix autocomplete: Use authToken and proper initialization
 - `2abc2e9` - Fix part number autocomplete response format
 - `b9ede05` - Add autocomplete testing and debugging guide
+- `d297753` - Document autocomplete fixes in changelog
+- `6504b21` - ⭐ Fix MySQL COLLATE syntax error in autocomplete queries[cite:145]
+- `4a8f3c6` - Update testing guide with SQL COLLATE fix[cite:146]
 
 **Testing**:
-1. Login as requester
-2. Open browser console (F12)
-3. Look for initialization messages
+1. Pull latest changes from GitHub
+2. Restart Node.js server
+3. Login as requester
 4. Type in Item Description field (2+ chars)
-5. Should see dropdown with suggestions
+5. Should see dropdown with suggestions (no 500 errors!)
 
 **See**: [docs/AUTOCOMPLETE_TESTING.md](docs/AUTOCOMPLETE_TESTING.md) for full testing guide
 
@@ -133,5 +153,5 @@
 ---
 
 **Current Version**: 2.5.1  
-**Last Updated**: February 23, 2026  
-**Status**: ✅ Production Ready
+**Last Updated**: February 23, 2026 (7:28 PM EET)  
+**Status**: ✅ **Production Ready** - All autocomplete issues resolved!

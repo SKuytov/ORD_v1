@@ -2,6 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const orderController = require('../controllers/orderController');
+const supplierSuggestionsController = require('../controllers/supplierSuggestionsController');
 const { authenticateToken, authorizeRoles } = require('../middleware/auth');
 const upload = require('../middleware/upload');
 
@@ -10,6 +11,27 @@ router.get('/stats/overview',
     authenticateToken,
     authorizeRoles('admin', 'procurement'),
     orderController.getOrderStats
+);
+
+// ⭐ NEW: Phase 1 - Smart Supplier Suggestions
+router.get('/:id/suggested-suppliers',
+    authenticateToken,
+    authorizeRoles('admin', 'procurement'),
+    supplierSuggestionsController.getSuggestedSuppliers
+);
+
+// ⭐ NEW: Log supplier selection for learning
+router.post('/supplier-selection-log',
+    authenticateToken,
+    authorizeRoles('admin', 'procurement'),
+    supplierSuggestionsController.logSupplierSelection
+);
+
+// ⭐ NEW: Get suggestion statistics (admin)
+router.get('/stats/suggestions',
+    authenticateToken,
+    authorizeRoles('admin'),
+    supplierSuggestionsController.getSuggestionStats
 );
 
 // Create new order

@@ -17,6 +17,20 @@ const dbConfig = {
     port: process.env.DB_PORT || 3306
 };
 
+function truncateBuilding(building) {
+    if (!building) return 'Training Data';
+    
+    // Truncate to 50 characters max to fit database column
+    const maxLength = 50;
+    const trimmed = building.trim();
+    
+    if (trimmed.length <= maxLength) {
+        return trimmed;
+    }
+    
+    return trimmed.substring(0, maxLength - 3) + '...';
+}
+
 async function trainSupplierAI(excelFilePath) {
     const connection = await mysql.createConnection(dbConfig);
     
@@ -117,8 +131,11 @@ async function trainSupplierAI(excelFilePath) {
                     continue;
                 }
                 
+                // Truncate building name to fit database column
+                const buildingTruncated = truncateBuilding(building);
+                
                 // Create a virtual order for training
-                // Insert into orders table (without created_at)
+                // Insert into orders table
                 const [orderResult] = await connection.execute(
                     `INSERT INTO orders (
                         item_description, 
@@ -131,7 +148,7 @@ async function trainSupplierAI(excelFilePath) {
                     ) VALUES (?, ?, ?, NOW(), ?, ?, ?)`,
                     [
                         itemDescription.trim(),
-                        building || 'Historical Data',
+                        buildingTruncated,
                         1,
                         'Delivered', // Mark as delivered for training
                         adminUserId,

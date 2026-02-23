@@ -1,12 +1,12 @@
 // backend/controllers/supplierSuggestionsController.js
-// Phase 1: Smart Supplier Suggestions
+// Phase 1: Smart Supplier Suggestions with Cyrillic support
 
 const db = require('../config/database');
 
 /**
  * Get smart supplier suggestions for a specific order
  * Algorithm considers:
- * - Item description keywords
+ * - Item description keywords (supports Cyrillic/Bulgarian)
  * - Category matching
  * - Historical patterns (what this supplier has supplied before)
  * - Supplier specializations
@@ -33,6 +33,8 @@ exports.getSuggestedSuppliers = async (req, res) => {
         const keywords = extractKeywords(order.item_description);
         const category = order.category || '';
 
+        console.log('[AI] Order:', orderId, 'Keywords:', keywords, 'Category:', category);
+
         // Get all active suppliers with their history
         const [suppliers] = await db.query(`
             SELECT 
@@ -57,6 +59,8 @@ exports.getSuggestedSuppliers = async (req, res) => {
             WHERE s.active = 1
             GROUP BY s.id
         `);
+
+        console.log(`[AI] Found ${suppliers.length} active suppliers`);
 
         // Score each supplier
         const scoredSuppliers = suppliers.map(supplier => {
@@ -138,6 +142,8 @@ exports.getSuggestedSuppliers = async (req, res) => {
             .slice(0, 3)
             .filter(s => s.suggestion_score > 0); // Only show if some relevance
 
+        console.log(`[AI] Top suggestions:`, topSuggestions.map(s => ({ name: s.name, score: s.suggestion_score })));
+
         res.json({
             success: true,
             suggestions: topSuggestions,
@@ -216,21 +222,26 @@ exports.getSuggestionStats = async (req, res) => {
     }
 };
 
-// Helper function to extract meaningful keywords
+// Helper function to extract meaningful keywords (supports Cyrillic)
 function extractKeywords(text) {
     if (!text) return [];
     
-    // Common stop words to ignore
+    // Common Bulgarian stop words to ignore
     const stopWords = new Set([
+        // English
         'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
         'of', 'with', 'by', 'from', 'as', 'is', 'was', 'are', 'were', 'be',
         'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will',
-        'would', 'should', 'could', 'may', 'might', 'can', 'need', 'needs'
+        'would', 'should', 'could', 'may', 'might', 'can', 'need', 'needs',
+        // Bulgarian
+        'и', 'на', 'за', 'с', 'в', 'от', 'към', 'до', 'по', 'през', 'от', 'над', 'под', 'със',
+        'е', 'са', 'бъде', 'би', 'бил', 'била', 'било', 'след', 'пред', 'между'
     ]);
 
-    // Split, clean, and filter
+    // Split, clean, and filter - SUPPORT CYRILLIC
     const words = text.toLowerCase()
-        .replace(/[^a-z0-9\s-]/g, ' ') // Remove special chars except hyphens
+        // Keep: letters (Latin & Cyrillic), numbers, hyphens
+        .replace(/[^a-zа-я0-9\s-]/gi, ' ') // Keep Cyrillic а-я
         .split(/\s+/)
         .filter(word => 
             word.length > 2 && // At least 3 characters

@@ -1535,6 +1535,19 @@ function switchTab(tabId) {
     document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
     document.getElementById(tabId).classList.remove('hidden');
     currentTab = tabId;
+
+    // ⭐ NEW: Show brand training UI for admins in Suppliers tab
+    if (tabId === 'suppliersTab' && currentUser && currentUser.role === 'admin') {
+        const brandTrainingCard = document.getElementById('brandTrainingCard');
+        if (brandTrainingCard) {
+            brandTrainingCard.hidden = false;
+            // Load brand training UI if function exists
+            if (typeof loadBrandTrainingUI === 'function') {
+                loadBrandTrainingUI();
+            }
+        }
+    }
+    
 }
 
 function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c] || c)); }

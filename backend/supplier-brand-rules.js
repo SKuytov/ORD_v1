@@ -127,33 +127,39 @@ function setBrandRule(brandName, keywords, suppliers, scoreBonus = 200) {
 
 /**
  * Learn from historical data - auto-detect brand patterns
- * Analyzes training_orders to find brand→supplier correlations
+ * Analyzes orders to find brand→supplier correlations
  * @returns {Promise<Array>} Discovered patterns
  */
 async function learnBrandPatterns() {
     try {
         console.log('\n🧠 Learning brand patterns from historical data...');
         
-        // Find common brand keywords in descriptions
-        const [rows] = await pool.query(`
+        // Find common brand keywords in item descriptions from actual orders
+        // Use the orders table with item_description column
+        const [rows] = await pool.promise().query(`
             SELECT 
                 s.name as supplier_name,
-                t.description,
+                o.item_description,
                 COUNT(*) as order_count
-            FROM training_orders t
-            JOIN suppliers s ON t.supplier_id = s.id
+            FROM orders o
+            JOIN suppliers s ON o.supplier_id = s.id
             WHERE s.active = 1
-            GROUP BY s.name, t.description
-            HAVING order_count > 2
+                AND o.supplier_id IS NOT NULL
+                AND o.item_description IS NOT NULL
+                AND o.item_description != ''
+                AND o.status != 'Cancelled'
+            GROUP BY s.name, o.item_description
+            HAVING order_count >= 2
             ORDER BY order_count DESC
             LIMIT 100
         `);
         
         const patterns = [];
+        const brandMap = new Map();
         
         // Analyze patterns
         for (const row of rows) {
-            const desc = (row.description || '').toLowerCase();
+            const desc = (row.item_description || '').toLowerCase();
             const words = desc.split(/\s+/).filter(w => w.length >= 3);
             
             // Check if supplier name appears in description (brand match)
@@ -162,22 +168,44 @@ async function learnBrandPatterns() {
                 words.some(w => w.includes(sw) || sw.includes(w))
             );
             
-            if (brandMatch && row.order_count >= 5) {
-                patterns.push({
-                    brand: row.supplier_name,
-                    supplier: row.supplier_name,
-                    frequency: row.order_count,
-                    confidence: 'HIGH'
-                });
+            if (brandMatch) {
+                const key = row.supplier_name.toUpperCase();
+                if (!brandMap.has(key)) {
+                    brandMap.set(key, {
+                        brand: row.supplier_name,
+                        supplier: row.supplier_name,
+                        totalOrders: 0,
+                        examples: []
+                    });
+                }
+                const entry = brandMap.get(key);
+                entry.totalOrders += row.order_count;
+                if (entry.examples.length < 3) {
+                    entry.examples.push(row.item_description);
+                }
             }
         }
+        
+        // Convert map to array with confidence ratings
+        for (const [key, value] of brandMap.entries()) {
+            patterns.push({
+                brand: value.brand,
+                supplier: value.supplier,
+                frequency: value.totalOrders,
+                confidence: value.totalOrders >= 10 ? 'HIGH' : value.totalOrders >= 5 ? 'MEDIUM' : 'LOW',
+                examples: value.examples
+            });
+        }
+        
+        // Sort by frequency
+        patterns.sort((a, b) => b.frequency - a.frequency);
         
         console.log(`📊 Discovered ${patterns.length} brand patterns`);
         return patterns;
         
     } catch (error) {
         console.error('Error learning brand patterns:', error);
-        return [];
+        throw error;
     }
 }
 

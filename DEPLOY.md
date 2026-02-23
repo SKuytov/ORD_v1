@@ -14,17 +14,26 @@ cd backend
 npm install
 ```
 
-### 3. Database Migration
+### 3. Database Migration (MySQL)
 
-**Go to Supabase Dashboard → SQL Editor → Run this:**
-
-```sql
--- Copy/paste contents of: backend/database/supplier-products-schema.sql
+**Option A: Direct MySQL command (Recommended)**
+```bash
+mysql -u root -p < backend/database/supplier-products-schema-mysql.sql
 ```
 
-Or via command line:
+**Option B: Connect and run manually**
 ```bash
-psql -h db.xxx.supabase.co -U postgres -d postgres -f backend/database/supplier-products-schema.sql
+mysql -u root -p
+# Then:
+USE your_database_name;
+source /path/to/ORD_v1/backend/database/supplier-products-schema-mysql.sql;
+```
+
+**Option C: Via init-db script**
+```bash
+cd backend
+npm run init-db
+# Then paste the contents of supplier-products-schema-mysql.sql
 ```
 
 ### 4. Restart PM2
@@ -37,7 +46,7 @@ pm2 restart partpulse-orders
 ## ✅ Quick Verification
 
 ```bash
-# Check status
+# Check PM2 status
 pm2 status
 
 # Check logs
@@ -45,6 +54,9 @@ pm2 logs partpulse-orders --lines 20
 
 # Verify ExcelJS installed
 npm list exceljs
+
+# Verify database table created
+mysql -u root -p -e "DESCRIBE supplier_products;"
 ```
 
 **In Browser:**
@@ -58,7 +70,7 @@ npm list exceljs
 ## 🐛 If Something Breaks
 
 ```bash
-# Check logs
+# Check PM2 logs
 pm2 logs partpulse-orders --err
 
 # Restart
@@ -70,6 +82,9 @@ pm2 reload partpulse-orders
 # Full restart
 pm2 delete partpulse-orders
 pm2 start backend/server.js --name partpulse-orders
+
+# Check database
+mysql -u root -p -e "SELECT COUNT(*) FROM supplier_products;"
 ```
 
 ---
@@ -81,6 +96,16 @@ pm2 start backend/server.js --name partpulse-orders
 - ✅ Product database with search
 - ✅ AI integration ready
 - ✅ Full documentation in `docs/`
+- ✅ MySQL full-text search optimization
+
+---
+
+## 🗄️ Database Notes
+
+**Table created:** `supplier_products`
+**Indexes:** 9 indexes including full-text search
+**View created:** `v_supplier_catalog`
+**Sample data:** 3 example products (optional)
 
 ---
 

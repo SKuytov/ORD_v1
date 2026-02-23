@@ -1,4 +1,4 @@
-// frontend/app.js - PartPulse Orders v2.3 - Manager Role Support
+// frontend/app.js - PartPulse Orders v2.5 - Professional Supplier Selector
 
 const API_BASE = '/api';
 let currentUser = null;
@@ -1176,7 +1176,16 @@ function renderOrderDetail(o) {
         html += '<hr class="mt-2" style="border-color: rgba(31,41,55,0.9); margin-bottom: 0.6rem;">';
         html += '<div class="detail-section-title">Update Order</div>';
         html += `<div class="form-group mt-1"><label>Status</label><select id="detailStatus" class="form-control form-control-sm">${ORDER_STATUSES.map(s => `<option value="${s}" ${s === o.status ? 'selected' : ''}>${s}</option>`).join('')}</select></div>`;
-        html += `<div class="form-group"><label>Supplier</label><select id="detailSupplier" class="form-control form-control-sm"><option value="">None</option>${suppliersState.map(s => `<option value="${s.id}" ${o.supplier_id === s.id ? 'selected' : ''}>${escapeHtml(s.name)}</option>`).join('')}</select></div>`;
+        
+        // ⭐ REPLACE SUPPLIER DROPDOWN WITH BUTTON
+        html += `<div class="form-group">
+            <label>Supplier</label>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <input type="text" id="detailSupplierDisplay" class="form-control form-control-sm" value="${o.supplier_name || 'No supplier selected'}" readonly style="flex: 1; background: #0f172a; cursor: pointer;" />
+                <button id="btnSelectSupplier" class="btn btn-primary btn-sm" style="white-space: nowrap;">🏢 Select</button>
+            </div>
+        </div>`;
+        
         html += `<div class="detail-grid"><div><div class="form-group"><label>Expected Delivery</label><input type="date" id="detailExpected" class="form-control form-control-sm date-picker" value="${o.expected_delivery_date ? o.expected_delivery_date.substring(0,10) : ''}"></div></div><div><div class="form-group"><label>Unit Price</label><input type="number" step="0.01" id="detailUnitPrice" class="form-control form-control-sm" value="${parseFloat(o.unit_price) || ''}"></div></div></div>`;
         html += `<div class="form-group"><label>Total Price</label><input type="number" step="0.01" id="detailTotalPrice" class="form-control form-control-sm" value="${parseFloat(o.total_price) || ''}"></div>`;
         html += `<div class="form-actions"><button id="btnSaveOrder" class="btn btn-primary btn-sm">Save</button></div>`;
@@ -1184,12 +1193,20 @@ function renderOrderDetail(o) {
 
     orderDetailBody.innerHTML = html;
 
+    // ⭐ ATTACH SUPPLIER SELECTOR BUTTON
+    const btnSelectSupplier = document.getElementById('btnSelectSupplier');
+    if (btnSelectSupplier && typeof openSupplierSelector === 'function') {
+        btnSelectSupplier.addEventListener('click', () => {
+            openSupplierSelector(o.id, o.supplier_id);
+        });
+    }
+
     const btnSave = document.getElementById('btnSaveOrder');
     if (btnSave) {
         btnSave.addEventListener('click', async () => {
             const payload = {
                 status: document.getElementById('detailStatus').value,
-                supplier_id: document.getElementById('detailSupplier').value || null,
+                supplier_id: o.supplier_id || null, // Keep current supplier_id (updated by modal)
                 expected_delivery_date: document.getElementById('detailExpected').value || null,
                 unit_price: parseFloat(document.getElementById('detailUnitPrice').value || 0) || null,
                 total_price: parseFloat(document.getElementById('detailTotalPrice').value || 0) || null

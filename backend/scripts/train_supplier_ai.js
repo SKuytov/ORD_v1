@@ -118,7 +118,7 @@ async function trainSupplierAI(excelFilePath) {
                 }
                 
                 // Create a virtual order for training
-                // Insert into orders table
+                // Insert into orders table (without created_at)
                 const [orderResult] = await connection.execute(
                     `INSERT INTO orders (
                         item_description, 
@@ -127,9 +127,8 @@ async function trainSupplierAI(excelFilePath) {
                         date_needed, 
                         status, 
                         requester_id, 
-                        supplier_id,
-                        created_at
-                    ) VALUES (?, ?, ?, NOW(), ?, ?, ?, NOW())`,
+                        supplier_id
+                    ) VALUES (?, ?, ?, NOW(), ?, ?, ?)`,
                     [
                         itemDescription.trim(),
                         building || 'Historical Data',
@@ -148,9 +147,8 @@ async function trainSupplierAI(excelFilePath) {
                         order_id, 
                         supplier_id, 
                         selected_by_user_id, 
-                        from_suggestion,
-                        selected_at
-                    ) VALUES (?, ?, ?, ?, NOW())`,
+                        from_suggestion
+                    ) VALUES (?, ?, ?, ?)`,
                     [orderId, supplierId, adminUserId, false]
                 );
                 
@@ -177,9 +175,7 @@ async function trainSupplierAI(excelFilePath) {
                 total_orders = (
                     SELECT COUNT(*) FROM orders o WHERE o.supplier_id = s.id
                 ),
-                last_order_date = (
-                    SELECT MAX(created_at) FROM orders o WHERE o.supplier_id = s.id
-                )
+                last_order_date = NOW()
         `);
         
         console.log('\n' + '='.repeat(60));

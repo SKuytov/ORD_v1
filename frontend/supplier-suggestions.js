@@ -19,7 +19,8 @@ async function loadSupplierSuggestions(orderId, currentSupplierId) {
     `;
 
     try {
-        const res = await apiGet(`/orders/${orderId}/suggested-suppliers`);
+        // ⭐ FIX: Use correct API endpoint
+        const res = await apiGet(`/suppliers/suggestions/${orderId}`);
         
         if (!res.success || !res.suggestions || res.suggestions.length === 0) {
             container.innerHTML = `
@@ -50,29 +51,29 @@ function renderSuggestions(container, suggestions, orderId, currentSupplierId) {
 
     suggestions.forEach((supplier, index) => {
         const rank = index + 1;
-        const isCurrentSupplier = supplier.id === currentSupplierId;
+        const isCurrentSupplier = supplier.supplier_id === currentSupplierId;
         const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : '🥉';
         
-        // Star rating based on performance score
-        const stars = getStarRating(supplier.performance_score);
+        // Star rating based on confidence
+        const stars = getStarRating(supplier.confidence);
 
         html += `
-            <div class="suggestion-card ${isCurrentSupplier ? 'current-supplier' : ''}" data-supplier-id="${supplier.id}">
+            <div class="suggestion-card ${isCurrentSupplier ? 'current-supplier' : ''}" data-supplier-id="${supplier.supplier_id}">
                 <div class="suggestion-header">
                     <div class="suggestion-rank">${medal}</div>
                     <div class="suggestion-title">
-                        <div class="supplier-name">${escapeHtml(supplier.name)}</div>
-                        <div class="suggestion-score-badge">${supplier.suggestion_score}% match</div>
+                        <div class="supplier-name">${escapeHtml(supplier.supplier_name)}</div>
+                        <div class="suggestion-score-badge">${supplier.confidence}% match</div>
                     </div>
                 </div>
                 
                 <div class="suggestion-performance">
                     <span class="stars">${stars}</span>
-                    <span class="score-text">${supplier.performance_score}/100</span>
+                    <span class="score-text">${supplier.confidence}/100</span>
                 </div>
 
                 <div class="suggestion-reasons">
-                    ${supplier.suggestion_reasons.slice(0, 2).map(reason => 
+                    ${supplier.match_reasons.slice(0, 2).map(reason => 
                         `<div class="reason-badge">✓ ${escapeHtml(reason)}</div>`
                     ).join('')}
                 </div>
@@ -80,14 +81,14 @@ function renderSuggestions(container, suggestions, orderId, currentSupplierId) {
                 <div class="suggestion-contact">
                     ${supplier.contact_person ? `<div>👤 ${escapeHtml(supplier.contact_person)}</div>` : ''}
                     ${supplier.email ? `<div>📧 ${escapeHtml(supplier.email)}</div>` : ''}
-                    ${supplier.phone ? `<div>📞 ${escapeHtml(supplier.phone)}</div>` : ''}
+                    <div>📊 ${supplier.total_orders} order${supplier.total_orders !== 1 ? 's' : ''} processed</div>
                 </div>
 
                 ${isCurrentSupplier ? 
                     '<div class="suggestion-current-badge">✓ Currently Assigned</div>' :
                     `<button class="btn btn-primary btn-sm btn-assign-suggested" 
-                            data-supplier-id="${supplier.id}" 
-                            data-supplier-name="${escapeHtml(supplier.name)}"
+                            data-supplier-id="${supplier.supplier_id}" 
+                            data-supplier-name="${escapeHtml(supplier.supplier_name)}"
                             data-rank="${rank}">
                         Assign Supplier
                     </button>`
@@ -127,14 +128,6 @@ function attachSuggestionHandlers(orderId) {
                 });
 
                 if (updateRes.success) {
-                    // Log the selection for learning
-                    await apiPost('/orders/supplier-selection-log', {
-                        orderId: orderId,
-                        supplierId: supplierId,
-                        wasFromSuggestion: true,
-                        suggestionRank: rank
-                    });
-
                     // Show success message
                     showToast(`✓ Supplier "${supplierName}" assigned successfully!`, 'success');
 
@@ -155,11 +148,11 @@ function attachSuggestionHandlers(orderId) {
 }
 
 /**
- * Get star rating HTML based on performance score
+ * Get star rating HTML based on confidence score
  */
-function getStarRating(score) {
-    const fullStars = Math.floor(score / 20); // 0-5 stars
-    const halfStar = (score % 20) >= 10;
+function getStarRating(confidence) {
+    const fullStars = Math.floor(confidence / 20); // 0-5 stars
+    const halfStar = (confidence % 20) >= 10;
     const emptyStars = 5 - fullStars - (halfStar ? 1 : 0);
 
     let html = '';

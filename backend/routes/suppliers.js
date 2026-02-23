@@ -18,6 +18,13 @@ router.get('/suggestions/:orderId',
     supplierController.getSupplierSuggestions
 );
 
+// ⭐ NEW: Get brand rules configuration
+router.get('/brand-rules',
+    authenticateToken,
+    authorizeRoles('admin', 'procurement'),
+    supplierController.getBrandRules
+);
+
 // Create supplier
 router.post('/',
     authenticateToken,

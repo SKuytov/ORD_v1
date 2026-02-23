@@ -13,7 +13,8 @@ class IntelligentAutocomplete {
             placeholder: options.placeholder || 'Start typing...',
             showUsageCount: options.showUsageCount !== false,
             onSelect: options.onSelect || null,
-            customParams: options.customParams || {}
+            customParams: options.customParams || {},
+            isPartNumber: options.isPartNumber || false  // ⭐ NEW: Flag for part number mode
         };
 
         this.debounceTimer = null;
@@ -177,11 +178,35 @@ class IntelligentAutocomplete {
             item.className = 'autocomplete-item';
             item.dataset.index = index;
 
+            // ⭐ Handle both part number format and regular format
+            const displayText = suggestion.part_number || suggestion.text;
+            const subtitle = suggestion.description || suggestion.category || null;
+
+            // Main text container
+            const textContainer = document.createElement('div');
+            textContainer.style.flex = '1';
+            textContainer.style.overflow = 'hidden';
+
             // Main text
-            const textSpan = document.createElement('span');
+            const textSpan = document.createElement('div');
             textSpan.className = 'autocomplete-text';
-            textSpan.textContent = suggestion.text;
-            item.appendChild(textSpan);
+            textSpan.textContent = displayText;
+            textContainer.appendChild(textSpan);
+
+            // Subtitle (for part numbers)
+            if (subtitle && this.options.isPartNumber) {
+                const subtitleSpan = document.createElement('div');
+                subtitleSpan.style.fontSize = '0.75rem';
+                subtitleSpan.style.color = 'rgba(100, 116, 139, 1)';
+                subtitleSpan.style.marginTop = '2px';
+                subtitleSpan.style.overflow = 'hidden';
+                subtitleSpan.style.textOverflow = 'ellipsis';
+                subtitleSpan.style.whiteSpace = 'nowrap';
+                subtitleSpan.textContent = subtitle;
+                textContainer.appendChild(subtitleSpan);
+            }
+
+            item.appendChild(textContainer);
 
             // Usage count badge (optional)
             if (this.options.showUsageCount && suggestion.usage_count) {
@@ -220,10 +245,12 @@ class IntelligentAutocomplete {
     }
 
     selectSuggestion(suggestion) {
-        this.input.value = suggestion.text;
+        // ⭐ Set input value based on format
+        const value = suggestion.part_number || suggestion.text;
+        this.input.value = value;
         this.hideSuggestions();
 
-        console.log('✅ Autocomplete: Selected "' + suggestion.text + '"');
+        console.log('✅ Autocomplete: Selected "' + value + '"');
 
         // Trigger input event so other listeners know the value changed
         this.input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -339,6 +366,7 @@ function initializeOrderFormAutocomplete() {
             maxResults: 10,
             placeholder: 'e.g., 6205, SKF-123',
             showUsageCount: true,
+            isPartNumber: true,  // ⭐ Enable part number mode
             customParams: {},
             onSelect: (suggestion) => {
                 console.log('✅ Selected part number:', suggestion.part_number);

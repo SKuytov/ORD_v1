@@ -77,9 +77,9 @@ async function trainSupplierAI(excelFilePath) {
         
         console.log(`📦 Found ${suppliers.length} suppliers in database\n`);
         
-        // Get admin user ID (for training data attribution)
+        // Get admin user ID and name (for training data attribution)
         const [adminUsers] = await connection.execute(
-            "SELECT id FROM users WHERE role = 'admin' LIMIT 1"
+            "SELECT id, name FROM users WHERE role = 'admin' LIMIT 1"
         );
         
         if (adminUsers.length === 0) {
@@ -87,6 +87,7 @@ async function trainSupplierAI(excelFilePath) {
         }
         
         const adminUserId = adminUsers[0].id;
+        const adminUserName = adminUsers[0].name || 'Training Import';
         
         let totalProcessed = 0;
         let totalSkipped = 0;
@@ -176,15 +177,17 @@ async function trainSupplierAI(excelFilePath) {
                         quantity, 
                         date_needed, 
                         status, 
-                        requester_id, 
+                        requester_id,
+                        requester_name,
                         supplier_id
-                    ) VALUES (?, ?, ?, NOW(), ?, ?, ?)`,
+                    ) VALUES (?, ?, ?, NOW(), ?, ?, ?, ?)`,
                     [
                         truncateText(fullDescription, 500), // Truncate full description
                         building,
                         1,
                         'Delivered', // Mark as delivered for training
                         adminUserId,
+                        adminUserName,
                         supplierId
                     ]
                 );

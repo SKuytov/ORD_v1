@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="css/order-form-enhanced.css">
     <link rel="stylesheet" href="documents.css">
     <link rel="stylesheet" href="approvals.css">
+    <link rel="stylesheet" href="brand-training.css">
     <script src="upload-progress.js"></script>
 </head>
 <body>
@@ -132,7 +133,7 @@
 
             <!-- Orders Tab -->
             <section id="ordersTab" class="tab-content active">
-                <div class="card">
+               <div class="card">
                     <div class="card-header-row">
                         <h2>Orders</h2>
                         <div class="order-actions" id="orderActionsContainer">
@@ -278,6 +279,13 @@
 
             <!-- Suppliers Tab -->
             <section id="suppliersTab" class="tab-content hidden">
+                <!-- ⭐ NEW: Brand Training UI (Admin Only) -->
+                <div class="card" id="brandTrainingCard" hidden>
+                    <div id="brandTrainingContainer">
+                        <!-- Brand training UI will be loaded here -->
+                    </div>
+                </div>
+                
                 <div class="grid-2">
                     <div class="card">
                         <div class="card-header-row">
@@ -504,7 +512,9 @@
 <script src="order-assignment.js"></script>
 <!-- ⭐ Professional Supplier Selector -->
 <script src="supplier-selector.js"></script>
-<!-- ⭐ NEW: Phase 1 - Smart Supplier Suggestions -->
+<!-- ⭐ Smart Supplier Suggestions -->
 <script src="supplier-suggestions.js"></script>
+<!-- ⭐ NEW: Brand Training UI -->
+<script src="brand-training.js"></script>
 </body>
 </html>

@@ -81,7 +81,7 @@ exports.createOrder = async (req, res) => {
 
 exports.getOrders = async (req, res) => {
     try {
-        const { status, building, priority, supplier_id, search } = req.query;
+        const { status, building, priority, supplier_id, search, assigned_filter } = req.query;
 
         let query = `
             SELECT o.*,
@@ -89,6 +89,9 @@ exports.getOrders = async (req, res) => {
                    q.quote_number,
                    cc.code as cost_center_code,
                    cc.name as cost_center_name,
+                   u_assigned.name as assigned_to_name,
+                   u_assigned.username as assigned_to_username,
+                   TIMESTAMPDIFF(MINUTE, o.last_activity_at, NOW()) as minutes_since_activity,
                    GROUP_CONCAT(
                        DISTINCT JSON_OBJECT(
                            'id', f.id,
@@ -103,6 +106,7 @@ exports.getOrders = async (req, res) => {
             LEFT JOIN suppliers s ON o.supplier_id = s.id
             LEFT JOIN quotes q ON o.quote_ref = q.id
             LEFT JOIN cost_centers cc ON o.cost_center_id = cc.id
+            LEFT JOIN users u_assigned ON o.assigned_to_user_id = u_assigned.id
         `;
 
         const conditions = [];
@@ -119,6 +123,15 @@ exports.getOrders = async (req, res) => {
         if (building) { conditions.push('o.building = ?'); params.push(building); }
         if (priority) { conditions.push('o.priority = ?'); params.push(priority); }
         if (supplier_id) { conditions.push('o.supplier_id = ?'); params.push(supplier_id); }
+        
+        // ⭐ NEW: Assignment filter for procurement
+        if (assigned_filter === 'mine' && ['admin', 'procurement'].includes(req.user.role)) {
+            conditions.push('o.assigned_to_user_id = ?');
+            params.push(req.user.id);
+        } else if (assigned_filter === 'unassigned') {
+            conditions.push('o.assigned_to_user_id IS NULL');
+        }
+        
         if (search) {
             conditions.push('(o.item_description LIKE ? OR o.part_number LIKE ? OR o.requester_name LIKE ?)');
             const s = `%${search}%`;
@@ -161,11 +174,17 @@ exports.getOrderById = async (req, res) => {
                    s.name as supplier_name, s.email as supplier_email,
                    s.contact_person as supplier_contact,
                    q.quote_number, q.status as quote_status,
-                   cc.code as cost_center_code, cc.name as cost_center_name
+                   cc.code as cost_center_code, cc.name as cost_center_name,
+                   u_assigned.id as assigned_to_id,
+                   u_assigned.name as assigned_to_name,
+                   u_assigned.username as assigned_to_username,
+                   u_assigned.email as assigned_to_email,
+                   TIMESTAMPDIFF(MINUTE, o.last_activity_at, NOW()) as minutes_since_activity
             FROM orders o
             LEFT JOIN suppliers s ON o.supplier_id = s.id
             LEFT JOIN quotes q ON o.quote_ref = q.id
             LEFT JOIN cost_centers cc ON o.cost_center_id = cc.id
+            LEFT JOIN users u_assigned ON o.assigned_to_user_id = u_assigned.id
             WHERE o.id = ?
         `, [id]);
 
@@ -188,6 +207,23 @@ exports.getOrderById = async (req, res) => {
             [id]
         );
         order.history = history;
+        
+        // ⭐ NEW: Get assignment history
+        const [assignmentHistory] = await db.query(
+            `SELECT ah.*, 
+                    u_from.name as from_user_name,
+                    u_to.name as to_user_name,
+                    u_by.name as by_user_name
+             FROM order_assignment_history ah
+             LEFT JOIN users u_from ON ah.assigned_from_user_id = u_from.id
+             LEFT JOIN users u_to ON ah.assigned_to_user_id = u_to.id
+             LEFT JOIN users u_by ON ah.assigned_by_user_id = u_by.id
+             WHERE ah.order_id = ?
+             ORDER BY ah.created_at DESC
+             LIMIT 5`,
+            [id]
+        );
+        order.assignmentHistory = assignmentHistory;
 
         res.json({ success: true, order });
     } catch (error) {
@@ -215,6 +251,45 @@ exports.updateOrder = async (req, res) => {
         }
 
         const orderData = currentOrder[0];
+        
+        // ⭐ NEW: Check assignment permissions
+        if (orderData.assigned_to_user_id && req.user.role !== 'admin') {
+            // If order is assigned, only the assigned user can edit it
+            if (orderData.assigned_to_user_id !== req.user.id) {
+                await connection.rollback();
+                
+                // Get assigned user name
+                const [assignedUser] = await connection.query(
+                    'SELECT name FROM users WHERE id = ?',
+                    [orderData.assigned_to_user_id]
+                );
+                
+                return res.status(403).json({ 
+                    success: false, 
+                    message: `This order is currently being processed by ${assignedUser[0]?.name || 'another user'}. Only they or an admin can edit it.`,
+                    assigned_to: assignedUser[0]?.name
+                });
+            }
+        }
+        
+        // ⭐ NEW: Auto-claim order on first edit if not assigned
+        if (!orderData.assigned_to_user_id && ['admin', 'procurement'].includes(req.user.role)) {
+            const now = new Date();
+            await connection.query(
+                `UPDATE orders 
+                 SET assigned_to_user_id = ?, assigned_at = ?, last_activity_at = ?
+                 WHERE id = ?`,
+                [req.user.id, now, now, id]
+            );
+            
+            // Log the auto-claim
+            await connection.query(
+                `INSERT INTO order_assignment_history 
+                 (order_id, assigned_to_user_id, assigned_by_user_id, assignment_type, reason)
+                 VALUES (?, ?, ?, 'claim', 'Auto-claimed on first edit')`,
+                [id, req.user.id, req.user.id]
+            );
+        }
 
         // Allowed updatable fields
         const allowedFields = [
@@ -345,6 +420,17 @@ exports.getOrderStats = async (req, res) => {
             SELECT id, building, item_description, status, priority, submission_date
             FROM orders ORDER BY submission_date DESC LIMIT 10
         `);
+        
+        // ⭐ NEW: Assignment statistics
+        const [assignmentStats] = await db.query(`
+            SELECT 
+                COUNT(CASE WHEN assigned_to_user_id IS NOT NULL THEN 1 END) as assigned_count,
+                COUNT(CASE WHEN assigned_to_user_id IS NULL THEN 1 END) as unassigned_count,
+                COUNT(CASE WHEN assigned_to_user_id IS NOT NULL AND 
+                      TIMESTAMPDIFF(MINUTE, last_activity_at, NOW()) > 30 THEN 1 END) as stale_count
+            FROM orders
+            WHERE status IN ('New', 'Pending', 'Quote Requested', 'Quote Received')
+        `);
 
         res.json({
             success: true,
@@ -353,7 +439,8 @@ exports.getOrderStats = async (req, res) => {
                 byBuilding: buildingCounts,
                 byPriority: priorityCounts,
                 totalValue: totalValue[0].total || 0,
-                recentOrders
+                recentOrders,
+                assignments: assignmentStats[0] || {}
             }
         });
     } catch (error) {

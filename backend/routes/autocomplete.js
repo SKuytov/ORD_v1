@@ -25,17 +25,15 @@ router.get('/item-descriptions', authenticateToken, async (req, res) => {
         }
 
         // Search for matching item descriptions
-        // Use LOWER() for case-insensitive search (works with all MySQL versions)
         const query = `
             SELECT DISTINCT
                 item_description,
-                COUNT(*) as usage_count,
-                MAX(created_at) as last_used
+                COUNT(*) as usage_count
             FROM orders
             WHERE LOWER(item_description) LIKE LOWER(?)
                 AND status != 'Cancelled'
             GROUP BY item_description
-            ORDER BY usage_count DESC, last_used DESC
+            ORDER BY usage_count DESC
             LIMIT ?
         `;
 
@@ -45,8 +43,7 @@ router.get('/item-descriptions', authenticateToken, async (req, res) => {
         // Format results
         const suggestions = results.map(row => ({
             text: row.item_description,
-            usage_count: row.usage_count,
-            last_used: row.last_used
+            usage_count: row.usage_count
         }));
 
         res.json({ suggestions });
@@ -79,8 +76,7 @@ router.get('/categories', authenticateToken, async (req, res) => {
             const query = `
                 SELECT DISTINCT
                     category,
-                    COUNT(*) as usage_count,
-                    MAX(created_at) as last_used
+                    COUNT(*) as usage_count
                 FROM orders
                 WHERE category IS NOT NULL 
                     AND category != ''
@@ -94,8 +90,7 @@ router.get('/categories', authenticateToken, async (req, res) => {
             
             const suggestions = results.map(row => ({
                 text: row.category,
-                usage_count: row.usage_count,
-                last_used: row.last_used
+                usage_count: row.usage_count
             }));
 
             return res.json({ suggestions });
@@ -105,15 +100,14 @@ router.get('/categories', authenticateToken, async (req, res) => {
         const query = `
             SELECT DISTINCT
                 category,
-                COUNT(*) as usage_count,
-                MAX(created_at) as last_used
+                COUNT(*) as usage_count
             FROM orders
             WHERE LOWER(category) LIKE LOWER(?)
                 AND category IS NOT NULL
                 AND category != ''
                 AND status != 'Cancelled'
             GROUP BY category
-            ORDER BY usage_count DESC, last_used DESC
+            ORDER BY usage_count DESC
             LIMIT ?
         `;
 
@@ -123,8 +117,7 @@ router.get('/categories', authenticateToken, async (req, res) => {
         // Format results
         const suggestions = results.map(row => ({
             text: row.category,
-            usage_count: row.usage_count,
-            last_used: row.last_used
+            usage_count: row.usage_count
         }));
 
         res.json({ suggestions });
@@ -159,7 +152,6 @@ router.get('/smart-suggestions', authenticateToken, async (req, res) => {
         }
 
         // Search for descriptions containing the input
-        // Use LOWER() for case-insensitive search
         const query = `
             SELECT DISTINCT
                 item_description,

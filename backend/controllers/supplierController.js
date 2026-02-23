@@ -1,6 +1,7 @@
 // backend/controllers/supplierController.js
 const db = require('../config/database');
-const supplierAI = require('../supplier-ai'); // ⭐ NEW: AI module
+const supplierAI = require('../supplier-ai');
+const brandRules = require('../supplier-brand-rules'); // ⭐ NEW
 
 exports.getSuppliers = async (req, res) => {
     try {
@@ -14,7 +15,7 @@ exports.getSuppliers = async (req, res) => {
     }
 };
 
-// ⭐ NEW: Get AI-powered supplier suggestions for an order
+// Get AI-powered supplier suggestions for an order
 exports.getSupplierSuggestions = async (req, res) => {
     try {
         const { orderId } = req.params;
@@ -38,6 +39,23 @@ exports.getSupplierSuggestions = async (req, res) => {
         res.status(500).json({ 
             success: false, 
             message: 'Failed to generate supplier suggestions' 
+        });
+    }
+};
+
+// ⭐ NEW: Get brand rules configuration
+exports.getBrandRules = async (req, res) => {
+    try {
+        const rules = brandRules.getBrandRules();
+        res.json({
+            success: true,
+            rules
+        });
+    } catch (error) {
+        console.error('Get brand rules error:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Failed to retrieve brand rules' 
         });
     }
 };

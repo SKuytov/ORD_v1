@@ -37,7 +37,7 @@
         <header>
             <div class="container header-row">
                 <div>
-                    <h1>PartPulse Orders v2</h1>
+                    <h1>PartPulse Orders v2.5</h1>
                     <div id="userRole" class="badge-role"></div>
                 </div>
                 <div class="user-info">
@@ -150,13 +150,14 @@
                     <!-- Smart Filters (visible to all roles) -->
                     <div class="filters-container">
                         <!-- Quick Filter Chips -->
-                        <div class="quick-filters">
+                        <div class="quick-filters filters-bar" style="display: flex; align-items: center; flex-wrap: wrap;">
                             <button class="quick-filter-chip" data-filter="late">⚠ Late</button>
                             <button class="quick-filter-chip" data-filter="due7">🕒 Due in 7d</button>
                             <button class="quick-filter-chip" data-filter="due14">📅 Due in 14d</button>
                             <button class="quick-filter-chip" data-filter="new">🆕 New</button>
                             <button class="quick-filter-chip" data-filter="ordered">📦 Ordered</button>
                             <button class="quick-filter-chip" data-filter="transit">🚚 In Transit</button>
+                            <!-- Assignment filter chips will be injected here by order-assignment.js -->
                         </div>
 
                         <!-- Detailed Filters -->
@@ -499,5 +500,7 @@
 <script src="documents.js"></script>
 <script src="approvals.js"></script>
 <script src="approval-submission.js"></script>
+<!-- ⭐ NEW: Order Assignment System (Phase 4) -->
+<script src="order-assignment.js"></script>
 </body>
 </html>

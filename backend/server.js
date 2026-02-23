@@ -10,6 +10,7 @@ const authRoutes = require('./routes/auth');
 const orderRoutes = require('./routes/orders');
 const orderAssignmentRoutes = require('./routes/orderAssignments');
 const supplierRoutes = require('./routes/suppliers');
+const supplierCatalogRoutes = require('./routes/supplier-catalog'); // ⭐ NEW: Supplier catalog
 const quoteRoutes = require('./routes/quotes');
 const userRoutes = require('./routes/users');
 const buildingRoutes = require('./routes/buildings');
@@ -40,8 +41,9 @@ app.use(express.static(path.join(__dirname, '../frontend')));
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/orders', orderRoutes);
-app.use('/api/order-assignments', orderAssignmentRoutes); // ⭐ NEW: Assignment system
+app.use('/api/order-assignments', orderAssignmentRoutes); // ⭐ Assignment system
 app.use('/api/suppliers', supplierRoutes);
+app.use('/api/suppliers', supplierCatalogRoutes); // ⭐ NEW: Supplier catalog (nested under /api/suppliers)
 app.use('/api/quotes', quoteRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/buildings', buildingRoutes);
@@ -56,7 +58,7 @@ app.get('/api/health', (req, res) => {
         status: 'OK',
         timestamp: new Date().toISOString(),
         environment: process.env.NODE_ENV,
-        version: '2.5.0' // Phase 4: Procurement Workflow Enhancement
+        version: '2.6.0' // Phase 5: Supplier Catalog System
     });
 });
 
@@ -76,10 +78,10 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`PartPulse Orders Server v2.5 running on port ${PORT}`);
+    console.log(`PartPulse Orders Server v2.6 running on port ${PORT}`);
     console.log(`Environment: ${process.env.NODE_ENV}`);
     console.log(`Frontend URL: ${process.env.FRONTEND_URL}`);
-    console.log(`Features: Document Management + Approval Workflow + Procurement Enhancement (Phase 4)`);
+    console.log(`Features: Document Management + Approval Workflow + Procurement Enhancement + Supplier Catalog`);
 });
 
 module.exports = app;

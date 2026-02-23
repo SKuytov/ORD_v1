@@ -219,17 +219,22 @@ function renderSupplierCards() {
             });
         }
     });
+    
+    console.log('✅ Supplier cards rendered and click handlers attached');
 }
 
 function createSupplierCard(supplier) {
     const isSelected = supplierSelectorState.selectedSupplierId === supplier.id;
     const isActive = supplier.active;
     
-    // Performance score color
+    // Performance score - SAFELY handle null/undefined
+    const perfScore = supplier.performance_score != null ? parseFloat(supplier.performance_score) : null;
     let scoreColor = '#64748b';
-    if (supplier.performance_score >= 7) scoreColor = '#22c55e';
-    else if (supplier.performance_score >= 5) scoreColor = '#f59e0b';
-    else if (supplier.performance_score < 5) scoreColor = '#ef4444';
+    if (perfScore !== null) {
+        if (perfScore >= 7) scoreColor = '#22c55e';
+        else if (perfScore >= 5) scoreColor = '#f59e0b';
+        else if (perfScore < 5) scoreColor = '#ef4444';
+    }
     
     // Last order badge
     let lastOrderBadge = '';
@@ -266,7 +271,7 @@ function createSupplierCard(supplier) {
             
             <!-- Supplier Name -->
             <div style="font-weight: 600; font-size: 1rem; color: #e2e8f0; margin-bottom: 0.5rem; padding-right: 2rem;">
-                ${supplier.name}
+                ${supplier.name || 'Unnamed Supplier'}
                 ${!isActive ? '<span style="color: #ef4444; font-size: 0.75rem; margin-left: 0.5rem;">(Inactive)</span>' : ''}
             </div>
             
@@ -294,11 +299,11 @@ function createSupplierCard(supplier) {
                         </span>
                     ` : ''}
                 </div>
-                ${supplier.performance_score ? `
+                ${perfScore !== null ? `
                     <div style="display: flex; align-items: center; gap: 0.25rem;">
                         <span style="color: ${scoreColor}; font-size: 0.85rem;">⭐</span>
                         <span style="color: ${scoreColor}; font-size: 0.8rem; font-weight: 600;">
-                            ${supplier.performance_score.toFixed(1)}
+                            ${perfScore.toFixed(1)}
                         </span>
                     </div>
                 ` : ''}
@@ -467,7 +472,7 @@ function filterSuppliers(searchTerm) {
     // Sort: active first, then by performance score
     filtered.sort((a, b) => {
         if (a.active !== b.active) return b.active - a.active;
-        return (b.performance_score || 0) - (a.performance_score || 0);
+        return (parseFloat(b.performance_score) || 0) - (parseFloat(a.performance_score) || 0);
     });
     
     supplierSelectorState.filteredSuppliers = filtered;

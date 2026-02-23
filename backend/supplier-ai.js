@@ -66,32 +66,36 @@ async function getSupplierSuggestions(orderId) {
             let score = 0;
             let matchReasons = [];
             
-            // ⭐ A. Check TRAINING_ORDERS table (historical knowledge base)
+            // ⭐ A. Check TRAINING_ORDERS table (uses different column names!)
             let trainingMatches = 0;
-            for (const keyword of keywords) {
-                const [trainingRows] = await pool.query(`
-                    SELECT COUNT(*) as match_count
-                    FROM training_orders
-                    WHERE supplier_id = ?
-                    AND (
-                        LOWER(item_description) LIKE ?
-                        OR LOWER(part_number) LIKE ?
-                        OR LOWER(category) LIKE ?
-                    )
-                `, [supplier.id, `%${keyword}%`, `%${keyword}%`, `%${keyword}%`]);
-                
-                const matches = parseInt(trainingRows[0].match_count) || 0;
-                if (matches > 0) {
-                    console.log(`    📚 Training data: keyword '${keyword}' → ${matches} matches`);
+            try {
+                for (const keyword of keywords) {
+                    // training_orders uses 'description' not 'item_description'
+                    const [trainingRows] = await pool.query(`
+                        SELECT COUNT(*) as match_count
+                        FROM training_orders
+                        WHERE supplier_id = ?
+                        AND (
+                            LOWER(description) LIKE ?
+                            OR LOWER(category) LIKE ?
+                        )
+                    `, [supplier.id, `%${keyword}%`, `%${keyword}%`]);
+                    
+                    const matches = parseInt(trainingRows[0].match_count) || 0;
+                    if (matches > 0) {
+                        console.log(`    📚 Training data: keyword '${keyword}' → ${matches} matches`);
+                    }
+                    trainingMatches += matches;
                 }
-                trainingMatches += matches;
-            }
-            
-            if (trainingMatches > 0) {
-                const points = trainingMatches * 30;
-                score += points;
-                matchReasons.push(`${trainingMatches} historical match${trainingMatches > 1 ? 'es' : ''}`);
-                console.log(`    ✅ Training score: +${points} (${trainingMatches} matches)`);
+                
+                if (trainingMatches > 0) {
+                    const points = trainingMatches * 30;
+                    score += points;
+                    matchReasons.push(`${trainingMatches} historical match${trainingMatches > 1 ? 'es' : ''}`);
+                    console.log(`    ✅ Training score: +${points} (${trainingMatches} matches)`);
+                }
+            } catch (trainingError) {
+                console.log(`    ⚠️ Training table query failed:`, trainingError.message);
             }
             
             // ⭐ B. Check ORDERS table (current system data)
@@ -122,22 +126,15 @@ async function getSupplierSuggestions(orderId) {
                 console.log(`    ✅ Orders score: +${points} (${orderMatches} matches)`);
             }
             
-            // C. Check exact part number matches (BOTH tables)
+            // C. Check exact part number matches (orders table only, training may not have it)
             if (partNumber) {
-                const [trainingPartRows] = await pool.query(
-                    'SELECT COUNT(*) as count FROM training_orders WHERE supplier_id = ? AND LOWER(part_number) = ?',
-                    [supplier.id, partNumber]
-                );
-                const trainingPartCount = parseInt(trainingPartRows[0].count) || 0;
-                
                 const [partRows] = await pool.query(
                     'SELECT COUNT(*) as count FROM orders WHERE supplier_id = ? AND LOWER(part_number) = ?',
                     [supplier.id, partNumber]
                 );
                 const partCount = parseInt(partRows[0].count) || 0;
                 
-                const totalPartMatches = trainingPartCount + partCount;
-                if (totalPartMatches > 0) {
+                if (partCount > 0) {
                     score += 60;
                     matchReasons.push(`exact part #${partNumber}`);
                     console.log(`    ✅ Exact part match: +60`);
@@ -146,11 +143,17 @@ async function getSupplierSuggestions(orderId) {
             
             // D. Check category matches (BOTH tables)
             if (category) {
-                const [trainingCatRows] = await pool.query(
-                    'SELECT COUNT(*) as count FROM training_orders WHERE supplier_id = ? AND LOWER(category) = ?',
-                    [supplier.id, category]
-                );
-                const trainingCatCount = parseInt(trainingCatRows[0].count) || 0;
+                // Training data (if table exists and has category)
+                let trainingCatCount = 0;
+                try {
+                    const [trainingCatRows] = await pool.query(
+                        'SELECT COUNT(*) as count FROM training_orders WHERE supplier_id = ? AND LOWER(category) = ?',
+                        [supplier.id, category]
+                    );
+                    trainingCatCount = parseInt(trainingCatRows[0].count) || 0;
+                } catch (e) {
+                    // Column may not exist
+                }
                 
                 const [categoryRows] = await pool.query(
                     'SELECT COUNT(*) as count FROM orders WHERE supplier_id = ? AND LOWER(category) = ?',
@@ -168,11 +171,16 @@ async function getSupplierSuggestions(orderId) {
             }
             
             // E. Bonus for suppliers with more total orders (reliability)
-            const [totalTrainingRows] = await pool.query(
-                'SELECT COUNT(*) as total FROM training_orders WHERE supplier_id = ?',
-                [supplier.id]
-            );
-            const trainingTotal = parseInt(totalTrainingRows[0].total) || 0;
+            let trainingTotal = 0;
+            try {
+                const [totalTrainingRows] = await pool.query(
+                    'SELECT COUNT(*) as total FROM training_orders WHERE supplier_id = ?',
+                    [supplier.id]
+                );
+                trainingTotal = parseInt(totalTrainingRows[0].total) || 0;
+            } catch (e) {
+                // Table may not exist
+            }
             
             const [totalOrdersRows] = await pool.query(
                 'SELECT COUNT(*) as total FROM orders WHERE supplier_id = ?',

@@ -1,6 +1,6 @@
 // backend/supplier-ai.js - AI-Powered Supplier Recommendations
 
-const db = require('./db');
+const pool = require('./config/database'); // ⭐ FIX: Use correct MySQL pool
 
 /**
  * Generate supplier suggestions for an order using AI-like heuristics
@@ -10,16 +10,16 @@ const db = require('./db');
 async function getSupplierSuggestions(orderId) {
     try {
         // 1. Get order details
-        const orderResult = await db.query(
-            'SELECT id, item_description, part_number, category FROM orders WHERE id = $1',
+        const [orderRows] = await pool.query(
+            'SELECT id, item_description, part_number, category FROM orders WHERE id = ?',
             [orderId]
         );
         
-        if (orderResult.rows.length === 0) {
+        if (orderRows.length === 0) {
             return [];
         }
         
-        const order = orderResult.rows[0];
+        const order = orderRows[0];
         const description = (order.item_description || '').toLowerCase();
         const partNumber = (order.part_number || '').toLowerCase();
         const category = (order.category || '').toLowerCase();
@@ -32,11 +32,9 @@ async function getSupplierSuggestions(orderId) {
         }
         
         // 3. Get all active suppliers
-        const suppliersResult = await db.query(
+        const [suppliers] = await pool.query(
             'SELECT id, name, contact_person, email FROM suppliers WHERE active = 1'
         );
-        
-        const suppliers = suppliersResult.rows;
         
         if (suppliers.length === 0) {
             return [];
@@ -50,31 +48,34 @@ async function getSupplierSuggestions(orderId) {
             let matchReasons = [];
             
             // A. Check historical orders with same keywords
-            const historyResult = await db.query(`
-                SELECT COUNT(*) as match_count
-                FROM orders
-                WHERE supplier_id = $1
-                AND (
-                    LOWER(item_description) LIKE ANY($2::text[])
-                    OR LOWER(part_number) LIKE ANY($2::text[])
-                    OR LOWER(category) LIKE ANY($2::text[])
-                )
-            `, [supplier.id, keywords.map(k => `%${k}%`)]);
+            let keywordMatches = 0;
+            for (const keyword of keywords) {
+                const [historyRows] = await pool.query(`
+                    SELECT COUNT(*) as match_count
+                    FROM orders
+                    WHERE supplier_id = ?
+                    AND (
+                        LOWER(item_description) LIKE ?
+                        OR LOWER(part_number) LIKE ?
+                        OR LOWER(category) LIKE ?
+                    )
+                `, [supplier.id, `%${keyword}%`, `%${keyword}%`, `%${keyword}%`]);
+                
+                keywordMatches += parseInt(historyRows[0].match_count) || 0;
+            }
             
-            const matchCount = parseInt(historyResult.rows[0].match_count) || 0;
-            
-            if (matchCount > 0) {
-                score += matchCount * 20; // 20 points per historical match
-                matchReasons.push(`${matchCount} similar order${matchCount > 1 ? 's' : ''}`);
+            if (keywordMatches > 0) {
+                score += keywordMatches * 20; // 20 points per historical match
+                matchReasons.push(`${keywordMatches} similar order${keywordMatches > 1 ? 's' : ''}`);
             }
             
             // B. Check exact part number matches
             if (partNumber) {
-                const partResult = await db.query(
-                    'SELECT COUNT(*) as count FROM orders WHERE supplier_id = $1 AND LOWER(part_number) = $2',
+                const [partRows] = await pool.query(
+                    'SELECT COUNT(*) as count FROM orders WHERE supplier_id = ? AND LOWER(part_number) = ?',
                     [supplier.id, partNumber]
                 );
-                const partCount = parseInt(partResult.rows[0].count) || 0;
+                const partCount = parseInt(partRows[0].count) || 0;
                 if (partCount > 0) {
                     score += 50; // Strong match
                     matchReasons.push('exact part number match');
@@ -83,11 +84,11 @@ async function getSupplierSuggestions(orderId) {
             
             // C. Check category matches
             if (category) {
-                const categoryResult = await db.query(
-                    'SELECT COUNT(*) as count FROM orders WHERE supplier_id = $1 AND LOWER(category) = $2',
+                const [categoryRows] = await pool.query(
+                    'SELECT COUNT(*) as count FROM orders WHERE supplier_id = ? AND LOWER(category) = ?',
                     [supplier.id, category]
                 );
-                const catCount = parseInt(categoryResult.rows[0].count) || 0;
+                const catCount = parseInt(categoryRows[0].count) || 0;
                 if (catCount > 0) {
                     score += catCount * 10;
                     matchReasons.push(`${catCount} ${category} order${catCount > 1 ? 's' : ''}`);
@@ -95,11 +96,11 @@ async function getSupplierSuggestions(orderId) {
             }
             
             // D. Bonus for suppliers with more total orders (reliability)
-            const totalOrdersResult = await db.query(
-                'SELECT COUNT(*) as total FROM orders WHERE supplier_id = $1',
+            const [totalOrdersRows] = await pool.query(
+                'SELECT COUNT(*) as total FROM orders WHERE supplier_id = ?',
                 [supplier.id]
             );
-            const totalOrders = parseInt(totalOrdersResult.rows[0].total) || 0;
+            const totalOrders = parseInt(totalOrdersRows[0].total) || 0;
             if (totalOrders > 5) {
                 score += Math.min(totalOrders, 50); // Max 50 bonus points
             }

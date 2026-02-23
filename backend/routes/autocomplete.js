@@ -40,7 +40,7 @@ router.get('/item-descriptions', authenticateToken, async (req, res) => {
         `;
 
         const searchPattern = `%${q}%`;
-        const [results] = await db.promise().query(query, [searchPattern, parseInt(limit)]);
+        const [results] = await db.query(query, [searchPattern, parseInt(limit)]);
 
         // Format results
         const suggestions = results.map(row => ({
@@ -90,7 +90,7 @@ router.get('/categories', authenticateToken, async (req, res) => {
                 LIMIT ?
             `;
 
-            const [results] = await db.promise().query(query, [parseInt(limit)]);
+            const [results] = await db.query(query, [parseInt(limit)]);
             
             const suggestions = results.map(row => ({
                 text: row.category,
@@ -118,7 +118,7 @@ router.get('/categories', authenticateToken, async (req, res) => {
         `;
 
         const searchPattern = `%${q}%`;
-        const [results] = await db.promise().query(query, [searchPattern, parseInt(limit)]);
+        const [results] = await db.query(query, [searchPattern, parseInt(limit)]);
 
         // Format results
         const suggestions = results.map(row => ({
@@ -183,7 +183,7 @@ router.get('/smart-suggestions', authenticateToken, async (req, res) => {
         const startsWithPattern = `${q}%`;
         const containsPattern = `%${q}%`;
 
-        const [results] = await db.promise().query(
+        const [results] = await db.query(
             query, 
             [containsPattern, startsWithPattern, parseInt(limit)]
         );
@@ -261,7 +261,7 @@ router.get('/part-numbers', authenticateToken, async (req, res) => {
 
         params.push(parseInt(limit));
 
-        const [results] = await db.promise().query(query, params);
+        const [results] = await db.query(query, params);
 
         // Format results
         const suggestions = results.map(row => ({

@@ -123,6 +123,13 @@ class IntelligentAutocomplete {
 
     async fetchSuggestions(query) {
         try {
+            // Check if user is logged in
+            const token = localStorage.getItem('token');
+            if (!token) {
+                console.warn('Autocomplete: No auth token found. User may not be logged in.');
+                return;
+            }
+
             const params = new URLSearchParams({
                 q: query,
                 limit: this.options.maxResults,
@@ -131,12 +138,15 @@ class IntelligentAutocomplete {
 
             const response = await fetch(`${this.options.endpoint}?${params}`, {
                 headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
                 }
             });
 
             if (!response.ok) {
-                throw new Error('Failed to fetch suggestions');
+                const errorText = await response.text();
+                console.error(`Autocomplete API error (${response.status}):`, errorText);
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
 
             const data = await response.json();
@@ -150,7 +160,8 @@ class IntelligentAutocomplete {
             }
 
         } catch (error) {
-            console.error('Autocomplete error:', error);
+            console.error('Autocomplete error:', error.message || error);
+            // Silently fail - don't disrupt user experience
             this.hideSuggestions();
         }
     }
@@ -265,9 +276,17 @@ class IntelligentAutocomplete {
 
 // Initialize autocomplete on form fields
 function initializeOrderFormAutocomplete() {
+    console.log('🔍 Initializing intelligent autocomplete...');
+    
     // Wait for DOM to be ready
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initializeOrderFormAutocomplete);
+        return;
+    }
+
+    // Check if user is logged in (has token)
+    if (!localStorage.getItem('token')) {
+        console.log('🔒 Autocomplete: Waiting for user login...');
         return;
     }
 
@@ -284,10 +303,10 @@ function initializeOrderFormAutocomplete() {
             placeholder: 'Start typing... (e.g., Лагер, Bearing, Motor)',
             showUsageCount: true,
             onSelect: (suggestion) => {
-                console.log('Selected item:', suggestion.text);
-                // Optional: trigger part number suggestions if available
+                console.log('✅ Selected item:', suggestion.text);
             }
         });
+        console.log('✅ Item Description autocomplete initialized');
     }
 
     // Category autocomplete
@@ -303,9 +322,10 @@ function initializeOrderFormAutocomplete() {
             placeholder: 'e.g., Bearings, Motors, Лагери, Мотори',
             showUsageCount: true,
             onSelect: (suggestion) => {
-                console.log('Selected category:', suggestion.text);
+                console.log('✅ Selected category:', suggestion.text);
             }
         });
+        console.log('✅ Category autocomplete initialized');
     }
 
     // Part Number autocomplete (context-aware)
@@ -322,7 +342,7 @@ function initializeOrderFormAutocomplete() {
             showUsageCount: true,
             customParams: {},
             onSelect: (suggestion) => {
-                console.log('Selected part number:', suggestion.part_number);
+                console.log('✅ Selected part number:', suggestion.part_number);
                 // Optionally populate description from historical data
                 if (suggestion.description && !itemDescriptionInput.value) {
                     itemDescriptionInput.value = suggestion.description;
@@ -345,13 +365,29 @@ function initializeOrderFormAutocomplete() {
 
         itemDescriptionInput.addEventListener('change', updatePartNumberContext);
         categoryInput.addEventListener('change', updatePartNumberContext);
+        console.log('✅ Part Number autocomplete initialized');
     }
 }
 
-// Auto-initialize when script loads
-initializeOrderFormAutocomplete();
+// Don't auto-initialize - wait for user to login first
+// Instead, initialize after successful login
+console.log('📚 Intelligent Autocomplete module loaded');
 
-// Re-initialize when switching tabs (for SPA behavior)
+// Listen for login success event
+if (window.app) {
+    // Hook into existing login success handler
+    const originalHandleLogin = window.app.handleLogin;
+    if (originalHandleLogin) {
+        window.app.handleLogin = async function(e) {
+            const result = await originalHandleLogin.call(this, e);
+            // Initialize autocomplete after successful login
+            setTimeout(initializeOrderFormAutocomplete, 500);
+            return result;
+        };
+    }
+}
+
+// Also re-initialize when switching tabs (for SPA behavior)
 if (window.app && window.app.switchTab) {
     const originalSwitchTab = window.app.switchTab;
     window.app.switchTab = function(tabId) {
@@ -359,3 +395,6 @@ if (window.app && window.app.switchTab) {
         setTimeout(initializeOrderFormAutocomplete, 100);
     };
 }
+
+// Manual initialization function (can be called from console for debugging)
+window.initAutocomplete = initializeOrderFormAutocomplete;

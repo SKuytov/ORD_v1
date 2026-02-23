@@ -25,14 +25,14 @@ router.get('/item-descriptions', authenticateToken, async (req, res) => {
         }
 
         // Search for matching item descriptions
-        // Use COLLATE utf8mb4_unicode_ci for case-insensitive multilingual search
+        // Use LOWER() for case-insensitive search (works with all MySQL versions)
         const query = `
             SELECT DISTINCT
                 item_description,
                 COUNT(*) as usage_count,
                 MAX(created_at) as last_used
             FROM orders
-            WHERE item_description LIKE ? COLLATE utf8mb4_unicode_ci
+            WHERE LOWER(item_description) LIKE LOWER(?)
                 AND status != 'Cancelled'
             GROUP BY item_description
             ORDER BY usage_count DESC, last_used DESC
@@ -55,7 +55,8 @@ router.get('/item-descriptions', authenticateToken, async (req, res) => {
         console.error('Error fetching item description suggestions:', error);
         res.status(500).json({ 
             success: false, 
-            message: 'Failed to fetch suggestions'
+            message: 'Failed to fetch suggestions',
+            error: error.message
         });
     }
 });
@@ -107,7 +108,7 @@ router.get('/categories', authenticateToken, async (req, res) => {
                 COUNT(*) as usage_count,
                 MAX(created_at) as last_used
             FROM orders
-            WHERE category LIKE ? COLLATE utf8mb4_unicode_ci
+            WHERE LOWER(category) LIKE LOWER(?)
                 AND category IS NOT NULL
                 AND category != ''
                 AND status != 'Cancelled'
@@ -132,7 +133,8 @@ router.get('/categories', authenticateToken, async (req, res) => {
         console.error('Error fetching category suggestions:', error);
         res.status(500).json({ 
             success: false, 
-            message: 'Failed to fetch suggestions'
+            message: 'Failed to fetch suggestions',
+            error: error.message
         });
     }
 });
@@ -156,22 +158,19 @@ router.get('/smart-suggestions', authenticateToken, async (req, res) => {
             return res.json({ suggestions: [] });
         }
 
-        // Split input into words to provide smart completion
-        const words = q.trim().split(/\s+/);
-        const lastWord = words[words.length - 1];
-
-        // If typing a new word, search for descriptions starting with those words
+        // Search for descriptions containing the input
+        // Use LOWER() for case-insensitive search
         const query = `
             SELECT DISTINCT
                 item_description,
                 COUNT(*) as usage_count
             FROM orders
-            WHERE item_description LIKE ? COLLATE utf8mb4_unicode_ci
+            WHERE LOWER(item_description) LIKE LOWER(?)
                 AND status != 'Cancelled'
             GROUP BY item_description
             ORDER BY 
                 CASE 
-                    WHEN item_description LIKE ? THEN 1
+                    WHEN LOWER(item_description) LIKE LOWER(?) THEN 1
                     ELSE 2
                 END,
                 usage_count DESC
@@ -189,7 +188,7 @@ router.get('/smart-suggestions', authenticateToken, async (req, res) => {
             [containsPattern, startsWithPattern, parseInt(limit)]
         );
 
-        // Format results with highlighting
+        // Format results
         const suggestions = results.map(row => ({
             text: row.item_description,
             usage_count: row.usage_count,
@@ -201,9 +200,11 @@ router.get('/smart-suggestions', authenticateToken, async (req, res) => {
 
     } catch (error) {
         console.error('Error fetching smart suggestions:', error);
+        console.error('SQL error details:', error.sqlMessage || error.message);
         res.status(500).json({ 
             success: false, 
-            message: 'Failed to fetch suggestions'
+            message: 'Failed to fetch suggestions',
+            error: error.message
         });
     }
 });
@@ -235,7 +236,7 @@ router.get('/part-numbers', authenticateToken, async (req, res) => {
             FROM orders
             WHERE part_number IS NOT NULL 
                 AND part_number != ''
-                AND part_number LIKE ?
+                AND LOWER(part_number) LIKE LOWER(?)
                 AND status != 'Cancelled'
         `;
 
@@ -243,12 +244,12 @@ router.get('/part-numbers', authenticateToken, async (req, res) => {
 
         // Add context filters if provided
         if (category) {
-            query += ' AND category LIKE ?';
+            query += ' AND LOWER(category) LIKE LOWER(?)';
             params.push(`%${category}%`);
         }
 
         if (description) {
-            query += ' AND item_description LIKE ?';
+            query += ' AND LOWER(item_description) LIKE LOWER(?)';
             params.push(`%${description}%`);
         }
 
@@ -276,7 +277,8 @@ router.get('/part-numbers', authenticateToken, async (req, res) => {
         console.error('Error fetching part number suggestions:', error);
         res.status(500).json({ 
             success: false, 
-            message: 'Failed to fetch suggestions'
+            message: 'Failed to fetch suggestions',
+            error: error.message
         });
     }
 });

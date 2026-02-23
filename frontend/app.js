@@ -493,7 +493,10 @@ function showDashboard() {
 
     loadBuildings();
     loadCostCenters();
-    loadSuppliers().then(() => { populateSupplierFilter(); });
+    // ⭐ FIX: Only load suppliers for admin and procurement roles
+    if (currentUser.role === 'admin' || currentUser.role === 'procurement') {
+        loadSuppliers().then(() => { populateSupplierFilter(); });
+    }
     loadOrders();
     if (currentUser.role !== 'requester') { loadQuotes(); }
     if (currentUser.role === 'admin') { loadUsers(); }

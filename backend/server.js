@@ -8,6 +8,7 @@ require('dotenv').config();
 
 const authRoutes = require('./routes/auth');
 const orderRoutes = require('./routes/orders');
+const orderAssignmentRoutes = require('./routes/orderAssignments');
 const supplierRoutes = require('./routes/suppliers');
 const quoteRoutes = require('./routes/quotes');
 const userRoutes = require('./routes/users');
@@ -39,6 +40,7 @@ app.use(express.static(path.join(__dirname, '../frontend')));
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api/order-assignments', orderAssignmentRoutes); // ⭐ NEW: Assignment system
 app.use('/api/suppliers', supplierRoutes);
 app.use('/api/quotes', quoteRoutes);
 app.use('/api/users', userRoutes);
@@ -54,7 +56,7 @@ app.get('/api/health', (req, res) => {
         status: 'OK',
         timestamp: new Date().toISOString(),
         environment: process.env.NODE_ENV,
-        version: '2.4.0' // Phase 3: Approval Workflow
+        version: '2.5.0' // Phase 4: Procurement Workflow Enhancement
     });
 });
 
@@ -74,10 +76,10 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`PartPulse Orders Server v2.4 running on port ${PORT}`);
+    console.log(`PartPulse Orders Server v2.5 running on port ${PORT}`);
     console.log(`Environment: ${process.env.NODE_ENV}`);
     console.log(`Frontend URL: ${process.env.FRONTEND_URL}`);
-    console.log(`Features: Document Management (Phase 2) + Approval Workflow (Phase 3)`);
+    console.log(`Features: Document Management + Approval Workflow + Procurement Enhancement (Phase 4)`);
 });
 
 module.exports = app;

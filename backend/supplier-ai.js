@@ -28,6 +28,7 @@ async function getSupplierSuggestions(orderId) {
         const keywords = extractKeywords(description + ' ' + partNumber + ' ' + category);
         
         if (keywords.length === 0) {
+            console.log(`⚠️ No keywords extracted for order ${orderId}`);
             return [];
         }
         
@@ -206,10 +207,11 @@ function extractKeywords(text) {
     ]);
     
     // Split and clean (support Cyrillic characters)
+    // FIX: Single backslash, not double!
     const words = text
         .toLowerCase()
-        .replace(/[^a-zа-я0-9\\s-]/gi, ' ') // Keep Cyrillic (а-я) and Latin (a-z)
-        .split(/\\s+/)
+        .replace(/[^a-zа-я0-9\s-]/gi, ' ') // Keep Cyrillic (а-я) and Latin (a-z)
+        .split(/\s+/)
         .filter(word => word.length >= 3 && !stopWords.has(word));
     
     // Remove duplicates

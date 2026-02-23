@@ -100,7 +100,12 @@ async function trainSupplierAI(excelFilePath) {
             console.log('='.repeat(60));
             
             const sheet = workbook.Sheets[sheetName];
-            const data = xlsx.utils.sheet_to_json(sheet);
+            
+            // Read sheet with header row starting at row 3 (skip first 2 rows)
+            const data = xlsx.utils.sheet_to_json(sheet, { 
+                range: 2, // Start from row 3 (0-indexed, so row 2)
+                defval: '' // Default value for empty cells
+            });
             
             console.log(`   Loaded ${data.length} rows`);
             

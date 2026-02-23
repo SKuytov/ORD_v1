@@ -1186,6 +1186,8 @@ function renderOrderDetail(o) {
         }
         
         html += '</div>';
+        
+        // ⭐ FIX: Container is now OUTSIDE the flex wrapper, on its own line
         html += '<div id="supplierSuggestionsContainer"></div>';
     }
 

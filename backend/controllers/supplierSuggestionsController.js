@@ -1,5 +1,6 @@
 // backend/controllers/supplierSuggestionsController.js
 // Phase 1: Smart Supplier Suggestions with Cyrillic support
+// Uses BOTH production orders and historical training data
 
 const db = require('../config/database');
 
@@ -7,8 +8,7 @@ const db = require('../config/database');
  * Get smart supplier suggestions for a specific order
  * Algorithm considers:
  * - Item description keywords (supports Cyrillic/Bulgarian)
- * - Category matching
- * - Historical patterns (what this supplier has supplied before)
+ * - Historical patterns from BOTH production orders AND training data
  * - Supplier specializations
  * - Recent usage (prefer suppliers used recently)
  */
@@ -35,7 +35,7 @@ exports.getSuggestedSuppliers = async (req, res) => {
 
         console.log('[AI] Order:', orderId, 'Keywords:', keywords, 'Category:', category);
 
-        // Get all active suppliers with their history
+        // Get all active suppliers with their history from BOTH sources
         const [suppliers] = await db.query(`
             SELECT 
                 s.id,
@@ -44,7 +44,13 @@ exports.getSuggestedSuppliers = async (req, res) => {
                 s.email,
                 s.phone,
                 s.specialization,
-                COUNT(DISTINCT o.id) as total_orders,
+                -- Count from production orders
+                COUNT(DISTINCT o.id) as production_orders,
+                -- Count from training data
+                COUNT(DISTINCT t.id) as training_orders,
+                -- Combined total
+                (COUNT(DISTINCT o.id) + COUNT(DISTINCT t.id)) as total_orders,
+                -- Performance from production only
                 AVG(CASE 
                     WHEN o.status = 'Delivered' THEN 100
                     WHEN o.status IN ('Ordered', 'In Transit') THEN 80
@@ -52,10 +58,14 @@ exports.getSuggestedSuppliers = async (req, res) => {
                     ELSE 50
                 END) as performance_score,
                 MAX(o.submission_date) as last_order_date,
+                -- Categories from production
                 GROUP_CONCAT(DISTINCT o.category SEPARATOR '|||') as categories_supplied,
-                GROUP_CONCAT(DISTINCT o.item_description SEPARATOR '|||') as items_supplied
+                -- Items from BOTH sources
+                GROUP_CONCAT(DISTINCT o.item_description SEPARATOR '|||') as production_items,
+                GROUP_CONCAT(DISTINCT t.item_description SEPARATOR '|||') as training_items
             FROM suppliers s
             LEFT JOIN orders o ON s.id = o.supplier_id
+            LEFT JOIN training_orders t ON s.id = t.supplier_id
             WHERE s.active = 1
             GROUP BY s.id
         `);
@@ -67,9 +77,15 @@ exports.getSuggestedSuppliers = async (req, res) => {
             let score = 0;
             const reasons = [];
 
+            // Combine items from both sources
+            const allItems = [
+                supplier.production_items || '',
+                supplier.training_items || ''
+            ].filter(s => s).join('|||');
+
             // 1. Keyword matching in items previously supplied
-            if (supplier.items_supplied) {
-                const suppliedItems = supplier.items_supplied.toLowerCase();
+            if (allItems) {
+                const suppliedItems = allItems.toLowerCase();
                 let keywordMatches = 0;
                 keywords.forEach(keyword => {
                     if (suppliedItems.includes(keyword)) {
@@ -83,7 +99,7 @@ exports.getSuggestedSuppliers = async (req, res) => {
                 }
             }
 
-            // 2. Category matching
+            // 2. Category matching (production orders only)
             if (category && supplier.categories_supplied) {
                 const suppliedCategories = supplier.categories_supplied.toLowerCase().split('|||');
                 if (suppliedCategories.some(cat => cat.includes(category.toLowerCase()))) {
@@ -104,7 +120,7 @@ exports.getSuggestedSuppliers = async (req, res) => {
                 }
             }
 
-            // 4. Recent usage bonus (used in last 30 days)
+            // 4. Recent usage bonus (production orders only)
             if (supplier.last_order_date) {
                 const daysSinceLastOrder = Math.floor(
                     (Date.now() - new Date(supplier.last_order_date).getTime()) / (1000 * 60 * 60 * 24)
@@ -118,14 +134,17 @@ exports.getSuggestedSuppliers = async (req, res) => {
                 }
             }
 
-            // 5. Performance score bonus
+            // 5. Performance score bonus (production only)
             const perfScore = supplier.performance_score || 50;
             score += perfScore / 10; // Add up to 10 points based on performance
 
-            // 6. Experience bonus (total orders)
+            // 6. Experience bonus (BOTH sources - training data helps!)
             if (supplier.total_orders > 0) {
                 score += Math.min(supplier.total_orders * 2, 20); // Cap at 20 points
-                reasons.push(`${supplier.total_orders} previous orders`);
+                const trainingInfo = supplier.training_orders > 0 
+                    ? ` (${supplier.training_orders} from history)` 
+                    : '';
+                reasons.push(`${supplier.total_orders} previous orders${trainingInfo}`);
             }
 
             return {
@@ -211,10 +230,20 @@ exports.getSuggestionStats = async (req, res) => {
             LIMIT 5
         `);
 
+        // Get training data stats
+        const [trainingStats] = await db.query(`
+            SELECT 
+                COUNT(*) as total_training_orders,
+                COUNT(DISTINCT supplier_id) as suppliers_in_training,
+                MAX(import_date) as last_import_date
+            FROM training_orders
+        `);
+
         res.json({
             success: true,
             stats: stats[0],
-            topSuppliers
+            topSuppliers,
+            trainingData: trainingStats[0]
         });
     } catch (error) {
         console.error('Get suggestion stats error:', error);

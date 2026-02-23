@@ -49,6 +49,28 @@ function abbreviateBuilding(sheetName) {
     return truncateText(sheetName, 15);
 }
 
+function detectHeaderRow(sheet) {
+    // Try reading from row 1 (default)
+    const dataRow1 = xlsx.utils.sheet_to_json(sheet, { range: 0, defval: '' });
+    
+    if (dataRow1.length > 0) {
+        const firstRow = dataRow1[0];
+        const columns = Object.keys(firstRow);
+        
+        // Check if row 1 has proper column names
+        const hasProperColumns = columns.some(col => 
+            col === 'Описание артикул' || col === 'Доставчик'
+        );
+        
+        if (hasProperColumns) {
+            return 0; // Headers in row 1
+        }
+    }
+    
+    // Otherwise assume headers in row 3
+    return 2; // Skip first 2 rows
+}
+
 async function trainSupplierAI(excelFilePath) {
     const connection = await mysql.createConnection(dbConfig);
     
@@ -101,9 +123,13 @@ async function trainSupplierAI(excelFilePath) {
             
             const sheet = workbook.Sheets[sheetName];
             
-            // Read sheet with header row starting at row 3 (skip first 2 rows)
+            // Auto-detect header row position
+            const headerRowRange = detectHeaderRow(sheet);
+            console.log(`   Header row: ${headerRowRange === 0 ? 'Row 1' : 'Row 3'}`);
+            
+            // Read sheet with detected header row
             const data = xlsx.utils.sheet_to_json(sheet, { 
-                range: 2, // Start from row 3 (0-indexed, so row 2)
+                range: headerRowRange,
                 defval: '' // Default value for empty cells
             });
             

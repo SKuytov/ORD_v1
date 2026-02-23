@@ -11,6 +11,13 @@ router.get('/',
     supplierController.getSuppliers
 );
 
+// ⭐ NEW: Get AI-powered supplier suggestions for an order
+router.get('/suggestions/:orderId',
+    authenticateToken,
+    authorizeRoles('admin', 'procurement'),
+    supplierController.getSupplierSuggestions
+);
+
 // Create supplier
 router.post('/',
     authenticateToken,

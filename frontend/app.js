@@ -1,4 +1,4 @@
-// frontend/app.js - PartPulse Orders v2.6 - Pagination + Priority Sort + Smart Delivered Collapse
+// frontend/app.js - PartPulse Orders v2.7 - Bug Fixes
 
 const API_BASE = '/api';
 let currentUser = null;
@@ -288,7 +288,11 @@ function resetFiltersOnLogout() {
 
 // ===================== DELIVERY TIMELINE LOGIC =====================
 
+// ⭐ FIX: Delivered orders should never show "Late"
 function getDeliveryStatus(order) {
+    // If already delivered, no status needed
+    if (order.status === 'Delivered') return 'delivered';
+    
     if (!order.expected_delivery_date) return 'none';
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -304,6 +308,7 @@ function getDeliveryStatus(order) {
 
 function getDeliveryBadgeHtml(status) {
     const badges = {
+        'delivered': '<span class="delivery-badge delivery-ontrack">✓ Delivered</span>',
         'late': '<span class="delivery-badge delivery-late">⚠ Late</span>',
         'due7': '<span class="delivery-badge delivery-due7">🕒 Due 7d</span>',
         'due14': '<span class="delivery-badge delivery-due14">📅 Due 14d</span>',
@@ -313,9 +318,9 @@ function getDeliveryBadgeHtml(status) {
     return badges[status] || '-';
 }
 
-// ⭐ NEW: Check if order is old delivered (delivered >7 days ago)
-function isOldDelivered(order) {
-    if (order.status !== 'Delivered') return false;
+// ⭐ NEW: Get delivered date from history
+function getDeliveredDate(order) {
+    if (order.status !== 'Delivered') return null;
     
     // Try to find the delivered date from history
     if (order.history && order.history.length) {
@@ -324,11 +329,23 @@ function isOldDelivered(order) {
             .sort((a, b) => new Date(b.changed_at) - new Date(a.changed_at));
         
         if (deliveredHistory.length > 0) {
-            const deliveredDate = new Date(deliveredHistory[0].changed_at);
-            const today = new Date();
-            const daysSince = Math.floor((today - deliveredDate) / (1000 * 60 * 60 * 24));
-            return daysSince > 7;
+            return deliveredHistory[0].changed_at;
         }
+    }
+    
+    return null;
+}
+
+// ⭐ NEW: Check if order is old delivered (delivered >7 days ago)
+function isOldDelivered(order) {
+    if (order.status !== 'Delivered') return false;
+    
+    const deliveredDate = getDeliveredDate(order);
+    if (deliveredDate) {
+        const delivered = new Date(deliveredDate);
+        const today = new Date();
+        const daysSince = Math.floor((today - delivered) / (1000 * 60 * 60 * 24));
+        return daysSince > 7;
     }
     
     // Fallback: If no history, check created_at (conservative)
@@ -498,9 +515,15 @@ function showDashboard() {
         requesterBuildingBadge.textContent = `Building ${currentUser.building}`;
         navTabs.classList.add('hidden');
         
+        // ⭐ FIX: Show view toggle for requesters but hide quote actions
         const orderActionsContainer = document.getElementById('orderActionsContainer');
         if (orderActionsContainer) {
-            orderActionsContainer.style.display = 'none';
+            orderActionsContainer.style.display = 'flex'; // Show container
+        }
+        
+        // Hide only the quote creation bar
+        if (orderActionsBar) {
+            orderActionsBar.style.display = 'none';
         }
     } else if (currentUser.role === 'manager') {
         // ⭐ MANAGER: Show navigation with approvals tab, read-only orders view
@@ -511,10 +534,15 @@ function showDashboard() {
         // Show approvals tab for managers
         if (approvalsTabButton) approvalsTabButton.hidden = false;
         
-        // Hide order actions (quote creation) for managers
+        // Show order actions container (view toggle)
         const orderActionsContainer = document.getElementById('orderActionsContainer');
         if (orderActionsContainer) {
-            orderActionsContainer.style.display = 'none';
+            orderActionsContainer.style.display = 'flex';
+        }
+        
+        // Hide quote creation for managers
+        if (orderActionsBar) {
+            orderActionsBar.style.display = 'none';
         }
         
         // Initialize approvals if function exists
@@ -1012,13 +1040,13 @@ function renderFlatOrders(activeOrders, oldDelivered) {
         
         if (isAdminView) {
             html += '<th>Requester</th>';
-            html += '<th>Delivered</th>';
+            html += '<th>Delivered</th>'; // ⭐ NEW: Delivered date column
             html += '<th>Supplier</th>';
             html += '<th>Building</th>';
             html += '<th>Unit</th>';
             html += '<th>Total</th>';
         } else {
-            html += '<th>Delivered</th>';
+            html += '<th>Delivered</th>'; // ⭐ NEW: Delivered date column
         }
         
         html += '</tr></thead><tbody>';
@@ -1121,13 +1149,13 @@ function renderGroupedOrders(activeOrders, oldDelivered) {
         
         if (isAdminView) {
             html += '<th>Requester</th>';
-            html += '<th>Delivered</th>';
+            html += '<th>Delivered</th>'; // ⭐ NEW: Delivered date column
             html += '<th>Supplier</th>';
             html += '<th>Building</th>';
             html += '<th>Unit</th>';
             html += '<th>Total</th>';
         } else {
-            html += '<th>Delivered</th>';
+            html += '<th>Delivered</th>'; // ⭐ NEW: Delivered date column
         }
         
         html += '</tr></thead><tbody>';
@@ -1163,6 +1191,7 @@ function renderOrderRow(order, canSelectOrders, isAdminView) {
     const priorityClass = 'priority-' + (order.priority || 'Normal').toLowerCase();
     const hasFiles = order.files && order.files.length > 0;
     const deliveryStatus = getDeliveryStatus(order);
+    const deliveredDate = getDeliveredDate(order);
 
     let html = '<tr data-id="' + order.id + '">';
     
@@ -1187,13 +1216,14 @@ function renderOrderRow(order, canSelectOrders, isAdminView) {
     if (isAdminView) {
         html += `<td>${order.requester_name}</td>`;
         
-        // For old delivered, show "Delivered" text instead of delivery status
+        // ⭐ FIX: For old delivered, show delivered date instead of delivery status
         if (isOldDelivered(order)) {
-            html += `<td><span class="status-badge status-delivered">Delivered</span></td>`;
+            html += `<td>${deliveredDate ? formatDate(deliveredDate) : '<span class="status-badge status-delivered">Delivered</span>'}</td>`;
         } else {
             html += `<td>${getDeliveryBadgeHtml(deliveryStatus)}</td>`;
         }
         
+        // For active orders, show "Needed" date; for old delivered, skip it
         if (!isOldDelivered(order)) {
             html += `<td>${formatDate(order.date_needed)}</td>`;
         }
@@ -1203,8 +1233,9 @@ function renderOrderRow(order, canSelectOrders, isAdminView) {
         html += `<td class="text-right">${fmtPrice(order.unit_price)}</td>`;
         html += `<td class="text-right">${fmtPrice(order.total_price)}</td>`;
     } else {
+        // ⭐ FIX: For requesters, show delivered date for old delivered
         if (isOldDelivered(order)) {
-            html += `<td><span class="status-badge status-delivered">Delivered</span></td>`;
+            html += `<td>${deliveredDate ? formatDate(deliveredDate) : '<span class="status-badge status-delivered">Delivered</span>'}</td>`;
         } else {
             html += `<td>${getDeliveryBadgeHtml(deliveryStatus)}</td>`;
             html += `<td>${formatDate(order.date_needed)}</td>`;
@@ -1269,6 +1300,7 @@ function renderOrderDetail(o) {
     const statusClass = 'status-' + o.status.toLowerCase().replace(/ /g, '-');
     const priorityClass = 'priority-' + (o.priority || 'Normal').toLowerCase();
     const deliveryStatus = getDeliveryStatus(o);
+    const deliveredDate = getDeliveredDate(o);
     
     // ⭐ SECURITY: Check if current user can see sensitive data
     const canSeeSensitiveData = currentUser.role !== 'requester';
@@ -1281,9 +1313,16 @@ function renderOrderDetail(o) {
         <div><div class="detail-label">Status</div><div class="detail-value"><span class="status-badge ${statusClass}">${o.status}</span></div></div>
         <div><div class="detail-label">Priority</div><div class="detail-value"><span class="priority-pill ${priorityClass}">${o.priority || 'Normal'}</span></div></div>
         <div><div class="detail-label">Date Needed</div><div class="detail-value">${formatDate(o.date_needed)}</div></div>
-        <div><div class="detail-label">Expected Delivery</div><div class="detail-value">${o.expected_delivery_date ? formatDate(o.expected_delivery_date) : '-'}</div></div>
-        <div><div class="detail-label">Delivery Status</div><div class="detail-value">${getDeliveryBadgeHtml(deliveryStatus)}</div></div>
-        <div><div class="detail-label">Requester</div><div class="detail-value">${o.requester_name}</div></div>`;
+        <div><div class="detail-label">Expected Delivery</div><div class="detail-value">${o.expected_delivery_date ? formatDate(o.expected_delivery_date) : '-'}</div></div>`;
+    
+    // ⭐ NEW: Show delivered date if available
+    if (deliveredDate) {
+        html += `<div><div class="detail-label">Delivered Date</div><div class="detail-value">${formatDate(deliveredDate)}</div></div>`;
+    } else {
+        html += `<div><div class="detail-label">Delivery Status</div><div class="detail-value">${getDeliveryBadgeHtml(deliveryStatus)}</div></div>`;
+    }
+    
+    html += `<div><div class="detail-label">Requester</div><div class="detail-value">${o.requester_name}</div></div>`;
     
     // ⭐ HIDE SUPPLIER AND PRICES FROM REQUESTERS
     if (canSeeSensitiveData) {

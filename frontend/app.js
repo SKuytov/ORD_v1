@@ -1,4 +1,4 @@
-// frontend/app.js - PartPulse Orders v2.5 - Professional Supplier Selector
+// frontend/app.js - PartPulse Orders v2.6 - Pagination + Priority Sort + Smart Delivered Collapse
 
 const API_BASE = '/api';
 let currentUser = null;
@@ -14,6 +14,10 @@ let costCentersState = [];
 let selectedOrderIds = new Set();
 let currentTab = 'ordersTab';
 let viewMode = 'flat'; // 'flat' or 'grouped'
+
+// ⭐ NEW: Pagination state
+let currentPage = 1;
+const ORDERS_PER_PAGE = 20;
 
 // Filter state
 let filterState = {
@@ -138,6 +142,9 @@ const ORDER_STATUSES = [
     'Cancelled', 'On Hold'
 ];
 
+// ⭐ NEW: Priority order for sorting (Urgent first!)
+const PRIORITY_ORDER = { 'Urgent': 1, 'High': 2, 'Normal': 3, 'Low': 4 };
+
 function fmtPrice(val) {
     const n = parseFloat(val);
     if (isNaN(n) || n === 0) return '-';
@@ -174,12 +181,12 @@ function setupEventListeners() {
     });
 
     // Real-time filtering
-    if (filterSearch) filterSearch.addEventListener('input', () => { filterState.search = filterSearch.value.trim(); applyFilters(); });
-    if (filterStatus) filterStatus.addEventListener('change', () => { filterState.status = filterStatus.value; applyFilters(); });
-    if (filterBuilding) filterBuilding.addEventListener('change', () => { filterState.building = filterBuilding.value; applyFilters(); });
-    if (filterPriority) filterPriority.addEventListener('change', () => { filterState.priority = filterPriority.value; applyFilters(); });
-    if (filterSupplier) filterSupplier.addEventListener('change', () => { filterState.supplier = filterSupplier.value; applyFilters(); });
-    if (filterDelivery) filterDelivery.addEventListener('change', () => { filterState.delivery = filterDelivery.value; applyFilters(); });
+    if (filterSearch) filterSearch.addEventListener('input', () => { filterState.search = filterSearch.value.trim(); currentPage = 1; applyFilters(); });
+    if (filterStatus) filterStatus.addEventListener('change', () => { filterState.status = filterStatus.value; currentPage = 1; applyFilters(); });
+    if (filterBuilding) filterBuilding.addEventListener('change', () => { filterState.building = filterBuilding.value; currentPage = 1; applyFilters(); });
+    if (filterPriority) filterPriority.addEventListener('change', () => { filterState.priority = filterPriority.value; currentPage = 1; applyFilters(); });
+    if (filterSupplier) filterSupplier.addEventListener('change', () => { filterState.supplier = filterSupplier.value; currentPage = 1; applyFilters(); });
+    if (filterDelivery) filterDelivery.addEventListener('change', () => { filterState.delivery = filterDelivery.value; currentPage = 1; applyFilters(); });
 
     if (btnClearFilters) btnClearFilters.addEventListener('click', clearFilters);
 
@@ -195,6 +202,7 @@ function setupEventListeners() {
                 filterState.quickFilter = filter;
                 chip.classList.add('active');
             }
+            currentPage = 1;
             applyFilters();
         });
     });
@@ -237,6 +245,7 @@ function setViewMode(mode) {
         btnViewFlat.classList.remove('active');
         btnViewGrouped.classList.add('active');
     }
+    currentPage = 1; // Reset to page 1 when changing view mode
     renderOrdersTable();
 }
 
@@ -249,6 +258,7 @@ function clearFilters() {
     if (filterSupplier) filterSupplier.value = '';
     if (filterDelivery) filterDelivery.value = '';
     document.querySelectorAll('.quick-filter-chip').forEach(c => c.classList.remove('active'));
+    currentPage = 1;
     applyFilters();
 }
 
@@ -271,6 +281,9 @@ function resetFiltersOnLogout() {
     viewMode = 'flat';
     if (btnViewFlat) btnViewFlat.classList.add('active');
     if (btnViewGrouped) btnViewGrouped.classList.remove('active');
+    
+    // Reset pagination
+    currentPage = 1;
 }
 
 // ===================== DELIVERY TIMELINE LOGIC =====================
@@ -298,6 +311,35 @@ function getDeliveryBadgeHtml(status) {
         'none': '-'
     };
     return badges[status] || '-';
+}
+
+// ⭐ NEW: Check if order is old delivered (delivered >7 days ago)
+function isOldDelivered(order) {
+    if (order.status !== 'Delivered') return false;
+    
+    // Try to find the delivered date from history
+    if (order.history && order.history.length) {
+        const deliveredHistory = order.history
+            .filter(h => h.field_name === 'status' && h.new_value === 'Delivered')
+            .sort((a, b) => new Date(b.changed_at) - new Date(a.changed_at));
+        
+        if (deliveredHistory.length > 0) {
+            const deliveredDate = new Date(deliveredHistory[0].changed_at);
+            const today = new Date();
+            const daysSince = Math.floor((today - deliveredDate) / (1000 * 60 * 60 * 24));
+            return daysSince > 7;
+        }
+    }
+    
+    // Fallback: If no history, check created_at (conservative)
+    if (order.created_at) {
+        const createdDate = new Date(order.created_at);
+        const today = new Date();
+        const daysSince = Math.floor((today - createdDate) / (1000 * 60 * 60 * 24));
+        return daysSince > 14; // More conservative for created_at
+    }
+    
+    return false;
 }
 
 // ===================== FILTERING =====================
@@ -353,6 +395,19 @@ function applyFilters() {
         }
 
         return true;
+    });
+
+    // ⭐ NEW: Sort by priority (Urgent → High → Normal → Low)
+    filteredOrders.sort((a, b) => {
+        const priorityA = PRIORITY_ORDER[a.priority] || PRIORITY_ORDER['Normal'];
+        const priorityB = PRIORITY_ORDER[b.priority] || PRIORITY_ORDER['Normal'];
+        
+        if (priorityA !== priorityB) {
+            return priorityA - priorityB; // Lower number = higher priority
+        }
+        
+        // Secondary sort by ID (newer orders first)
+        return b.id - a.id;
     });
 
     renderOrdersTable();
@@ -804,6 +859,7 @@ async function loadOrders() {
             filteredOrders = ordersState;
             selectedOrderIds.clear();
             updateSelectionUi();
+            currentPage = 1; // Reset to page 1
             applyFilters();
         }
     } catch (err) {
@@ -812,137 +868,188 @@ async function loadOrders() {
     }
 }
 
+// ⭐ NEW: Render pagination controls
+function renderPaginationControls(totalOrders, containerId = 'ordersTable') {
+    const totalPages = Math.ceil(totalOrders / ORDERS_PER_PAGE);
+    
+    if (totalPages <= 1) return ''; // No pagination needed
+    
+    let html = '<div class="pagination-controls">';
+    html += `<div class="pagination-info">Page ${currentPage} of ${totalPages} (${totalOrders} orders)</div>`;
+    html += '<div class="pagination-buttons">';
+    
+    // First & Previous
+    html += `<button class="btn-pagination" data-page="1" ${currentPage === 1 ? 'disabled' : ''}>⏮ First</button>`;
+    html += `<button class="btn-pagination" data-page="${currentPage - 1}" ${currentPage === 1 ? 'disabled' : ''}>◀ Previous</button>`;
+    
+    // Page numbers (show current, ±2 pages)
+    const startPage = Math.max(1, currentPage - 2);
+    const endPage = Math.min(totalPages, currentPage + 2);
+    
+    if (startPage > 1) {
+        html += '<span class="pagination-ellipsis">...</span>';
+    }
+    
+    for (let i = startPage; i <= endPage; i++) {
+        html += `<button class="btn-pagination ${i === currentPage ? 'active' : ''}" data-page="${i}">${i}</button>`;
+    }
+    
+    if (endPage < totalPages) {
+        html += '<span class="pagination-ellipsis">...</span>';
+    }
+    
+    // Next & Last
+    html += `<button class="btn-pagination" data-page="${currentPage + 1}" ${currentPage === totalPages ? 'disabled' : ''}>Next ▶</button>`;
+    html += `<button class="btn-pagination" data-page="${totalPages}" ${currentPage === totalPages ? 'disabled' : ''}>Last ⏭</button>`;
+    
+    html += '</div></div>';
+    
+    return html;
+}
+
+// ⭐ NEW: Attach pagination event listeners
+function attachPaginationListeners() {
+    document.querySelectorAll('.btn-pagination').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const page = parseInt(btn.dataset.page, 10);
+            if (!isNaN(page) && page > 0) {
+                currentPage = page;
+                renderOrdersTable();
+                // Scroll to top of orders table
+                ordersTable.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        });
+    });
+}
+
 function renderOrdersTable() {
-    if (!filteredOrders.length) {
+    // ⭐ NEW: Separate delivered orders >7 days old
+    const activeOrders = filteredOrders.filter(o => !isOldDelivered(o));
+    const oldDelivered = filteredOrders.filter(o => isOldDelivered(o));
+    
+    if (!activeOrders.length && !oldDelivered.length) {
         ordersTable.innerHTML = '<p class="text-muted">No orders found.</p>';
         return;
     }
 
     if (viewMode === 'grouped') {
-        renderGroupedOrders();
+        renderGroupedOrders(activeOrders, oldDelivered);
     } else {
-        renderFlatOrders();
+        renderFlatOrders(activeOrders, oldDelivered);
     }
 }
 
-function renderFlatOrders() {
+function renderFlatOrders(activeOrders, oldDelivered) {
     const isAdminView = currentUser.role !== 'requester';
     const canSelectOrders = currentUser.role === 'admin' || currentUser.role === 'procurement';
-
-    let html = '<div class="table-wrapper"><table><thead><tr>';
-    if (canSelectOrders) html += '<th class="sticky"><input type="checkbox" id="selectAllOrders"></th>';
     
-    // NEW COLUMN ORDER: ID, View Button, Item, Cost Center, Qty, Status, Priority, Files, Requester, Delivery, Needed, Supplier, Building, Unit, Total
-    html += '<th>ID</th>';
-    html += '<th></th>'; // View button column
-    html += '<th>Item</th>';
-    html += '<th>Cost Center</th>';
-    html += '<th>Qty</th>';
-    html += '<th>Status</th>';
-    html += '<th>Priority</th>';
-    html += '<th>Files</th>';
+    let html = '';
     
-    if (isAdminView) {
-        html += '<th>Requester</th>';
-        html += '<th>Delivery</th>';
-        html += '<th>Needed</th>';
-        html += '<th>Supplier</th>';
-        html += '<th>Building</th>';
-        html += '<th>Unit</th>';
-        html += '<th>Total</th>';
-    } else {
-        html += '<th>Delivery</th>';
-        html += '<th>Needed</th>';
-    }
-    
-    html += '</tr></thead><tbody>';
-
-    for (const order of filteredOrders) {
-        const statusClass = 'status-' + order.status.toLowerCase().replace(/ /g, '-');
-        const priorityClass = 'priority-' + (order.priority || 'Normal').toLowerCase();
-        const hasFiles = order.files && order.files.length > 0;
-        const deliveryStatus = getDeliveryStatus(order);
-
-        html += '<tr data-id="' + order.id + '">';
+    // ⭐ ACTIVE ORDERS (with pagination)
+    if (activeOrders.length > 0) {
+        const startIdx = (currentPage - 1) * ORDERS_PER_PAGE;
+        const endIdx = startIdx + ORDERS_PER_PAGE;
+        const paginatedOrders = activeOrders.slice(startIdx, endIdx);
         
-        if (canSelectOrders) {
-            html += `<td class="sticky"><input type="checkbox" class="row-select" data-id="${order.id}"></td>`;
-        }
+        html += '<div class="table-wrapper"><table><thead><tr>';
+        if (canSelectOrders) html += '<th class="sticky"><input type="checkbox" id="selectAllOrders"></th>';
         
-        // ID
-        html += `<td>#${order.id}</td>`;
+        html += '<th>ID</th>';
+        html += '<th></th>'; // View button column
+        html += '<th>Item</th>';
+        html += '<th>Cost Center</th>';
+        html += '<th>Qty</th>';
+        html += '<th>Status</th>';
+        html += '<th>Priority</th>';
+        html += '<th>Files</th>';
         
-        // View Button (moved here!)
-        html += `<td><button class="btn btn-secondary btn-sm btn-view-order" data-id="${order.id}">View</button></td>`;
-        
-        // Item
-        html += `<td title="${escapeHtml(order.item_description)}">${escapeHtml(order.item_description.substring(0, 40))}${order.item_description.length > 40 ? '…' : ''}</td>`;
-        
-        // Cost Center
-        html += `<td>${order.cost_center_code || '-'}</td>`;
-        
-        // Qty
-        html += `<td>${order.quantity}</td>`;
-        
-        // Status
-        html += `<td><span class="status-badge ${statusClass}">${order.status}</span></td>`;
-        
-        // Priority
-        html += `<td><span class="priority-pill ${priorityClass}">${order.priority || 'Normal'}</span></td>`;
-        
-        // Files
-        html += `<td>${hasFiles ? '📎 ' + order.files.length : '-'}</td>`;
-
         if (isAdminView) {
-            // Requester
-            html += `<td>${order.requester_name}</td>`;
-            
-            // Delivery
-            html += `<td>${getDeliveryBadgeHtml(deliveryStatus)}</td>`;
-            
-            // Needed
-            html += `<td>${formatDate(order.date_needed)}</td>`;
-            
-            // Supplier
-            html += `<td>${order.supplier_name || '-'}</td>`;
-            
-            // Building
-            html += `<td>${order.building}</td>`;
-            
-            // Unit
-            html += `<td class="text-right">${fmtPrice(order.unit_price)}</td>`;
-            
-            // Total
-            html += `<td class="text-right">${fmtPrice(order.total_price)}</td>`;
+            html += '<th>Requester</th>';
+            html += '<th>Delivery</th>';
+            html += '<th>Needed</th>';
+            html += '<th>Supplier</th>';
+            html += '<th>Building</th>';
+            html += '<th>Unit</th>';
+            html += '<th>Total</th>';
         } else {
-            // Delivery
-            html += `<td>${getDeliveryBadgeHtml(deliveryStatus)}</td>`;
-            
-            // Needed
-            html += `<td>${formatDate(order.date_needed)}</td>`;
+            html += '<th>Delivery</th>';
+            html += '<th>Needed</th>';
         }
+        
+        html += '</tr></thead><tbody>';
 
-        html += '</tr>';
+        for (const order of paginatedOrders) {
+            html += renderOrderRow(order, canSelectOrders, isAdminView);
+        }
+        
+        html += '</tbody></table></div>';
+        
+        // Pagination controls
+        html += renderPaginationControls(activeOrders.length);
     }
-    html += '</tbody></table></div>';
+    
+    // ⭐ OLD DELIVERED SECTION (collapsed, not paginated)
+    if (oldDelivered.length > 0) {
+        html += '<div class="old-delivered-section" style="margin-top: 1.5rem;">';
+        html += `<div class="old-delivered-header" onclick="this.parentElement.classList.toggle('expanded')">`;
+        html += `<span class="old-delivered-title">📦 Delivered Orders (>7 days ago)</span>`;
+        html += `<span class="old-delivered-count">${oldDelivered.length} orders</span>`;
+        html += `<span class="old-delivered-chevron">▼</span>`;
+        html += '</div>';
+        html += '<div class="old-delivered-body">';
+        
+        html += '<div class="table-wrapper"><table><thead><tr>';
+        if (canSelectOrders) html += '<th class="sticky"><input type="checkbox" id="selectAllOldOrders"></th>';
+        
+        html += '<th>ID</th>';
+        html += '<th></th>';
+        html += '<th>Item</th>';
+        html += '<th>Cost Center</th>';
+        html += '<th>Qty</th>';
+        html += '<th>Status</th>';
+        html += '<th>Priority</th>';
+        html += '<th>Files</th>';
+        
+        if (isAdminView) {
+            html += '<th>Requester</th>';
+            html += '<th>Delivered</th>';
+            html += '<th>Supplier</th>';
+            html += '<th>Building</th>';
+            html += '<th>Unit</th>';
+            html += '<th>Total</th>';
+        } else {
+            html += '<th>Delivered</th>';
+        }
+        
+        html += '</tr></thead><tbody>';
+
+        for (const order of oldDelivered) {
+            html += renderOrderRow(order, canSelectOrders, isAdminView);
+        }
+        
+        html += '</tbody></table></div>';
+        html += '</div></div>';
+    }
 
     ordersTable.innerHTML = html;
     attachOrderEventListeners(canSelectOrders);
+    attachPaginationListeners();
 }
 
-function renderGroupedOrders() {
+function renderGroupedOrders(activeOrders, oldDelivered) {
     const isAdminView = currentUser.role !== 'requester';
     const canSelectOrders = currentUser.role === 'admin' || currentUser.role === 'procurement';
     const grouped = {};
 
-    // Group by status
-    for (const order of filteredOrders) {
+    // Group active orders by status
+    for (const order of activeOrders) {
         if (!grouped[order.status]) grouped[order.status] = [];
         grouped[order.status].push(order);
     }
 
     let html = '';
 
+    // Render active orders grouped by status
     for (const status of ORDER_STATUSES) {
         if (!grouped[status] || grouped[status].length === 0) continue;
 
@@ -960,9 +1067,8 @@ function renderGroupedOrders() {
         html += '<div class="table-wrapper"><table><thead><tr>';
         if (canSelectOrders) html += '<th class="sticky"><input type="checkbox" class="select-all-group" data-status="${status}"></th>';
         
-        // NEW COLUMN ORDER (without Status since we're grouped by status)
         html += '<th>ID</th>';
-        html += '<th></th>'; // View button column
+        html += '<th></th>';
         html += '<th>Item</th>';
         html += '<th>Cost Center</th>';
         html += '<th>Qty</th>';
@@ -985,70 +1091,53 @@ function renderGroupedOrders() {
         html += '</tr></thead><tbody>';
 
         for (const order of grouped[status]) {
-            const priorityClass = 'priority-' + (order.priority || 'Normal').toLowerCase();
-            const hasFiles = order.files && order.files.length > 0;
-            const deliveryStatus = getDeliveryStatus(order);
-
-            html += '<tr data-id="' + order.id + '">';
-            
-            if (canSelectOrders) {
-                html += `<td class="sticky"><input type="checkbox" class="row-select" data-id="${order.id}"></td>`;
-            }
-            
-            // ID
-            html += `<td>#${order.id}</td>`;
-            
-            // View Button (moved here!)
-            html += `<td><button class="btn btn-secondary btn-sm btn-view-order" data-id="${order.id}">View</button></td>`;
-            
-            // Item
-            html += `<td title="${escapeHtml(order.item_description)}">${escapeHtml(order.item_description.substring(0, 40))}${order.item_description.length > 40 ? '…' : ''}</td>`;
-            
-            // Cost Center
-            html += `<td>${order.cost_center_code || '-'}</td>`;
-            
-            // Qty
-            html += `<td>${order.quantity}</td>`;
-            
-            // Priority
-            html += `<td><span class="priority-pill ${priorityClass}">${order.priority || 'Normal'}</span></td>`;
-            
-            // Files
-            html += `<td>${hasFiles ? '📎 ' + order.files.length : '-'}</td>`;
-
-            if (isAdminView) {
-                // Requester
-                html += `<td>${order.requester_name}</td>`;
-                
-                // Delivery
-                html += `<td>${getDeliveryBadgeHtml(deliveryStatus)}</td>`;
-                
-                // Needed
-                html += `<td>${formatDate(order.date_needed)}</td>`;
-                
-                // Supplier
-                html += `<td>${order.supplier_name || '-'}</td>`;
-                
-                // Building
-                html += `<td>${order.building}</td>`;
-                
-                // Unit
-                html += `<td class="text-right">${fmtPrice(order.unit_price)}</td>`;
-                
-                // Total
-                html += `<td class="text-right">${fmtPrice(order.total_price)}</td>`;
-            } else {
-                // Delivery
-                html += `<td>${getDeliveryBadgeHtml(deliveryStatus)}</td>`;
-                
-                // Needed
-                html += `<td>${formatDate(order.date_needed)}</td>`;
-            }
-
-            html += '</tr>';
+            html += renderOrderRow(order, canSelectOrders, isAdminView);
         }
 
         html += '</tbody></table></div></div></div>';
+    }
+    
+    // ⭐ OLD DELIVERED SECTION (same as flat view)
+    if (oldDelivered.length > 0) {
+        html += '<div class="old-delivered-section" style="margin-top: 1.5rem;">';
+        html += `<div class="old-delivered-header" onclick="this.parentElement.classList.toggle('expanded')">`;
+        html += `<span class="old-delivered-title">📦 Delivered Orders (>7 days ago)</span>`;
+        html += `<span class="old-delivered-count">${oldDelivered.length} orders</span>`;
+        html += `<span class="old-delivered-chevron">▼</span>`;
+        html += '</div>';
+        html += '<div class="old-delivered-body">';
+        
+        html += '<div class="table-wrapper"><table><thead><tr>';
+        if (canSelectOrders) html += '<th class="sticky"><input type="checkbox" id="selectAllOldOrders"></th>';
+        
+        html += '<th>ID</th>';
+        html += '<th></th>';
+        html += '<th>Item</th>';
+        html += '<th>Cost Center</th>';
+        html += '<th>Qty</th>';
+        html += '<th>Status</th>';
+        html += '<th>Priority</th>';
+        html += '<th>Files</th>';
+        
+        if (isAdminView) {
+            html += '<th>Requester</th>';
+            html += '<th>Delivered</th>';
+            html += '<th>Supplier</th>';
+            html += '<th>Building</th>';
+            html += '<th>Unit</th>';
+            html += '<th>Total</th>';
+        } else {
+            html += '<th>Delivered</th>';
+        }
+        
+        html += '</tr></thead><tbody>';
+
+        for (const order of oldDelivered) {
+            html += renderOrderRow(order, canSelectOrders, isAdminView);
+        }
+        
+        html += '</tbody></table></div>';
+        html += '</div></div>';
     }
 
     ordersTable.innerHTML = html;
@@ -1066,6 +1155,64 @@ function renderGroupedOrders() {
     });
 
     attachOrderEventListeners(canSelectOrders);
+}
+
+// ⭐ NEW: Shared order row rendering function
+function renderOrderRow(order, canSelectOrders, isAdminView) {
+    const statusClass = 'status-' + order.status.toLowerCase().replace(/ /g, '-');
+    const priorityClass = 'priority-' + (order.priority || 'Normal').toLowerCase();
+    const hasFiles = order.files && order.files.length > 0;
+    const deliveryStatus = getDeliveryStatus(order);
+
+    let html = '<tr data-id="' + order.id + '">';
+    
+    if (canSelectOrders) {
+        html += `<td class="sticky"><input type="checkbox" class="row-select" data-id="${order.id}"></td>`;
+    }
+    
+    html += `<td>#${order.id}</td>`;
+    html += `<td><button class="btn btn-secondary btn-sm btn-view-order" data-id="${order.id}">View</button></td>`;
+    html += `<td title="${escapeHtml(order.item_description)}">${escapeHtml(order.item_description.substring(0, 40))}${order.item_description.length > 40 ? '…' : ''}</td>`;
+    html += `<td>${order.cost_center_code || '-'}</td>`;
+    html += `<td>${order.quantity}</td>`;
+    
+    // Show status badge only if not in a group (flat view or old delivered)
+    if (isOldDelivered(order) || viewMode === 'flat') {
+        html += `<td><span class="status-badge ${statusClass}">${order.status}</span></td>`;
+    }
+    
+    html += `<td><span class="priority-pill ${priorityClass}">${order.priority || 'Normal'}</span></td>`;
+    html += `<td>${hasFiles ? '📎 ' + order.files.length : '-'}</td>`;
+
+    if (isAdminView) {
+        html += `<td>${order.requester_name}</td>`;
+        
+        // For old delivered, show "Delivered" text instead of delivery status
+        if (isOldDelivered(order)) {
+            html += `<td><span class="status-badge status-delivered">Delivered</span></td>`;
+        } else {
+            html += `<td>${getDeliveryBadgeHtml(deliveryStatus)}</td>`;
+        }
+        
+        if (!isOldDelivered(order)) {
+            html += `<td>${formatDate(order.date_needed)}</td>`;
+        }
+        
+        html += `<td>${order.supplier_name || '-'}</td>`;
+        html += `<td>${order.building}</td>`;
+        html += `<td class="text-right">${fmtPrice(order.unit_price)}</td>`;
+        html += `<td class="text-right">${fmtPrice(order.total_price)}</td>`;
+    } else {
+        if (isOldDelivered(order)) {
+            html += `<td><span class="status-badge status-delivered">Delivered</span></td>`;
+        } else {
+            html += `<td>${getDeliveryBadgeHtml(deliveryStatus)}</td>`;
+            html += `<td>${formatDate(order.date_needed)}</td>`;
+        }
+    }
+
+    html += '</tr>';
+    return html;
 }
 
 function attachOrderEventListeners(canSelectOrders) {

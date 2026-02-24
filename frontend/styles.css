@@ -1,4 +1,4 @@
-/* PartPulse Order Management v2.1 - Enhanced Filtering & Grouping */
+/* PartPulse Order Management v2.6 - Pagination & Smart Delivered Collapsing */
 
 :root {
     --color-bg-primary: #020617;
@@ -381,6 +381,132 @@ input[type="date"].date-picker:invalid::-webkit-datetime-edit {
     font-weight: 600;
 }
 
+/* ======================== */
+/* PAGINATION CONTROLS */
+/* ======================== */
+
+.pagination-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 0.5rem 0.5rem;
+    border-top: 1px solid rgba(31, 41, 55, 0.8);
+    margin-top: 0.5rem;
+}
+
+.pagination-info {
+    font-size: 0.8rem;
+    color: var(--color-text-secondary);
+}
+
+.pagination-buttons {
+    display: flex;
+    gap: 0.35rem;
+    align-items: center;
+}
+
+.btn-pagination {
+    background: rgba(15, 23, 42, 0.9);
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    color: var(--color-text-secondary);
+    padding: 0.3rem 0.65rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.btn-pagination:hover:not(:disabled) {
+    background: rgba(15, 23, 42, 0.95);
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+    transform: translateY(-1px);
+}
+
+.btn-pagination.active {
+    background: var(--color-accent);
+    color: #020617;
+    border-color: var(--color-accent);
+    font-weight: 600;
+}
+
+.btn-pagination:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.pagination-ellipsis {
+    color: var(--color-text-secondary);
+    font-size: 0.75rem;
+    padding: 0 0.2rem;
+}
+
+/* ======================== */
+/* OLD DELIVERED SECTION */
+/* ======================== */
+
+.old-delivered-section {
+    border: 1px solid rgba(31, 41, 55, 0.8);
+    border-radius: 10px;
+    overflow: hidden;
+    background: rgba(15, 23, 42, 0.4);
+}
+
+.old-delivered-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.7rem 0.9rem;
+    background: rgba(15, 23, 42, 0.85);
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.15s ease;
+    border-bottom: 1px solid rgba(31, 41, 55, 0.6);
+}
+
+.old-delivered-header:hover {
+    background: rgba(15, 23, 42, 0.95);
+}
+
+.old-delivered-title {
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.old-delivered-count {
+    background: rgba(148, 163, 184, 0.2);
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    color: var(--color-text-secondary);
+}
+
+.old-delivered-chevron {
+    font-size: 0.8rem;
+    color: var(--color-text-secondary);
+    transition: transform 0.2s ease;
+}
+
+.old-delivered-section:not(.expanded) .old-delivered-chevron {
+    transform: rotate(-90deg);
+}
+
+.old-delivered-body {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease-out;
+    background: rgba(2, 6, 23, 0.5);
+}
+
+.old-delivered-section.expanded .old-delivered-body {
+    max-height: 4000px;
+}
+
 /* Tables */
 .table-wrapper {
     width: 100%;
@@ -671,5 +797,15 @@ th.sticky, td.sticky {
 
     .quick-filters {
         flex-direction: column;
+    }
+    
+    .pagination-controls {
+        flex-direction: column;
+        gap: 0.6rem;
+        align-items: flex-start;
+    }
+    
+    .pagination-buttons {
+        flex-wrap: wrap;
     }
 }

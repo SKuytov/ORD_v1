@@ -64,7 +64,7 @@
 
         <div class="container">
             <!-- Tabs for admin/procurement -->
-            <div id="navTabs" class="tabs hidden">
+            <div id="navTabs" class="tabs hidden" style="position: relative;">
                 <button class="tab active" data-tab="ordersTab" data-i18n="nav.orders">Orders</button>
                 <button class="tab" data-tab="quotesTab" data-i18n="nav.quotes">Quotes</button>
                 <button class="tab" data-tab="approvalsTab" id="approvalsTabButton" hidden style="position: relative;" data-i18n="nav.approvals">
@@ -75,6 +75,10 @@
                 <button class="tab" data-tab="buildingsTab" id="buildingsTabButton" hidden data-i18n="nav.buildings">Buildings</button>
                 <button class="tab" data-tab="costCentersTab" id="costCentersTabButton" hidden data-i18n="nav.costCenters">Cost Centers</button>
                 <button class="tab" data-tab="usersTab" id="usersTabButton" hidden data-i18n="nav.users">Users</button>
+                <!-- ⭐ NEW: Procurement Create Order Button -->
+                <button id="btnProcurementCreateOrder" class="btn btn-primary" style="position: absolute; right: 1rem; top: 50%; transform: translateY(-50%);" hidden>
+                    ➕ Create Order
+                </button>
             </div>
 
             <!-- Requester: Create Order -->

@@ -187,7 +187,7 @@ class EmailService {
                                 
                                 <!-- Action Button -->
                                 <div style="text-align: center; margin: 30px 0;">
-                                    <a href="${process.env.FRONTEND_URL || 'http://100.89.57.33'}" 
+                                    <a href="${process.env.FRONTEND_URL || 'https://partpulse-orders.tail675c8b.ts.net/'}" 
                                        style="display: inline-block; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); 
                                               color: white; padding: 14px 32px; text-decoration: none; 
                                               border-radius: 6px; font-weight: 600; font-size: 15px;
@@ -357,7 +357,7 @@ class EmailService {
                                 
                                 <!-- Action Button -->
                                 <div style="text-align: center; margin: 30px 0;">
-                                    <a href="${process.env.FRONTEND_URL || 'http://100.89.57.33'}" 
+                                    <a href="${process.env.FRONTEND_URL || 'https://partpulse-orders.tail675c8b.ts.net/'}" 
                                        style="display: inline-block; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); 
                                               color: white; padding: 14px 32px; text-decoration: none; 
                                               border-radius: 6px; font-weight: 600; font-size: 15px;

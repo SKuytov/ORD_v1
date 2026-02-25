@@ -296,7 +296,8 @@ exports.updateOrder = async (req, res) => {
             'status', 'supplier', 'supplier_id', 'quote_id', 'price',
             'unit_price', 'total_price', 'assigned_to', 'priority',
             'expected_delivery_date', 'notes', 'part_number', 'category',
-            'cost_center_id'
+            'cost_center_id',
+            'supplier_notes', 'alternative_product_name', 'alternative_product_description'
         ];
 
         const updateFields = [];

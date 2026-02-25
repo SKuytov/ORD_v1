@@ -316,6 +316,10 @@ function initializeOrderFormAutocomplete() {
         return;
     }
 
+    // ========================================
+    // REQUESTER FORM (existing)
+    // ========================================
+    
     // Item Description autocomplete
     const itemDescriptionInput = document.getElementById('itemDescription');
     if (itemDescriptionInput && !itemDescriptionInput.dataset.autocompleteInitialized) {
@@ -371,10 +375,10 @@ function initializeOrderFormAutocomplete() {
             onSelect: (suggestion) => {
                 console.log('✅ Selected part number:', suggestion.part_number);
                 // Optionally populate description from historical data
-                if (suggestion.description && !itemDescriptionInput.value) {
+                if (suggestion.description && itemDescriptionInput && !itemDescriptionInput.value) {
                     itemDescriptionInput.value = suggestion.description;
                 }
-                if (suggestion.category && !categoryInput.value) {
+                if (suggestion.category && categoryInput && !categoryInput.value) {
                     categoryInput.value = suggestion.category;
                 }
             }
@@ -384,15 +388,98 @@ function initializeOrderFormAutocomplete() {
         const updatePartNumberContext = () => {
             if (window.partNumberAutocomplete) {
                 window.partNumberAutocomplete.options.customParams = {
-                    category: categoryInput.value,
-                    description: itemDescriptionInput.value.substring(0, 50)
+                    category: categoryInput ? categoryInput.value : '',
+                    description: itemDescriptionInput ? itemDescriptionInput.value.substring(0, 50) : ''
                 };
             }
         };
 
-        itemDescriptionInput.addEventListener('change', updatePartNumberContext);
-        categoryInput.addEventListener('change', updatePartNumberContext);
+        if (itemDescriptionInput) itemDescriptionInput.addEventListener('change', updatePartNumberContext);
+        if (categoryInput) categoryInput.addEventListener('change', updatePartNumberContext);
         console.log('✅ Part Number autocomplete initialized');
+    }
+
+    // ========================================
+    // PROCUREMENT MODAL (NEW)
+    // ========================================
+    
+    // Modal Item Description autocomplete
+    const procItemDescInput = document.getElementById('procItemDescription');
+    if (procItemDescInput && !procItemDescInput.dataset.autocompleteInitialized) {
+        procItemDescInput.dataset.autocompleteInitialized = 'true';
+        
+        window.procItemDescriptionAutocomplete = new IntelligentAutocomplete(procItemDescInput, {
+            endpoint: '/api/autocomplete/smart-suggestions',
+            minChars: 2,
+            debounceMs: 300,
+            maxResults: 8,
+            placeholder: 'Start typing... (e.g., Лагер, Bearing, Motor)',
+            showUsageCount: true,
+            onSelect: (suggestion) => {
+                console.log('✅ Modal: Selected item:', suggestion.text);
+            }
+        });
+        console.log('✅ Modal Item Description autocomplete initialized');
+    }
+
+    // Modal Category autocomplete
+    const procCategoryInput = document.getElementById('procCategory');
+    if (procCategoryInput && !procCategoryInput.dataset.autocompleteInitialized) {
+        procCategoryInput.dataset.autocompleteInitialized = 'true';
+        
+        window.procCategoryAutocomplete = new IntelligentAutocomplete(procCategoryInput, {
+            endpoint: '/api/autocomplete/categories',
+            minChars: 1,
+            debounceMs: 250,
+            maxResults: 10,
+            placeholder: 'e.g., Bearings, Motors, Лагери, Мотори',
+            showUsageCount: true,
+            onSelect: (suggestion) => {
+                console.log('✅ Modal: Selected category:', suggestion.text);
+            }
+        });
+        console.log('✅ Modal Category autocomplete initialized');
+    }
+
+    // Modal Part Number autocomplete (context-aware)
+    const procPartNumberInput = document.getElementById('procPartNumber');
+    if (procPartNumberInput && !procPartNumberInput.dataset.autocompleteInitialized) {
+        procPartNumberInput.dataset.autocompleteInitialized = 'true';
+        
+        window.procPartNumberAutocomplete = new IntelligentAutocomplete(procPartNumberInput, {
+            endpoint: '/api/autocomplete/part-numbers',
+            minChars: 1,
+            debounceMs: 300,
+            maxResults: 10,
+            placeholder: 'e.g., 6205, SKF-123',
+            showUsageCount: true,
+            isPartNumber: true,
+            customParams: {},
+            onSelect: (suggestion) => {
+                console.log('✅ Modal: Selected part number:', suggestion.part_number);
+                // Auto-populate description and category
+                if (suggestion.description && procItemDescInput && !procItemDescInput.value) {
+                    procItemDescInput.value = suggestion.description;
+                }
+                if (suggestion.category && procCategoryInput && !procCategoryInput.value) {
+                    procCategoryInput.value = suggestion.category;
+                }
+            }
+        });
+
+        // Update part number context when description/category changes
+        const updateProcPartNumberContext = () => {
+            if (window.procPartNumberAutocomplete) {
+                window.procPartNumberAutocomplete.options.customParams = {
+                    category: procCategoryInput ? procCategoryInput.value : '',
+                    description: procItemDescInput ? procItemDescInput.value.substring(0, 50) : ''
+                };
+            }
+        };
+
+        if (procItemDescInput) procItemDescInput.addEventListener('change', updateProcPartNumberContext);
+        if (procCategoryInput) procCategoryInput.addEventListener('change', updateProcPartNumberContext);
+        console.log('✅ Modal Part Number autocomplete initialized');
     }
 }
 
@@ -416,6 +503,12 @@ if (typeof originalShowDashboard === 'function') {
 } else {
     console.warn('⚠️ showDashboard() not found - autocomplete may not initialize properly');
 }
+
+// ⭐ NEW: Initialize modal autocomplete when modal opens
+window.initProcModalAutocomplete = function() {
+    console.log('🎯 Initializing procurement modal autocomplete...');
+    initializeOrderFormAutocomplete();
+};
 
 // Manual initialization function (can be called from console for debugging)
 window.initAutocomplete = initializeOrderFormAutocomplete;

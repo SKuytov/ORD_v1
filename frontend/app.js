@@ -234,6 +234,12 @@ function setupEventListeners() {
     if (btnNewUser) btnNewUser.addEventListener('click', () => openUserForm());
     if (btnCancelUser) btnCancelUser.addEventListener('click', () => { userFormCard.hidden = true; });
     if (userForm) userForm.addEventListener('submit', handleSaveUser);
+
+    // ⭐ NEW: Procurement/Admin/Manager Create Order button
+    const btnProcurementCreateOrder = document.getElementById('btnProcurementCreateOrder');
+    if (btnProcurementCreateOrder) {
+        btnProcurementCreateOrder.addEventListener('click', openProcCreateOrderModal);
+    }
 }
 
 function setViewMode(mode) {
@@ -544,6 +550,10 @@ function showDashboard() {
         if (orderActionsBar) {
             orderActionsBar.style.display = 'none';
         }
+
+        // ⭐ NEW: Show Create Order button for managers
+        const btnProcCreateMgr = document.getElementById('btnProcurementCreateOrder');
+        if (btnProcCreateMgr) btnProcCreateMgr.classList.remove('hidden');
         
         // Initialize approvals if function exists
         if (typeof loadApprovals === 'function') {
@@ -566,6 +576,10 @@ function showDashboard() {
             if (buildingsTabButton) buildingsTabButton.hidden = false;
             if (costCentersTabButton) costCentersTabButton.hidden = false;
         }
+
+        // ⭐ NEW: Show Create Order button for admin/procurement
+        const btnProcCreate = document.getElementById('btnProcurementCreateOrder');
+        if (btnProcCreate) btnProcCreate.classList.remove('hidden');
     }
 
     // Show orders tab by default
@@ -1311,6 +1325,7 @@ function renderOrderDetail(o) {
         <div><div class="detail-label">Building</div><div class="detail-value">${o.building}</div></div>
         <div><div class="detail-label">Cost Center</div><div class="detail-value">${o.cost_center_code ? `${o.cost_center_code} — ${o.cost_center_name}` : '-'}</div></div>
         <div><div class="detail-label">Status</div><div class="detail-value"><span class="status-badge ${statusClass}">${o.status}</span></div></div>
+        <div><div class="detail-label">Quantity</div><div class="detail-value">${o.quantity || '-'}</div></div>
         <div><div class="detail-label">Priority</div><div class="detail-value"><span class="priority-pill ${priorityClass}">${o.priority || 'Normal'}</span></div></div>
         <div><div class="detail-label">Date Needed</div><div class="detail-value">${formatDate(o.date_needed)}</div></div>
         <div><div class="detail-label">Expected Delivery</div><div class="detail-value">${o.expected_delivery_date ? formatDate(o.expected_delivery_date) : '-'}</div></div>`;
@@ -1346,6 +1361,22 @@ function renderOrderDetail(o) {
 
     if (o.notes) {
         html += `<div class="detail-section-title mt-1">Notes</div><div class="text-muted mt-1">${escapeHtml(o.notes)}</div>`;
+    }
+
+    // ⭐ NEW: Supplier Notes & Alternative Product (read-only display for admin/procurement)
+    if (canSeeSensitiveData) {
+        if (o.supplier_notes) {
+            html += '<div class="detail-section-title mt-1">Supplier Notes</div><div class="text-muted mt-1">' + escapeHtml(o.supplier_notes) + '</div>';
+        }
+        if (o.alternative_product_name || o.alternative_product_description) {
+            html += '<div class="detail-section-title mt-1">Alternative Product</div>';
+            if (o.alternative_product_name) {
+                html += '<div class="text-muted mt-1"><strong>Name:</strong> ' + escapeHtml(o.alternative_product_name) + '</div>';
+            }
+            if (o.alternative_product_description) {
+                html += '<div class="text-muted mt-1"><strong>Description:</strong> ' + escapeHtml(o.alternative_product_description) + '</div>';
+            }
+        }
     }
 
     // ⭐ KEEP ATTACHMENTS VISIBLE TO REQUESTERS (these are files they uploaded!)
@@ -1407,6 +1438,9 @@ function renderOrderDetail(o) {
         
         html += `<div class="detail-grid"><div><div class="form-group"><label>Expected Delivery</label><input type="date" id="detailExpected" class="form-control form-control-sm date-picker" value="${o.expected_delivery_date ? o.expected_delivery_date.substring(0,10) : ''}"></div></div><div><div class="form-group"><label>Unit Price</label><input type="number" step="0.01" id="detailUnitPrice" class="form-control form-control-sm" value="${parseFloat(o.unit_price) || ''}"></div></div></div>`;
         html += `<div class="form-group"><label>Total Price</label><input type="number" step="0.01" id="detailTotalPrice" class="form-control form-control-sm" value="${parseFloat(o.total_price) || ''}"></div>`;
+        html += `<div class="form-group"><label>Supplier Notes</label><textarea id="detailSupplierNotes" class="form-control form-control-sm" rows="2" placeholder="Internal notes about the supplier for this order">${o.supplier_notes || ''}</textarea></div>`;
+        html += `<div class="form-group"><label>Alternative Product Name</label><input type="text" id="detailAltProductName" class="form-control form-control-sm" placeholder="Alternative product name" value="${escapeHtml(o.alternative_product_name || '')}"></div>`;
+        html += `<div class="form-group"><label>Alternative Product Description</label><textarea id="detailAltProductDesc" class="form-control form-control-sm" rows="2" placeholder="Description of the alternative product">${o.alternative_product_description || ''}</textarea></div>`;
         html += `<div class="form-actions"><button id="btnSaveOrder" class="btn btn-primary btn-sm">Save</button></div>`;
     }
 
@@ -1434,7 +1468,10 @@ function renderOrderDetail(o) {
                 supplier_id: o.supplier_id || null, // Keep current supplier_id (updated by modal)
                 expected_delivery_date: document.getElementById('detailExpected').value || null,
                 unit_price: parseFloat(document.getElementById('detailUnitPrice').value || 0) || null,
-                total_price: parseFloat(document.getElementById('detailTotalPrice').value || 0) || null
+                total_price: parseFloat(document.getElementById('detailTotalPrice').value || 0) || null,
+                supplier_notes: document.getElementById('detailSupplierNotes') ? document.getElementById('detailSupplierNotes').value || null : null,
+                alternative_product_name: document.getElementById('detailAltProductName') ? document.getElementById('detailAltProductName').value || null : null,
+                alternative_product_description: document.getElementById('detailAltProductDesc') ? document.getElementById('detailAltProductDesc').value || null : null
             };
             const res = await apiPut(`/orders/${o.id}`, payload);
             if (res.success) { alert('Order updated'); loadOrders(); openOrderDetail(o.id); }
@@ -1525,38 +1562,64 @@ function renderQuoteDetail(q) {
 
 function openCreateQuoteDialog() {
     if (!selectedOrderIds.size) return;
-    const orders = ordersState.filter(o => selectedOrderIds.has(o.id));
-    const supplierOptions = suppliersState.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
-    const html = `Create quote for <strong>${orders.length}</strong> orders.\nSupplier: <select id="dlgSupplier">${supplierOptions}</select>\nValid until (YYYY-MM-DD): <input id="dlgValid" type="text" placeholder="optional">`;
-    promptHtml(html).then(supplierId => {
-        if (!supplierId) return;
-        const body = {
-            supplier_id: parseInt(document.getElementById('dlgSupplier').value, 10),
-            order_ids: orders.map(o => o.id),
-            valid_until: document.getElementById('dlgValid')?.value || null
-        };
-        apiPost('/quotes', body).then(res => {
-            if (res.success) { alert(`Quote ${res.quoteNumber} created`); selectedOrderIds.clear(); updateSelectionUi(); loadOrders(); loadQuotes(); }
-            else { alert('Failed to create quote: ' + (res.message || 'Unknown error')); }
-        });
-    });
+
+    // Populate the createQuoteModal fields
+    const modal = document.getElementById('createQuoteModal');
+    if (!modal) return;
+
+    // Fill supplier dropdown
+    const supplierSel = document.getElementById('cqSupplier');
+    if (supplierSel) {
+        supplierSel.innerHTML = '<option value="">Select supplier</option>' +
+            suppliersState.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
+    }
+
+    // Show selected order count
+    const orderCountEl = document.getElementById('cqOrderCount');
+    if (orderCountEl) orderCountEl.textContent = selectedOrderIds.size;
+
+    // Reset other fields
+    const notesEl = document.getElementById('cqNotes');
+    if (notesEl) notesEl.value = '';
+    const currencyEl = document.getElementById('cqCurrency');
+    if (currencyEl) currencyEl.value = 'EUR';
+    const validEl = document.getElementById('cqValidUntil');
+    if (validEl) validEl.value = '';
+
+    // Show modal
+    modal.classList.remove('hidden');
 }
 
-function promptHtml(messageHtml) {
-    const overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.85);display:flex;align-items:center;justify-content:center;z-index:50;';
-    const box = document.createElement('div');
-    box.style.cssText = 'background:#020617;padding:1rem 1.25rem;border-radius:12px;border:1px solid rgba(148,163,184,0.5);min-width:320px;color:white;';
-    box.innerHTML = `<div style="font-size:0.9rem;margin-bottom:0.7rem;">${messageHtml}</div>`;
-    const actions = document.createElement('div');
-    actions.style.cssText = 'display:flex;justify-content:flex-end;gap:0.4rem;';
-    const btnCancel = document.createElement('button'); btnCancel.textContent = 'Cancel'; btnCancel.className = 'btn btn-secondary btn-sm';
-    const btnOk = document.createElement('button'); btnOk.textContent = 'Create'; btnOk.className = 'btn btn-primary btn-sm';
-    actions.appendChild(btnCancel); actions.appendChild(btnOk); box.appendChild(actions); overlay.appendChild(box); document.body.appendChild(overlay);
-    return new Promise(resolve => {
-        btnCancel.onclick = () => { document.body.removeChild(overlay); resolve(null); };
-        btnOk.onclick = () => { const v = document.getElementById('dlgSupplier')?.value; document.body.removeChild(overlay); resolve(v); };
-    });
+function closeCreateQuoteModal() {
+    const modal = document.getElementById('createQuoteModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+async function handleCreateQuote(e) {
+    e.preventDefault();
+    const orders = ordersState.filter(o => selectedOrderIds.has(o.id));
+    const supplierId = document.getElementById('cqSupplier')?.value;
+    if (!supplierId) { alert('Please select a supplier'); return; }
+
+    const body = {
+        supplier_id: parseInt(supplierId, 10),
+        order_ids: orders.map(o => o.id),
+        notes: document.getElementById('cqNotes')?.value || null,
+        currency: document.getElementById('cqCurrency')?.value || 'EUR',
+        valid_until: document.getElementById('cqValidUntil')?.value || null
+    };
+
+    const res = await apiPost('/quotes', body);
+    if (res.success) {
+        alert('Quote ' + res.quoteNumber + ' created');
+        closeCreateQuoteModal();
+        selectedOrderIds.clear();
+        updateSelectionUi();
+        loadOrders();
+        loadQuotes();
+    } else {
+        alert('Failed to create quote: ' + (res.message || 'Unknown error'));
+    }
 }
 
 // ===================== BUILDINGS =====================
@@ -1753,3 +1816,111 @@ function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>"]/g, c 
 function formatDate(dateStr) { if (!dateStr) return '-'; const d = new Date(dateStr); if (isNaN(d)) return dateStr; return d.toLocaleDateString(); }
 function formatDateTime(dateStr) { if (!dateStr) return '-'; const d = new Date(dateStr); if (isNaN(d)) return dateStr; return d.toLocaleString(); }
 function formatFileSize(bytes) { if (!bytes) return ''; const kb = bytes / 1024; if (kb < 1024) return kb.toFixed(1) + ' KB'; return (kb / 1024).toFixed(1) + ' MB'; }
+
+// ===================== PROCUREMENT CREATE ORDER MODAL =====================
+
+function openProcCreateOrderModal() {
+    const modal = document.getElementById('procCreateOrderModal');
+    if (!modal) return;
+
+    const bldgSel = document.getElementById('procBuilding');
+    if (bldgSel) {
+        bldgSel.innerHTML = '<option value="">Select Building</option>' +
+            buildingsState.filter(b => b.active).map(b =>
+                `<option value="${b.code}">${escapeHtml(b.code)} - ${escapeHtml(b.name)}</option>`
+            ).join('');
+    }
+
+    const ccContainer = document.getElementById('procCostCenterRadios');
+    if (ccContainer) ccContainer.innerHTML = '<span class="text-muted">Select a building first</span>';
+
+    const form = document.getElementById('procCreateOrderForm');
+    if (form) form.reset();
+
+    if (bldgSel) {
+        bldgSel.onchange = () => renderProcCostCenterRadios(bldgSel.value);
+    }
+
+    modal.classList.remove('hidden');
+}
+
+function closeProcCreateOrderModal() {
+    const modal = document.getElementById('procCreateOrderModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function renderProcCostCenterRadios(buildingCode) {
+    const container = document.getElementById('procCostCenterRadios');
+    if (!container) return;
+
+    if (!buildingCode) {
+        container.innerHTML = '<span class="text-muted">Select a building first</span>';
+        return;
+    }
+
+    const filtered = costCentersState.filter(cc => cc.building_code === buildingCode && cc.active);
+    if (!filtered.length) {
+        container.innerHTML = '<span class="text-muted">No cost centers for this building</span>';
+        return;
+    }
+
+    container.innerHTML = filtered.map(cc =>
+        `<label class="radio-label">
+            <input type="radio" name="procCostCenter" value="${cc.id}" required>
+            <span class="radio-text"><strong>${escapeHtml(cc.code)}</strong> — ${escapeHtml(cc.name)}</span>
+        </label>`
+    ).join('');
+}
+
+async function handleProcCreateOrder(e) {
+    e.preventDefault();
+
+    const building = document.getElementById('procBuilding')?.value;
+    if (!building) { alert('Please select a building'); return; }
+
+    const selectedCC = document.querySelector('input[name="procCostCenter"]:checked');
+    if (!selectedCC) { alert('Please select a cost center'); return; }
+
+    const payload = {
+        building: building,
+        costCenterId: parseInt(selectedCC.value, 10),
+        itemDescription: document.getElementById('procItemDescription')?.value.trim() || '',
+        partNumber: document.getElementById('procPartNumber')?.value.trim() || '',
+        category: document.getElementById('procCategory')?.value.trim() || '',
+        quantity: parseInt(document.getElementById('procQuantity')?.value, 10) || 1,
+        dateNeeded: document.getElementById('procDateNeeded')?.value || '',
+        priority: document.getElementById('procPriority')?.value || 'Normal',
+        notes: document.getElementById('procNotes')?.value.trim() || '',
+        requester: currentUser.name,
+        requesterEmail: currentUser.email
+    };
+
+    if (!payload.itemDescription) { alert('Item description is required'); return; }
+    if (!payload.dateNeeded) { alert('Date needed is required'); return; }
+
+    try {
+        const res = await apiPost('/orders', payload);
+        if (res.success) {
+            alert('Order created successfully!');
+            closeProcCreateOrderModal();
+            loadOrders();
+        } else {
+            alert('Failed to create order: ' + (res.message || 'Unknown error'));
+        }
+    } catch (err) {
+        alert('Failed to create order: ' + err.message);
+    }
+}
+
+// ⭐ Attach form handlers on DOMContentLoaded
+document.addEventListener('DOMContentLoaded', () => {
+    const procForm = document.getElementById('procCreateOrderForm');
+    if (procForm) {
+        procForm.addEventListener('submit', handleProcCreateOrder);
+    }
+
+    const cqForm = document.getElementById('createQuoteForm');
+    if (cqForm) {
+        cqForm.addEventListener('submit', handleCreateQuote);
+    }
+});

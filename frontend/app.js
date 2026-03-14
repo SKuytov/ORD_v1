@@ -291,7 +291,7 @@ function resetFiltersOnLogout() {
     currentPage = 1;
 }
 
-// ===================== DELIVERY TIMELINE LOGIC =====================
+// =============== DELIVERY TIMELINE LOGIC ===============
 
 function getDeliveryStatus(order) {
     if (order.status === 'Delivered') return 'delivered';
@@ -348,7 +348,7 @@ function isOldDelivered(order) {
     return false;
 }
 
-// ===================== FILTERING =====================
+// =============== FILTERING ===============
 
 function applyFilters() {
     filteredOrders = ordersState.filter(order => {
@@ -402,7 +402,7 @@ function applyFilters() {
     renderOrdersTable();
 }
 
-// ===================== AUTH =====================
+// =============== AUTH ===============
 
 async function checkAuth() {
     const token = localStorage.getItem('authToken');
@@ -498,47 +498,40 @@ function showDashboard() {
         createOrderSection.classList.add('hidden');
         navTabs.classList.remove('hidden');
         populateStatusFilter();
-        const orderActionsContainer = document.getElementById('orderActionsContainer');
-        if (orderActionsContainer) orderActionsContainer.style.display = 'flex';
         if (currentUser.role === 'admin') {
             if (usersTabButton) usersTabButton.hidden = false;
             if (buildingsTabButton) buildingsTabButton.hidden = false;
             if (costCentersTabButton) costCentersTabButton.hidden = false;
         }
+        const orderActionsContainer = document.getElementById('orderActionsContainer');
+        if (orderActionsContainer) orderActionsContainer.style.display = 'flex';
+        if (orderActionsBar) orderActionsBar.style.display = 'none';
         const btnProcCreate = document.getElementById('btnProcurementCreateOrder');
         if (btnProcCreate) btnProcCreate.classList.remove('hidden');
     }
 
-    document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
-    const ordersTabEl = document.getElementById('ordersTab');
-    if (ordersTabEl) ordersTabEl.classList.remove('hidden');
-    currentTab = 'ordersTab';
+    loadInitialData();
+}
 
-    loadBuildings();
-    loadCostCenters();
-    if (currentUser.role === 'admin' || currentUser.role === 'procurement') {
-        loadSuppliers().then(() => { populateSupplierFilter(); });
+async function loadInitialData() {
+    await Promise.all([loadBuildings(), loadSuppliers(), loadCostCenters()]);
+    populateBuildingSelects();
+    populateSupplierFilter();
+    populateBuildingFilter();
+    await loadOrders();
+    if (currentUser.role === 'admin' || currentUser.role === 'procurement' || currentUser.role === 'manager') {
+        loadQuotes();
     }
-    loadOrders();
-    if (currentUser.role !== 'requester') { loadQuotes(); }
-    if (currentUser.role === 'admin') { loadUsers(); }
+    if (currentUser.role === 'admin') {
+        loadUsers();
+    }
 }
 
-// API helpers
-async function apiGet(path, params = {}) {
-    const url = new URL(`${API_BASE}${path}`, window.location.origin);
-    Object.entries(params).forEach(([k, v]) => {
-        if (v !== '' && v !== undefined && v !== null) url.searchParams.set(k, v);
-    });
-    const res = await fetch(url.toString(), { headers: { 'Authorization': `Bearer ${authToken}` } });
-    return res.json();
-}
+// =============== API HELPERS ===============
 
-async function apiPut(path, body) {
+async function apiGet(path) {
     const res = await fetch(`${API_BASE}${path}`, {
-        method: 'PUT',
-        headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+        headers: { 'Authorization': `Bearer ${authToken}` }
     });
     return res.json();
 }
@@ -546,7 +539,16 @@ async function apiPut(path, body) {
 async function apiPost(path, body) {
     const res = await fetch(`${API_BASE}${path}`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+        body: JSON.stringify(body)
+    });
+    return res.json();
+}
+
+async function apiPut(path, body) {
+    const res = await fetch(`${API_BASE}${path}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
         body: JSON.stringify(body)
     });
     return res.json();
@@ -560,947 +562,1164 @@ async function apiDelete(path) {
     return res.json();
 }
 
-// ===================== COST CENTERS =====================
+// =============== DATA LOADING ===============
+
+async function loadOrders() {
+    try {
+        const data = await apiGet('/orders');
+        if (data.success) {
+            ordersState = data.orders;
+            applyFilters();
+        }
+    } catch (err) {
+        console.error('Failed to load orders:', err);
+    }
+}
+
+async function loadSuppliers() {
+    try {
+        const data = await apiGet('/suppliers');
+        if (data.success) { suppliersState = data.suppliers; renderSuppliersTable(); }
+    } catch (err) { console.error('Failed to load suppliers:', err); }
+}
+
+async function loadBuildings() {
+    try {
+        const data = await apiGet('/buildings');
+        if (data.success) { buildingsState = data.buildings; renderBuildingsTable(); }
+    } catch (err) { console.error('Failed to load buildings:', err); }
+}
 
 async function loadCostCenters() {
     try {
-        const res = await apiGet('/cost-centers');
-        if (res.success) {
-            costCentersState = res.costCenters;
-            if (currentUser && currentUser.role === 'requester') renderCostCenterRadios(currentUser.building);
-            if (currentUser && currentUser.role === 'admin') { renderCostCentersTable(); populateCCBuildingSelects(); }
-        }
-    } catch (err) { console.error('loadCostCenters error:', err); }
+        const data = await apiGet('/cost-centers');
+        if (data.success) { costCentersState = data.cost_centers; renderCostCentersTable(); }
+    } catch (err) { console.error('Failed to load cost centers:', err); }
+}
+
+async function loadUsers() {
+    try {
+        const data = await apiGet('/users');
+        if (data.success) { usersState = data.users; renderUsersTable(); }
+    } catch (err) { console.error('Failed to load users:', err); }
+}
+
+async function loadQuotes() {
+    try {
+        const data = await apiGet('/quotes');
+        if (data.success) { quotesState = data.quotes; renderQuotesTable(); }
+    } catch (err) { console.error('Failed to load quotes:', err); }
+}
+
+// =============== POPULATE SELECTS ===============
+
+function populateBuildingSelects() {
+    // For order creation form (requester)
+    const activeBuildings = buildingsState.filter(b => b.is_active);
+    buildingSelect.innerHTML = '<option value="">-- Select Building --</option>';
+    activeBuildings.forEach(b => {
+        buildingSelect.innerHTML += `<option value="${b.code}">${b.code} - ${b.name}</option>`;
+    });
+
+    // For procurement create order modal
+    const procBuildingSelect = document.getElementById('procBuilding');
+    if (procBuildingSelect) {
+        procBuildingSelect.innerHTML = '<option value="">-- Select Building --</option>';
+        activeBuildings.forEach(b => {
+            procBuildingSelect.innerHTML += `<option value="${b.code}">${b.code} - ${b.name}</option>`;
+        });
+    }
+
+    // For user form
+    if (userBuildingSelect) {
+        userBuildingSelect.innerHTML = '<option value="">-- No Building --</option>';
+        activeBuildings.forEach(b => {
+            userBuildingSelect.innerHTML += `<option value="${b.code}">${b.code} - ${b.name}</option>`;
+        });
+    }
+
+    // For cost center form
+    if (ccBuildingSelect) {
+        ccBuildingSelect.innerHTML = '<option value="">-- Select Building --</option>';
+        activeBuildings.forEach(b => {
+            ccBuildingSelect.innerHTML += `<option value="${b.id}">${b.code} - ${b.name}</option>`;
+        });
+    }
+
+    // For cost center filter
+    if (ccFilterBuilding) {
+        ccFilterBuilding.innerHTML = '<option value="">All Buildings</option>';
+        activeBuildings.forEach(b => {
+            ccFilterBuilding.innerHTML += `<option value="${b.id}">${b.code} - ${b.name}</option>`;
+        });
+    }
+}
+
+function populateSupplierFilter() {
+    if (!filterSupplier) return;
+    filterSupplier.innerHTML = '<option value="">All Suppliers</option>';
+    suppliersState.filter(s => s.is_active).forEach(s => {
+        filterSupplier.innerHTML += `<option value="${s.id}">${s.name}</option>`;
+    });
+    // Also populate procurement modal supplier select
+    const procSupplierSelect = document.getElementById('procSupplier');
+    if (procSupplierSelect) {
+        procSupplierSelect.innerHTML = '<option value="">-- No Supplier --</option>';
+        suppliersState.filter(s => s.is_active).forEach(s => {
+            procSupplierSelect.innerHTML += `<option value="${s.id}">${s.name}</option>`;
+        });
+    }
+}
+
+function populateBuildingFilter() {
+    if (!filterBuilding) return;
+    filterBuilding.innerHTML = '<option value="">All Buildings</option>';
+    buildingsState.filter(b => b.is_active).forEach(b => {
+        filterBuilding.innerHTML += `<option value="${b.code}">${b.code} - ${b.name}</option>`;
+    });
+}
+
+function populateStatusFilter() {
+    if (!filterStatus) return;
+    filterStatus.innerHTML = '<option value="">All Statuses</option>';
+    ORDER_STATUSES.forEach(s => {
+        filterStatus.innerHTML += `<option value="${s}">${s}</option>`;
+    });
 }
 
 function renderCostCenterRadios(buildingCode) {
     if (!costCenterRadios) return;
-    if (!buildingCode) { costCenterRadios.innerHTML = '<span class="text-muted">Select a building first</span>'; return; }
-    const filtered = costCentersState.filter(cc => cc.building_code === buildingCode && cc.active);
-    if (!filtered.length) { costCenterRadios.innerHTML = '<span class="text-muted">No cost centers defined for this building</span>'; return; }
-    costCenterRadios.innerHTML = filtered.map(cc =>
-        `<label class="radio-label"><input type="radio" name="costCenter" value="${cc.id}" required><span class="radio-text"><strong>${escapeHtml(cc.code)}</strong> - ${escapeHtml(cc.name)}</span></label>`
+    const building = buildingsState.find(b => b.code === buildingCode);
+    if (!building) { costCenterRadios.innerHTML = '<p class="text-gray-400 text-sm">Select a building first</p>'; return; }
+    const ccs = costCentersState.filter(cc => cc.building_id === building.id && cc.is_active);
+    if (ccs.length === 0) {
+        costCenterRadios.innerHTML = '<p class="text-gray-400 text-sm">No cost centers for this building</p>';
+        return;
+    }
+    costCenterRadios.innerHTML = ccs.map(cc =>
+        `<label class="flex items-center gap-2 cursor-pointer">
+            <input type="radio" name="cost_center_id" value="${cc.id}" class="accent-blue-500">
+            <span>${cc.code} - ${cc.name}</span>
+        </label>`
     ).join('');
 }
 
-function populateCCBuildingSelects() {
-    if (ccBuildingSelect) {
-        ccBuildingSelect.innerHTML = '<option value="">Select Building</option>' +
-            buildingsState.filter(b => b.active).map(b => `<option value="${b.code}">${escapeHtml(b.code)} - ${escapeHtml(b.name)}</option>`).join('');
+// =============== ORDERS TABLE ===============
+
+function renderOrdersTable() {
+    const tbody = ordersTable.querySelector('tbody');
+    const totalOrders = filteredOrders.length;
+    const totalPages = Math.max(1, Math.ceil(totalOrders / ORDERS_PER_PAGE));
+    if (currentPage > totalPages) currentPage = totalPages;
+
+    const start = (currentPage - 1) * ORDERS_PER_PAGE;
+    const end = start + ORDERS_PER_PAGE;
+    const pageOrders = filteredOrders.slice(start, end);
+
+    const isAdmin = currentUser && (currentUser.role === 'admin' || currentUser.role === 'procurement' || currentUser.role === 'manager');
+
+    if (viewMode === 'grouped') {
+        renderGroupedView(pageOrders, tbody, isAdmin);
+    } else {
+        renderFlatView(pageOrders, tbody, isAdmin);
     }
-    if (ccFilterBuilding) {
-        ccFilterBuilding.innerHTML = '<option value="">All Buildings</option>' +
-            buildingsState.filter(b => b.active).map(b => `<option value="${b.code}">${escapeHtml(b.code)} - ${escapeHtml(b.name)}</option>`).join('');
-    }
+    renderPagination(totalOrders, totalPages);
+    updateSelectedCount();
 }
 
-function renderCostCentersTable() {
-    if (!costCentersTable) return;
-    const filterVal = ccFilterBuilding ? ccFilterBuilding.value : '';
-    const filtered = filterVal ? costCentersState.filter(cc => cc.building_code === filterVal) : costCentersState;
-    if (!filtered.length) { costCentersTable.innerHTML = '<p class="text-muted">No cost centers found.</p>'; return; }
-    let html = '<div class="table-wrapper"><table><thead><tr><th>Building</th><th>Code</th><th>Name</th><th>Active</th><th></th></tr></thead><tbody>';
-    for (const cc of filtered) {
-        html += `<tr data-id="${cc.id}"><td>${escapeHtml(cc.building_code)}</td><td>${escapeHtml(cc.code)}</td><td>${escapeHtml(cc.name)}</td><td>${cc.active ? 'Yes' : 'No'}</td><td><button class="btn btn-secondary btn-sm btn-edit-cc" data-id="${cc.id}">Edit</button></td></tr>`;
+function renderFlatView(orders, tbody, isAdmin) {
+    if (orders.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="${isAdmin ? 10 : 6}" class="text-center text-gray-400 py-8">No orders found</td></tr>`;
+        return;
     }
-    html += '</tbody></table></div>';
-    costCentersTable.innerHTML = html;
-    document.querySelectorAll('.btn-edit-cc').forEach(btn => {
-        btn.addEventListener('click', () => { const id = parseInt(btn.dataset.id, 10); const cc = costCentersState.find(x => x.id === id); if (cc) openCostCenterForm(cc); });
+    tbody.innerHTML = orders.map(order => renderOrderRow(order, isAdmin)).join('');
+    attachOrderRowListeners();
+}
+
+function renderGroupedView(orders, tbody, isAdmin) {
+    if (orders.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="${isAdmin ? 10 : 6}" class="text-center text-gray-400 py-8">No orders found</td></tr>`;
+        return;
+    }
+    const grouped = {};
+    orders.forEach(order => {
+        const key = order.building || 'Unknown';
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push(order);
+    });
+    const sortedBuildings = Object.keys(grouped).sort();
+    let html = '';
+    sortedBuildings.forEach(building => {
+        html += `<tr class="bg-gray-750"><td colspan="${isAdmin ? 10 : 6}" class="px-4 py-2 font-semibold text-blue-300 text-sm">Building: ${building} (${grouped[building].length} order${grouped[building].length !== 1 ? 's' : ''})</td></tr>`;
+        html += grouped[building].map(order => renderOrderRow(order, isAdmin)).join('');
+    });
+    tbody.innerHTML = html;
+    attachOrderRowListeners();
+}
+
+function renderOrderRow(order, isAdmin) {
+    const deliveryStatus = getDeliveryStatus(order);
+    const deliveryBadge = getDeliveryBadgeHtml(deliveryStatus);
+    const isOld = isOldDelivered(order);
+    const rowClass = isOld ? 'order-row opacity-50' : 'order-row';
+    const checked = selectedOrderIds.has(order.id) ? 'checked' : '';
+
+    if (!isAdmin) {
+        return `<tr class="${rowClass} cursor-pointer hover:bg-gray-700" data-id="${order.id}">
+            <td class="px-3 py-2 text-xs text-gray-400">#${order.id}</td>
+            <td class="px-3 py-2 text-sm">${order.item_description || ''}</td>
+            <td class="px-3 py-2">${renderStatusBadge(order.status)}</td>
+            <td class="px-3 py-2">${renderPriorityBadge(order.priority)}</td>
+            <td class="px-3 py-2 text-sm">${deliveryBadge}</td>
+            <td class="px-3 py-2 text-xs text-gray-400">${order.created_at ? new Date(order.created_at).toLocaleDateString() : '-'}</td>
+        </tr>`;
+    }
+
+    return `<tr class="${rowClass} cursor-pointer hover:bg-gray-700" data-id="${order.id}">
+        <td class="px-3 py-2" onclick="event.stopPropagation()">
+            <input type="checkbox" class="order-checkbox" data-id="${order.id}" ${checked}>
+        </td>
+        <td class="px-3 py-2 text-xs text-gray-400">#${order.id}</td>
+        <td class="px-3 py-2 text-sm max-w-xs truncate">${order.item_description || ''}</td>
+        <td class="px-3 py-2 text-xs">${order.building || '-'}</td>
+        <td class="px-3 py-2">${renderStatusBadge(order.status)}</td>
+        <td class="px-3 py-2">${renderPriorityBadge(order.priority)}</td>
+        <td class="px-3 py-2 text-xs">${order.supplier_name || '-'}</td>
+        <td class="px-3 py-2 text-sm">${deliveryBadge}</td>
+        <td class="px-3 py-2 text-xs text-gray-400">${order.expected_delivery_date || '-'}</td>
+        <td class="px-3 py-2 text-xs text-gray-400">${order.created_at ? new Date(order.created_at).toLocaleDateString() : '-'}</td>
+    </tr>`;
+}
+
+function attachOrderRowListeners() {
+    ordersTable.querySelectorAll('.order-row').forEach(row => {
+        row.addEventListener('click', () => {
+            const id = parseInt(row.dataset.id);
+            showOrderDetail(id);
+        });
+    });
+    ordersTable.querySelectorAll('.order-checkbox').forEach(cb => {
+        cb.addEventListener('change', () => {
+            const id = parseInt(cb.dataset.id);
+            if (cb.checked) selectedOrderIds.add(id);
+            else selectedOrderIds.delete(id);
+            updateSelectedCount();
+        });
     });
 }
 
-function openCostCenterForm(cc) {
-    if (!costCenterFormCard) return;
-    if (cc) {
-        costCenterFormTitle.textContent = 'Edit Cost Center';
-        costCenterIdInput.value = cc.id;
-        ccBuildingSelect.value = cc.building_code || '';
-        ccCodeInput.value = cc.code || '';
-        ccNameInput.value = cc.name || '';
-        ccDescriptionInput.value = cc.description || '';
-        ccActiveSelect.value = cc.active ? '1' : '0';
-        if (btnDeleteCostCenter) btnDeleteCostCenter.hidden = false;
-    } else {
-        costCenterFormTitle.textContent = 'Create Cost Center';
-        costCenterForm.reset();
-        costCenterIdInput.value = '';
-        ccActiveSelect.value = '1';
-        if (btnDeleteCostCenter) btnDeleteCostCenter.hidden = true;
+function renderPagination(totalOrders, totalPages) {
+    const container = document.getElementById('paginationContainer');
+    if (!container) return;
+    if (totalPages <= 1) { container.innerHTML = ''; return; }
+    let html = `<div class="flex items-center gap-2 mt-4 justify-center">`;
+    html += `<button onclick="gotoPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''} class="px-3 py-1 rounded bg-gray-700 text-sm ${currentPage === 1 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-600'}">Prev</button>`;
+    const maxButtons = 7;
+    let startPage = Math.max(1, currentPage - 3);
+    let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+    if (endPage - startPage < maxButtons - 1) startPage = Math.max(1, endPage - maxButtons + 1);
+    if (startPage > 1) html += `<button onclick="gotoPage(1)" class="px-3 py-1 rounded bg-gray-700 text-sm hover:bg-gray-600">1</button>${startPage > 2 ? '<span class="text-gray-400">...</span>' : ''}`;
+    for (let p = startPage; p <= endPage; p++) {
+        html += `<button onclick="gotoPage(${p})" class="px-3 py-1 rounded text-sm ${p === currentPage ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600'}">${p}</button>`;
     }
-    costCenterFormCard.hidden = false;
+    if (endPage < totalPages) html += `${endPage < totalPages - 1 ? '<span class="text-gray-400">...</span>' : ''}<button onclick="gotoPage(${totalPages})" class="px-3 py-1 rounded bg-gray-700 text-sm hover:bg-gray-600">${totalPages}</button>`;
+    html += `<button onclick="gotoPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''} class="px-3 py-1 rounded bg-gray-700 text-sm ${currentPage === totalPages ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-600'}">Next</button>`;
+    html += `<span class="text-gray-400 text-xs ml-2">${totalOrders} orders</span>`;
+    html += `</div>`;
+    container.innerHTML = html;
 }
 
-async function handleSaveCostCenter(e) {
-    e.preventDefault();
-    const payload = {
-        building_code: ccBuildingSelect.value,
-        code: ccCodeInput.value.trim(),
-        name: ccNameInput.value.trim(),
-        description: ccDescriptionInput.value.trim(),
-        active: ccActiveSelect.value === '1'
+function gotoPage(page) {
+    const totalPages = Math.max(1, Math.ceil(filteredOrders.length / ORDERS_PER_PAGE));
+    if (page < 1 || page > totalPages) return;
+    currentPage = page;
+    renderOrdersTable();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function updateSelectedCount() {
+    if (selectedCount) selectedCount.textContent = selectedOrderIds.size;
+    if (orderActionsBar) orderActionsBar.style.display = selectedOrderIds.size > 0 ? 'flex' : 'none';
+}
+
+function renderStatusBadge(status) {
+    const colors = {
+        'New': 'bg-blue-500', 'Pending': 'bg-yellow-500', 'Quote Requested': 'bg-purple-500',
+        'Quote Received': 'bg-indigo-500', 'Quote Under Approval': 'bg-orange-400',
+        'Approved': 'bg-green-600', 'Ordered': 'bg-teal-500',
+        'In Transit': 'bg-cyan-500', 'Partially Delivered': 'bg-lime-500',
+        'Delivered': 'bg-green-500', 'Cancelled': 'bg-red-500', 'On Hold': 'bg-gray-500'
     };
-    if (!payload.building_code || !payload.code || !payload.name) { alert('Building, code, and name are required'); return; }
-    const id = costCenterIdInput.value;
-    const res = id ? await apiPut(`/cost-centers/${id}`, payload) : await apiPost('/cost-centers', payload);
-    if (res.success) { alert('Cost center saved'); costCenterFormCard.hidden = true; loadCostCenters(); }
-    else { alert('Failed to save cost center: ' + (res.message || 'Unknown error')); }
+    const color = colors[status] || 'bg-gray-500';
+    return `<span class="status-badge ${color} text-white">${status || '-'}</span>`;
 }
 
-async function handleDeleteCostCenter() {
-    const id = costCenterIdInput.value;
-    if (!id) return;
-    if (!confirm('Are you sure you want to delete this cost center?')) return;
-    const res = await apiDelete(`/cost-centers/${id}`);
-    if (res.success) { alert('Cost center deleted'); costCenterFormCard.hidden = true; loadCostCenters(); }
-    else { alert('Failed to delete: ' + (res.message || 'Unknown error')); }
+function renderPriorityBadge(priority) {
+    const colors = { 'Urgent': 'bg-red-600', 'High': 'bg-orange-500', 'Normal': 'bg-blue-500', 'Low': 'bg-gray-500' };
+    const color = colors[priority] || 'bg-gray-500';
+    return `<span class="priority-badge ${color} text-white">${priority || '-'}</span>`;
 }
 
-// ===================== ORDERS =====================
+// =============== ORDER DETAIL ===============
+
+async function showOrderDetail(orderId) {
+    const order = ordersState.find(o => o.id === orderId);
+    if (!order) return;
+
+    const isAdmin = currentUser && (currentUser.role === 'admin' || currentUser.role === 'procurement' || currentUser.role === 'manager');
+    const isRequester = currentUser && currentUser.role === 'requester';
+
+    const deliveryStatus = getDeliveryStatus(order);
+
+    // Build attachment list
+    const attachments = (order.files || []).map(f => {
+        // Support legacy absolute paths (/uploads/...) and new filename-only values
+        let url;
+        if (f.path && (f.path.startsWith('/') || f.path.startsWith('http'))) {
+            url = f.path;
+        } else {
+            const filename = f.path || f.name;
+            url = `/uploads/${filename}`;
+        }
+        return `<a href="${url}" target="_blank" class="text-blue-400 hover:underline text-sm flex items-center gap-1">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
+            ${f.name || f.path}
+        </a>`;
+    }).join('');
+
+    // Build history
+    const historyHtml = (order.history || []).length > 0
+        ? (order.history || []).slice().reverse().map(h =>
+            `<div class="text-xs text-gray-400 py-1 border-b border-gray-700">
+                <span class="text-gray-300">${h.changed_by_name || 'System'}</span> changed <span class="text-blue-300">${h.field_name}</span> from <span class="text-red-300">${h.old_value || 'none'}</span> to <span class="text-green-300">${h.new_value || 'none'}</span>
+                <span class="float-right">${h.changed_at ? new Date(h.changed_at).toLocaleString() : ''}</span>
+            </div>`).join('')
+        : '<p class="text-gray-500 text-xs">No history</p>';
+
+    // Admin controls
+    let adminControls = '';
+    if (isAdmin) {
+        const statusOptions = ORDER_STATUSES.map(s =>
+            `<option value="${s}" ${order.status === s ? 'selected' : ''}>${s}</option>`
+        ).join('');
+        const supplierOptions = ['<option value="">-- No Supplier --</option>',
+            ...suppliersState.filter(s => s.is_active).map(s =>
+                `<option value="${s.id}" ${order.supplier_id === s.id ? 'selected' : ''}>${s.name}</option>`
+            )].join('');
+        adminControls = `
+            <div class="mt-4 p-4 bg-gray-750 rounded-lg border border-gray-600">
+                <h4 class="text-sm font-semibold text-gray-300 mb-3">Order Management</h4>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-xs text-gray-400">Status</label>
+                        <select id="detailStatus" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm mt-1">${statusOptions}</select>
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-400">Priority</label>
+                        <select id="detailPriority" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm mt-1">
+                            <option value="Normal" ${order.priority === 'Normal' ? 'selected' : ''}>Normal</option>
+                            <option value="High" ${order.priority === 'High' ? 'selected' : ''}>High</option>
+                            <option value="Urgent" ${order.priority === 'Urgent' ? 'selected' : ''}>Urgent</option>
+                            <option value="Low" ${order.priority === 'Low' ? 'selected' : ''}>Low</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-400">Supplier</label>
+                        <select id="detailSupplier" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm mt-1">${supplierOptions}</select>
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-400">Quote Number</label>
+                        <input id="detailQuoteNumber" type="text" value="${order.quote_number || ''}" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm mt-1" placeholder="Quote #">
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-400">Unit Price</label>
+                        <input id="detailUnitPrice" type="number" step="0.01" min="0" value="${order.unit_price || ''}" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm mt-1">
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-400">Expected Delivery</label>
+                        <input id="detailDeliveryDate" type="date" value="${order.expected_delivery_date || ''}" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm mt-1 date-picker">
+                    </div>
+                    <div class="col-span-2">
+                        <label class="text-xs text-gray-400">Internal Notes</label>
+                        <textarea id="detailNotes" rows="2" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm mt-1" placeholder="Internal notes...">${order.internal_notes || ''}</textarea>
+                    </div>
+                </div>
+                <div class="flex gap-2 mt-3">
+                    <button onclick="saveOrderChanges(${order.id})" class="btn-primary text-sm px-4 py-1.5">Save Changes</button>
+                    <button onclick="deleteOrder(${order.id})" class="bg-red-600 hover:bg-red-700 text-white text-sm px-4 py-1.5 rounded">Delete</button>
+                </div>
+            </div>`;
+    }
+
+    // Requester: cancel button
+    let requesterControls = '';
+    if (isRequester && (order.status === 'New' || order.status === 'Pending')) {
+        requesterControls = `
+            <div class="mt-4">
+                <button onclick="cancelOrder(${order.id})" class="bg-red-600 hover:bg-red-700 text-white text-sm px-4 py-1.5 rounded">Cancel Order</button>
+            </div>`;
+    }
+
+    orderDetailBody.innerHTML = `
+        <div class="space-y-4">
+            <div class="grid grid-cols-2 gap-4">
+                <div><span class="text-gray-400 text-xs">Order ID</span><p class="text-sm font-mono">#${order.id}</p></div>
+                <div><span class="text-gray-400 text-xs">Status</span><p>${renderStatusBadge(order.status)}</p></div>
+                <div><span class="text-gray-400 text-xs">Building</span><p class="text-sm">${order.building || '-'}</p></div>
+                <div><span class="text-gray-400 text-xs">Priority</span><p>${renderPriorityBadge(order.priority)}</p></div>
+                <div><span class="text-gray-400 text-xs">Cost Center</span><p class="text-sm">${order.cost_center_code ? `${order.cost_center_code} - ${order.cost_center_name || ''}` : '-'}</p></div>
+                <div><span class="text-gray-400 text-xs">Requester</span><p class="text-sm">${order.requester_name || '-'}</p></div>
+                <div><span class="text-gray-400 text-xs">Item Description</span><p class="text-sm">${order.item_description || '-'}</p></div>
+                <div><span class="text-gray-400 text-xs">Part Number</span><p class="text-sm font-mono">${order.part_number || '-'}</p></div>
+                <div><span class="text-gray-400 text-xs">Category</span><p class="text-sm">${order.category || '-'}</p></div>
+                <div><span class="text-gray-400 text-xs">Quantity</span><p class="text-sm">${order.quantity || '-'} ${order.unit || ''}</p></div>
+                <div><span class="text-gray-400 text-xs">Supplier</span><p class="text-sm">${order.supplier_name || '-'}</p></div>
+                <div><span class="text-gray-400 text-xs">Unit Price</span><p class="text-sm">${fmtPrice(order.unit_price)}</p></div>
+                <div><span class="text-gray-400 text-xs">Quote Number</span><p class="text-sm font-mono">${order.quote_number || '-'}</p></div>
+                <div><span class="text-gray-400 text-xs">Delivery Status</span><p>${getDeliveryBadgeHtml(deliveryStatus)}</p></div>
+                <div><span class="text-gray-400 text-xs">Expected Delivery</span><p class="text-sm">${order.expected_delivery_date || '-'}</p></div>
+                <div><span class="text-gray-400 text-xs">Notes</span><p class="text-sm">${order.notes || '-'}</p></div>
+                <div><span class="text-gray-400 text-xs">Created</span><p class="text-sm">${order.created_at ? new Date(order.created_at).toLocaleString() : '-'}</p></div>
+            </div>
+            ${attachments ? `<div><span class="text-gray-400 text-xs block mb-1">Attachments</span><div class="flex flex-col gap-1">${attachments}</div></div>` : ''}
+            ${adminControls}
+            ${requesterControls}
+            <div>
+                <span class="text-gray-400 text-xs block mb-1">History</span>
+                <div class="max-h-40 overflow-y-auto">${historyHtml}</div>
+            </div>
+        </div>`;
+
+    orderDetailPanel.classList.remove('hidden');
+}
+
+async function saveOrderChanges(orderId) {
+    const status = document.getElementById('detailStatus').value;
+    const priority = document.getElementById('detailPriority').value;
+    const supplier_id = document.getElementById('detailSupplier').value;
+    const quote_number = document.getElementById('detailQuoteNumber').value.trim();
+    const unit_price = document.getElementById('detailUnitPrice').value;
+    const expected_delivery_date = document.getElementById('detailDeliveryDate').value;
+    const internal_notes = document.getElementById('detailNotes').value.trim();
+
+    try {
+        const res = await apiPut(`/orders/${orderId}`, {
+            status, priority,
+            supplier_id: supplier_id ? parseInt(supplier_id) : null,
+            quote_number, unit_price: unit_price ? parseFloat(unit_price) : null,
+            expected_delivery_date: expected_delivery_date || null,
+            internal_notes
+        });
+        if (res.success) {
+            showToast('Order updated!');
+            await loadOrders();
+            showOrderDetail(orderId);
+        } else {
+            showToast(res.message || 'Update failed', true);
+        }
+    } catch (err) {
+        showToast('Update failed', true);
+    }
+}
+
+async function deleteOrder(orderId) {
+    if (!confirm('Delete this order?')) return;
+    try {
+        const res = await apiDelete(`/orders/${orderId}`);
+        if (res.success) {
+            showToast('Order deleted');
+            orderDetailPanel.classList.add('hidden');
+            await loadOrders();
+        } else {
+            showToast(res.message || 'Delete failed', true);
+        }
+    } catch { showToast('Delete failed', true); }
+}
+
+async function cancelOrder(orderId) {
+    if (!confirm('Cancel this order?')) return;
+    try {
+        const res = await apiPut(`/orders/${orderId}`, { status: 'Cancelled' });
+        if (res.success) {
+            showToast('Order cancelled');
+            orderDetailPanel.classList.add('hidden');
+            await loadOrders();
+        } else {
+            showToast(res.message || 'Cancel failed', true);
+        }
+    } catch { showToast('Cancel failed', true); }
+}
+
+// =============== CREATE ORDER (REQUESTER) ===============
 
 async function handleCreateOrder(e) {
     e.preventDefault();
-    const selectedCC = document.querySelector('input[name="costCenter"]:checked');
-    if (!selectedCC) { alert('Please select a Cost Center'); return; }
-    const formData = new FormData();
-    formData.append('building', buildingSelect.value);
-    formData.append('costCenterId', selectedCC.value);
-    formData.append('itemDescription', document.getElementById('itemDescription').value.trim());
-    formData.append('partNumber', document.getElementById('partNumber').value.trim());
-    formData.append('category', document.getElementById('category').value.trim());
-    formData.append('quantity', document.getElementById('quantity').value);
-    formData.append('dateNeeded', document.getElementById('dateNeeded').value);
-    formData.append('priority', document.getElementById('priority').value);
-    formData.append('notes', document.getElementById('notes').value.trim());
-    formData.append('requester', currentUser.name);
-    formData.append('requesterEmail', currentUser.email);
-    const files = document.getElementById('attachments').files;
-    for (let i = 0; i < files.length; i++) formData.append('files', files[i]);
-    if (window.UploadProgress) window.UploadProgress.show();
-    return new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.upload.addEventListener('progress', (e) => {
-            if (e.lengthComputable && window.UploadProgress) window.UploadProgress.update((e.loaded / e.total) * 100);
-        });
-        xhr.addEventListener('load', () => {
-            if (window.UploadProgress) window.UploadProgress.hide();
-            try {
-                const data = JSON.parse(xhr.responseText);
-                if (!data.success) { alert('Failed to create order: ' + (data.message || 'Unknown error')); reject(new Error(data.message)); return; }
-                alert('Order created successfully!');
-                createOrderForm.reset();
-                if (currentUser.role === 'requester') { buildingSelect.value = currentUser.building; renderCostCenterRadios(currentUser.building); }
-                loadOrders();
-                resolve(data);
-            } catch (err) { alert('Failed to process server response.'); reject(err); }
-        });
-        xhr.addEventListener('error', () => { if (window.UploadProgress) window.UploadProgress.hide(); alert('Failed to create order. Network error.'); reject(new Error('Network error')); });
-        xhr.addEventListener('abort', () => { if (window.UploadProgress) window.UploadProgress.hide(); alert('Upload cancelled.'); reject(new Error('Upload cancelled')); });
-        xhr.open('POST', `${API_BASE}/orders`);
-        xhr.setRequestHeader('Authorization', `Bearer ${authToken}`);
-        xhr.send(formData);
-    });
-}
+    const formData = new FormData(createOrderForm);
+    const costCenterId = formData.get('cost_center_id');
+    if (!costCenterId) { showToast('Please select a cost center', true); return; }
 
-async function loadOrders() {
     try {
-        const res = await apiGet('/orders');
-        if (res.success) {
-            ordersState = res.orders;
-            filteredOrders = ordersState;
-            selectedOrderIds.clear();
-            updateSelectionUi();
-            currentPage = 1;
-            applyFilters();
+        const res = await fetch(`${API_BASE}/orders`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${authToken}` },
+            body: formData
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast('Order created!');
+            createOrderForm.reset();
+            costCenterRadios.innerHTML = '<p class="text-gray-400 text-sm">Select a building first</p>';
+            await loadOrders();
+        } else {
+            showToast(data.message || 'Failed to create order', true);
         }
     } catch (err) {
-        console.error('loadOrders error:', err);
-        ordersTable.innerHTML = '<p>Failed to load orders.</p>';
+        showToast('Failed to create order', true);
     }
 }
 
-function renderPaginationControls(totalOrders) {
-    const totalPages = Math.ceil(totalOrders / ORDERS_PER_PAGE);
-    if (totalPages <= 1) return '';
-    let html = '<div class="pagination-controls">';
-    html += `<div class="pagination-info">Page ${currentPage} of ${totalPages} (${totalOrders} orders)</div>`;
-    html += '<div class="pagination-buttons">';
-    html += `<button class="btn-pagination" data-page="1" ${currentPage === 1 ? 'disabled' : ''}>First</button>`;
-    html += `<button class="btn-pagination" data-page="${currentPage - 1}" ${currentPage === 1 ? 'disabled' : ''}>Previous</button>`;
-    const startPage = Math.max(1, currentPage - 2);
-    const endPage = Math.min(totalPages, currentPage + 2);
-    if (startPage > 1) html += '<span class="pagination-ellipsis">...</span>';
-    for (let i = startPage; i <= endPage; i++) {
-        html += `<button class="btn-pagination ${i === currentPage ? 'active' : ''}" data-page="${i}">${i}</button>`;
-    }
-    if (endPage < totalPages) html += '<span class="pagination-ellipsis">...</span>';
-    html += `<button class="btn-pagination" data-page="${currentPage + 1}" ${currentPage === totalPages ? 'disabled' : ''}>Next</button>`;
-    html += `<button class="btn-pagination" data-page="${totalPages}" ${currentPage === totalPages ? 'disabled' : ''}>Last</button>`;
-    html += '</div></div>';
-    return html;
-}
-
-function attachPaginationListeners() {
-    document.querySelectorAll('.btn-pagination').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const page = parseInt(btn.dataset.page, 10);
-            if (!isNaN(page) && page > 0) {
-                currentPage = page;
-                renderOrdersTable();
-                ordersTable.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-        });
-    });
-}
-
-function renderOrdersTable() {
-    const activeOrders = filteredOrders.filter(o => !isOldDelivered(o));
-    const oldDelivered = filteredOrders.filter(o => isOldDelivered(o));
-    if (!activeOrders.length && !oldDelivered.length) {
-        ordersTable.innerHTML = '<p class="text-muted">No orders found.</p>';
-        return;
-    }
-    if (viewMode === 'grouped') renderGroupedOrders(activeOrders, oldDelivered);
-    else renderFlatOrders(activeOrders, oldDelivered);
-}
-
-function renderFlatOrders(activeOrders, oldDelivered) {
-    const isAdminView = currentUser.role !== 'requester';
-    const canSelectOrders = currentUser.role === 'admin' || currentUser.role === 'procurement';
-    let html = '';
-    if (activeOrders.length > 0) {
-        const startIdx = (currentPage - 1) * ORDERS_PER_PAGE;
-        const endIdx = startIdx + ORDERS_PER_PAGE;
-        const paginatedOrders = activeOrders.slice(startIdx, endIdx);
-        html += '<div class="table-wrapper"><table><thead><tr>';
-        if (canSelectOrders) html += '<th class="sticky"><input type="checkbox" id="selectAllOrders"></th>';
-        html += '<th>ID</th><th></th><th>Item</th><th>Cost Center</th><th>Qty</th><th>Status</th><th>Priority</th><th>Files</th>';
-        if (isAdminView) {
-            html += '<th>Requester</th><th>Delivery</th><th>Needed</th><th>Supplier</th><th>Lifecycle</th><th>Building</th><th>Unit</th><th>Total</th>';
-        } else {
-            html += '<th>Delivery</th><th>Needed</th>';
-        }
-        html += '</tr></thead><tbody>';
-        for (const order of paginatedOrders) html += renderOrderRow(order, canSelectOrders, isAdminView);
-        html += '</tbody></table></div>';
-        html += renderPaginationControls(activeOrders.length);
-    }
-    if (oldDelivered.length > 0) {
-        html += '<div class="old-delivered-section" style="margin-top: 1.5rem;">';
-        html += `<div class="old-delivered-header" onclick="this.parentElement.classList.toggle('expanded')">`;
-        html += `<span class="old-delivered-title">Delivered Orders (>7 days ago)</span>`;
-        html += `<span class="old-delivered-count">${oldDelivered.length} orders</span>`;
-        html += `<span class="old-delivered-chevron">v</span></div>`;
-        html += '<div class="old-delivered-body"><div class="table-wrapper"><table><thead><tr>';
-        if (canSelectOrders) html += '<th class="sticky"><input type="checkbox" id="selectAllOldOrders"></th>';
-        html += '<th>ID</th><th></th><th>Item</th><th>Cost Center</th><th>Qty</th><th>Status</th><th>Priority</th><th>Files</th>';
-        if (isAdminView) html += '<th>Requester</th><th>Delivered</th><th>Supplier</th><th>Building</th><th>Unit</th><th>Total</th>';
-        else html += '<th>Delivered</th>';
-        html += '</tr></thead><tbody>';
-        for (const order of oldDelivered) html += renderOrderRow(order, canSelectOrders, isAdminView);
-        html += '</tbody></table></div></div></div>';
-    }
-    ordersTable.innerHTML = html;
-    attachOrderEventListeners(canSelectOrders);
-    attachPaginationListeners();
-}
-
-function renderGroupedOrders(activeOrders, oldDelivered) {
-    const isAdminView = currentUser.role !== 'requester';
-    const canSelectOrders = currentUser.role === 'admin' || currentUser.role === 'procurement';
-    const grouped = {};
-    for (const order of activeOrders) {
-        if (!grouped[order.status]) grouped[order.status] = [];
-        grouped[order.status].push(order);
-    }
-    let html = '';
-    for (const status of ORDER_STATUSES) {
-        if (!grouped[status] || grouped[status].length === 0) continue;
-        const statusClass = 'status-' + status.toLowerCase().replace(/ /g, '-');
-        html += `<div class="status-group"><div class="status-group-header" data-status="${status}"><div class="status-group-title"><span class="status-badge ${statusClass}">${status}</span><span class="status-group-count">${grouped[status].length}</span></div><span class="status-group-chevron">v</span></div><div class="status-group-body" data-status="${status}">`;
-        html += '<div class="table-wrapper"><table><thead><tr>';
-        if (canSelectOrders) html += '<th class="sticky"><input type="checkbox" class="select-all-group" data-status="${status}"></th>';
-        html += '<th>ID</th><th></th><th>Item</th><th>Cost Center</th><th>Qty</th><th>Priority</th><th>Files</th>';
-        if (isAdminView) html += '<th>Requester</th><th>Delivery</th><th>Needed</th><th>Supplier</th><th>Building</th><th>Unit</th><th>Total</th>';
-        else html += '<th>Delivery</th><th>Needed</th>';
-        html += '</tr></thead><tbody>';
-        for (const order of grouped[status]) html += renderOrderRow(order, canSelectOrders, isAdminView);
-        html += '</tbody></table></div></div></div>';
-    }
-    if (oldDelivered.length > 0) {
-        html += '<div class="old-delivered-section" style="margin-top: 1.5rem;">';
-        html += `<div class="old-delivered-header" onclick="this.parentElement.classList.toggle('expanded')"><span class="old-delivered-title">Delivered Orders (>7 days ago)</span><span class="old-delivered-count">${oldDelivered.length} orders</span><span class="old-delivered-chevron">v</span></div>`;
-        html += '<div class="old-delivered-body"><div class="table-wrapper"><table><thead><tr>';
-        if (canSelectOrders) html += '<th class="sticky"><input type="checkbox" id="selectAllOldOrders"></th>';
-        html += '<th>ID</th><th></th><th>Item</th><th>Cost Center</th><th>Qty</th><th>Status</th><th>Priority</th><th>Files</th>';
-        if (isAdminView) html += '<th>Requester</th><th>Delivered</th><th>Supplier</th><th>Building</th><th>Unit</th><th>Total</th>';
-        else html += '<th>Delivered</th>';
-        html += '</tr></thead><tbody>';
-        for (const order of oldDelivered) html += renderOrderRow(order, canSelectOrders, isAdminView);
-        html += '</tbody></table></div></div></div>';
-    }
-    ordersTable.innerHTML = html;
-    document.querySelectorAll('.status-group-header').forEach(header => {
-        header.addEventListener('click', () => {
-            const status = header.dataset.status;
-            const body = document.querySelector(`.status-group-body[data-status="${status}"]`);
-            if (body) { body.classList.toggle('collapsed'); header.classList.toggle('collapsed'); }
-        });
-    });
-    attachOrderEventListeners(canSelectOrders);
-}
-
-function renderOrderRow(order, canSelectOrders, isAdminView) {
-    const statusClass = 'status-' + order.status.toLowerCase().replace(/ /g, '-');
-    const priorityClass = 'priority-' + (order.priority || 'Normal').toLowerCase();
-    const hasFiles = order.files && order.files.length > 0;
-    const deliveryStatus = getDeliveryStatus(order);
-    const deliveredDate = getDeliveredDate(order);
-    let html = '<tr data-id="' + order.id + '">';
-    if (canSelectOrders) html += `<td class="sticky"><input type="checkbox" class="row-select" data-id="${order.id}"></td>`;
-    html += `<td>#${order.id}</td>`;
-    html += `<td><button class="btn btn-secondary btn-sm btn-view-order" data-id="${order.id}">View</button></td>`;
-    html += `<td title="${escapeHtml(order.item_description)}">${escapeHtml(order.item_description.substring(0, 40))}${order.item_description.length > 40 ? '...' : ''}</td>`;
-    html += `<td>${order.cost_center_code || '-'}</td>`;
-    html += `<td>${order.quantity}</td>`;
-    if (isOldDelivered(order) || viewMode === 'flat') {
-        html += `<td><span class="status-badge ${statusClass}">${order.status}</span></td>`;
-    }
-    html += `<td><span class="priority-pill ${priorityClass}">${order.priority || 'Normal'}</span></td>`;
-    html += `<td>${hasFiles ? order.files.length + ' file(s)' : '-'}</td>`;
-    if (isAdminView) {
-        html += `<td>${order.requester_name}</td>`;
-        if (isOldDelivered(order)) {
-            html += `<td>${deliveredDate ? formatDate(deliveredDate) : '<span class="status-badge status-delivered">Delivered</span>'}</td>`;
-        } else {
-            html += `<td>${getDeliveryBadgeHtml(deliveryStatus)}</td>`;
-        }
-        if (!isOldDelivered(order)) html += `<td>${formatDate(order.date_needed)}</td>`;
-        html += `<td>${order.supplier_name || '-'}</td>`;
-        html += `<td>${typeof renderLifecycleBadge === 'function' ? renderLifecycleBadge(order) : (order.po_number ? order.po_number : '-')}</td>`;
-        html += `<td>${order.building}</td>`;
-        html += `<td class="text-right">${fmtPrice(order.unit_price)}</td>`;
-        html += `<td class="text-right">${fmtPrice(order.total_price)}</td>`;
-    } else {
-        if (isOldDelivered(order)) {
-            html += `<td>${deliveredDate ? formatDate(deliveredDate) : '<span class="status-badge status-delivered">Delivered</span>'}</td>`;
-        } else {
-            html += `<td>${getDeliveryBadgeHtml(deliveryStatus)}</td>`;
-            html += `<td>${formatDate(order.date_needed)}</td>`;
-        }
-    }
-    html += '</tr>';
-    return html;
-}
-
-function attachOrderEventListeners(canSelectOrders) {
-    if (canSelectOrders) {
-        const selectAll = document.getElementById('selectAllOrders');
-        if (selectAll) {
-            selectAll.addEventListener('change', e => {
-                const checked = e.target.checked;
-                selectedOrderIds.clear();
-                if (checked) filteredOrders.forEach(o => selectedOrderIds.add(o.id));
-                document.querySelectorAll('.row-select').forEach(cb => { cb.checked = checked; });
-                updateSelectionUi();
-            });
-        }
-        document.querySelectorAll('.row-select').forEach(cb => {
-            cb.addEventListener('change', e => {
-                const id = parseInt(e.target.dataset.id, 10);
-                if (e.target.checked) selectedOrderIds.add(id);
-                else selectedOrderIds.delete(id);
-                updateSelectionUi();
-            });
-        });
-    }
-    document.querySelectorAll('.btn-view-order').forEach(btn => {
-        btn.addEventListener('click', () => openOrderDetail(parseInt(btn.dataset.id, 10)));
-    });
-}
-
-function updateSelectionUi() {
-    const count = selectedOrderIds.size;
-    if (count > 0) { orderActionsBar.hidden = false; selectedCount.textContent = `${count} selected`; }
-    else { orderActionsBar.hidden = true; }
-}
-
-async function openOrderDetail(orderId) {
-    try {
-        const res = await apiGet(`/orders/${orderId}`);
-        if (!res.success) return;
-        renderOrderDetail(res.order);
-        orderDetailPanel.classList.remove('hidden');
-        if (typeof loadOrderDocuments === 'function') loadOrderDocuments(orderId);
-    } catch { alert('Failed to load order details'); }
-}
-
-function renderOrderDetail(o) {
-    const statusClass = 'status-' + o.status.toLowerCase().replace(/ /g, '-');
-    const priorityClass = 'priority-' + (o.priority || 'Normal').toLowerCase();
-    const deliveryStatus = getDeliveryStatus(o);
-    const deliveredDate = getDeliveredDate(o);
-    const canSeeSensitiveData = currentUser.role !== 'requester';
-    let html = '';
-    html += `<div class="detail-grid">
-        <div><div class="detail-label">Order ID</div><div class="detail-value">#${o.id}</div></div>
-        <div><div class="detail-label">Building</div><div class="detail-value">${o.building}</div></div>
-        <div><div class="detail-label">Cost Center</div><div class="detail-value">${o.cost_center_code ? `${o.cost_center_code} - ${o.cost_center_name}` : '-'}</div></div>
-        <div><div class="detail-label">Status</div><div class="detail-value"><span class="status-badge ${statusClass}">${o.status}</span></div></div>
-        <div><div class="detail-label">Quantity</div><div class="detail-value">${o.quantity || '-'}</div></div>
-        <div><div class="detail-label">Priority</div><div class="detail-value"><span class="priority-pill ${priorityClass}">${o.priority || 'Normal'}</span></div></div>
-        <div><div class="detail-label">Date Needed</div><div class="detail-value">${formatDate(o.date_needed)}</div></div>
-        <div><div class="detail-label">Expected Delivery</div><div class="detail-value">${o.expected_delivery_date ? formatDate(o.expected_delivery_date) : '-'}</div></div>`;
-    if (deliveredDate) {
-        html += `<div><div class="detail-label">Delivered Date</div><div class="detail-value">${formatDate(deliveredDate)}</div></div>`;
-    } else {
-        html += `<div><div class="detail-label">Delivery Status</div><div class="detail-value">${getDeliveryBadgeHtml(deliveryStatus)}</div></div>`;
-    }
-    html += `<div><div class="detail-label">Requester</div><div class="detail-value">${o.requester_name}</div></div>`;
-    if (canSeeSensitiveData) {
-        html += `<div><div class="detail-label">Supplier</div><div class="detail-value">${o.supplier_name || '-'}</div></div>
-        <div><div class="detail-label">Unit Price</div><div class="detail-value">${fmtPrice(o.unit_price)}</div></div>
-        <div><div class="detail-label">Total Price</div><div class="detail-value">${fmtPrice(o.total_price)}</div></div>`;
-    }
-    html += `</div>`;
-    html += `<div class="detail-section-title">Item Description</div><div class="text-muted mt-1">${escapeHtml(o.item_description)}</div>`;
-    if (o.part_number || o.category) {
-        html += '<div class="detail-grid mt-1">';
-        if (o.part_number) html += `<div><div class="detail-label">Part Number</div><div class="detail-value">${escapeHtml(o.part_number)}</div></div>`;
-        if (o.category) html += `<div><div class="detail-label">Category</div><div class="detail-value">${escapeHtml(o.category)}</div></div>`;
-        html += '</div>';
-    }
-    if (o.notes) html += `<div class="detail-section-title mt-1">Notes</div><div class="text-muted mt-1">${escapeHtml(o.notes)}</div>`;
-    if (canSeeSensitiveData) {
-        if (o.supplier_notes) html += '<div class="detail-section-title mt-1">Supplier Notes</div><div class="text-muted mt-1">' + escapeHtml(o.supplier_notes) + '</div>';
-        if (o.alternative_product_name || o.alternative_product_description) {
-            html += '<div class="detail-section-title mt-1">Alternative Product</div>';
-            if (o.alternative_product_name) html += '<div class="text-muted mt-1"><strong>Name:</strong> ' + escapeHtml(o.alternative_product_name) + '</div>';
-            if (o.alternative_product_description) html += '<div class="text-muted mt-1"><strong>Description:</strong> ' + escapeHtml(o.alternative_product_description) + '</div>';
-        }
-    }
-    html += '<div class="detail-section-title mt-2">Attachments</div>';
-    if (o.files && o.files.length) {
-        html += '<ul class="file-list">';
-        for (const f of o.files) {
-            const url = f.file_path.replace('./', '/');
-            html += `<li><a class="file-link" href="${url}" target="_blank" rel="noopener">${escapeHtml(f.file_name)}</a><span class="text-muted">${formatFileSize(f.file_size)}</span></li>`;
-        }
-        html += '</ul>';
-    } else {
-        html += '<div class="text-muted mt-1">No attachments.</div>';
-    }
-    if (currentUser.role !== 'requester' && currentUser.role !== 'manager' && o.history && o.history.length) {
-        html += '<div class="detail-section-title mt-2">History</div>';
-        html += '<div class="text-muted" style="max-height: 120px; overflow-y: auto; font-size: 0.78rem;">';
-        for (const h of o.history) {
-            html += `<div>[${formatDateTime(h.changed_at)}] <strong>${escapeHtml(h.changed_by)}</strong> changed <strong>${escapeHtml(h.field_name)}</strong> from "${escapeHtml(h.old_value || '')}" to "${escapeHtml(h.new_value || '')}"</div>`;
-        }
-        html += '</div>';
-    }
-    if (currentUser.role === 'admin' || currentUser.role === 'procurement') {
-        html += '<hr class="mt-2" style="border-color: rgba(31,41,55,0.9); margin-bottom: 0.6rem;">';
-        html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;"><div>';
-        html += '<div class="detail-section-title" style="margin:0;">Suggested Suppliers</div>';
-        html += '<div style="font-size:0.75rem;color:#94a3b8;margin-top:0.2rem;">AI-powered recommendations based on item description and history</div>';
-        html += '</div>';
-        if (typeof openSupplierSelector === 'function') {
-            html += '<button class="btn btn-secondary btn-sm" onclick="openSupplierSelector(' + o.id + ', ' + (o.supplier_id || 'null') + ')" style="white-space:nowrap;">Browse All</button>';
-        }
-        html += '</div><div id="supplierSuggestionsContainer"></div>';
-    }
-    if (currentUser.role === 'admin' || currentUser.role === 'procurement') {
-        html += '<hr class="mt-2" style="border-color: rgba(31,41,55,0.9); margin-bottom: 0.6rem;">';
-        html += '<div class="detail-section-title">Update Order</div>';
-        html += `<div class="form-group mt-1"><label>Status</label><select id="detailStatus" class="form-control form-control-sm">${ORDER_STATUSES.map(s => `<option value="${s}" ${s === o.status ? 'selected' : ''}>${s}</option>`).join('')}</select></div>`;
-        html += `<div class="form-group"><label>Supplier</label><div style="display: flex; align-items: center; gap: 0.5rem;"><input type="text" id="detailSupplierDisplay" class="form-control form-control-sm" value="${o.supplier_name || 'No supplier selected'}" readonly style="flex: 1; background: #0f172a; cursor: pointer;" /><button id="btnSelectSupplier" class="btn btn-primary btn-sm" style="white-space: nowrap;">Select</button></div></div>`;
-        html += `<div class="detail-grid"><div><div class="form-group"><label>Expected Delivery</label><input type="date" id="detailExpected" class="form-control form-control-sm date-picker" value="${o.expected_delivery_date ? o.expected_delivery_date.substring(0,10) : ''}"></div></div><div><div class="form-group"><label>Unit Price</label><input type="number" step="0.01" id="detailUnitPrice" class="form-control form-control-sm" value="${parseFloat(o.unit_price) || ''}"></div></div></div>`;
-        html += `<div class="form-group"><label>Total Price</label><input type="number" step="0.01" id="detailTotalPrice" class="form-control form-control-sm" value="${parseFloat(o.total_price) || ''}"></div>`;
-        html += `<div class="form-group"><label>Supplier Notes</label><textarea id="detailSupplierNotes" class="form-control form-control-sm" rows="2" placeholder="Internal notes about the supplier for this order">${o.supplier_notes || ''}</textarea></div>`;
-        html += `<div class="form-group"><label>Alternative Product Name</label><input type="text" id="detailAltProductName" class="form-control form-control-sm" placeholder="Alternative product name" value="${escapeHtml(o.alternative_product_name || '')}"></div>`;
-        html += `<div class="form-group"><label>Alternative Product Description</label><textarea id="detailAltProductDesc" class="form-control form-control-sm" rows="2" placeholder="Description of the alternative product">${o.alternative_product_description || ''}</textarea></div>`;
-        html += `<div class="form-actions"><button id="btnSaveOrder" class="btn btn-primary btn-sm">Save</button></div>`;
-    }
-    orderDetailBody.innerHTML = html;
-    if ((currentUser.role === 'admin' || currentUser.role === 'procurement') && typeof loadSupplierSuggestions === 'function') {
-        loadSupplierSuggestions(o.id, o.supplier_id);
-    }
-    const btnSelectSupplier = document.getElementById('btnSelectSupplier');
-    if (btnSelectSupplier && typeof openSupplierSelector === 'function') {
-        btnSelectSupplier.addEventListener('click', () => openSupplierSelector(o.id, o.supplier_id));
-    }
-    const btnSave = document.getElementById('btnSaveOrder');
-    if (btnSave) {
-        btnSave.addEventListener('click', async () => {
-            const payload = {
-                status: document.getElementById('detailStatus').value,
-                supplier_id: o.supplier_id || null,
-                expected_delivery_date: document.getElementById('detailExpected').value || null,
-                unit_price: parseFloat(document.getElementById('detailUnitPrice').value || 0) || null,
-                total_price: parseFloat(document.getElementById('detailTotalPrice').value || 0) || null,
-                supplier_notes: document.getElementById('detailSupplierNotes') ? document.getElementById('detailSupplierNotes').value || null : null,
-                alternative_product_name: document.getElementById('detailAltProductName') ? document.getElementById('detailAltProductName').value || null : null,
-                alternative_product_description: document.getElementById('detailAltProductDesc') ? document.getElementById('detailAltProductDesc').value || null : null
-            };
-            const res = await apiPut(`/orders/${o.id}`, payload);
-            if (res.success) { alert('Order updated'); loadOrders(); openOrderDetail(o.id); }
-            else { alert('Failed to update order: ' + (res.message || 'Unknown error')); }
-        });
-    }
-}
-
-// ===================== QUOTES =====================
-
-async function loadQuotes() {
-    try {
-        const res = await apiGet('/quotes');
-        if (res.success) { quotesState = res.quotes; renderQuotesTable(); }
-    } catch { if (quotesTable) quotesTable.innerHTML = '<p>Failed to load quotes.</p>'; }
-}
-
-function renderQuotesTable() {
-    if (!quotesTable) return;
-    if (!quotesState.length) { quotesTable.innerHTML = '<p class="text-muted">No quotes yet.</p>'; return; }
-    let html = '<div class="table-wrapper"><table><thead><tr><th>Quote #</th><th>Supplier</th><th>Status</th><th>Items</th><th>Total</th><th>Valid Until</th><th>Created</th><th></th></tr></thead><tbody>';
-    for (const q of quotesState) {
-        const isSent = q.status === 'Sent to Supplier';
-        const sentBadge = isSent ? '<span class="quote-sent-badge sent">Sent</span>' : '<span class="quote-sent-badge not-sent">Pending</span>';
-        html += `<tr data-id="${q.id}"><td>${q.quote_number}</td><td>${q.supplier_name || '-'}</td><td>${q.status}</td><td>${q.item_count || 0}</td><td class="text-right">${fmtPrice(q.total_amount)}</td><td>${q.valid_until ? formatDate(q.valid_until) : '-'}</td><td>${formatDateTime(q.created_at)}</td><td style="display:flex;gap:0.4rem;align-items:center;">${sentBadge}<button class="btn btn-secondary btn-sm btn-view-quote" data-id="${q.id}">View</button><button class="btn btn-primary btn-sm btn-send-quote" data-id="${q.id}" title="Compose &amp; Send">Send</button></td></tr>`;
-    }
-    html += '</tbody></table></div>';
-    quotesTable.innerHTML = html;
-    document.querySelectorAll('.btn-view-quote').forEach(btn => {
-        btn.addEventListener('click', () => openQuoteDetail(parseInt(btn.dataset.id, 10)));
-    });
-    document.querySelectorAll('.btn-send-quote').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (typeof openQuoteSendPanel === 'function') openQuoteSendPanel(parseInt(btn.dataset.id, 10));
-        });
-    });
-}
-
-async function openQuoteDetail(id) {
-    try {
-        const res = await apiGet(`/quotes/${id}`);
-        if (!res.success) return;
-        renderQuoteDetail(res.quote);
-        quoteDetailPanel.classList.remove('hidden');
-    } catch { alert('Failed to load quote details'); }
-}
-
-function renderQuoteDetail(q) {
-    let html = `<div class="detail-grid"><div><div class="detail-label">Quote #</div><div class="detail-value">${q.quote_number}</div></div><div><div class="detail-label">Status</div><div class="detail-value">${q.status}</div></div><div><div class="detail-label">Supplier</div><div class="detail-value">${q.supplier_name || '-'}</div></div><div><div class="detail-label">Valid Until</div><div class="detail-value">${q.valid_until ? formatDate(q.valid_until) : '-'}</div></div><div><div class="detail-label">Total Amount</div><div class="detail-value">${fmtPrice(q.total_amount)}</div></div><div><div class="detail-label">Currency</div><div class="detail-value">${q.currency}</div></div></div>`;
-    if (q.notes) html += `<div class="detail-section-title mt-1">Notes</div><div class="text-muted mt-1">${escapeHtml(q.notes)}</div>`;
-    if (q.items && q.items.length) {
-        html += '<div class="detail-section-title mt-2">Items</div><div class="table-wrapper"><table><thead><tr><th>Order</th><th>Building</th><th>Description</th><th>Qty</th><th>Unit</th><th>Total</th></tr></thead><tbody>';
-        for (const it of q.items) html += `<tr><td>#${it.order_id}</td><td>${it.building}</td><td>${escapeHtml(it.item_description.substring(0,40))}${it.item_description.length>40?'...':''}</td><td>${it.quantity}</td><td class="text-right">${fmtPrice(it.unit_price)}</td><td class="text-right">${fmtPrice(it.total_price)}</td></tr>`;
-        html += '</tbody></table></div>';
-    }
-    if ((currentUser.role === 'admin' || currentUser.role === 'procurement') && (q.status === 'Draft' || q.status === 'Received')) {
-        html += `<hr class="mt-2" style="border-color: rgba(31,41,55,0.9); margin-bottom: 0.6rem;"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;"><div><div class="detail-section-title" style="margin:0;">Approval Workflow</div><div style="font-size:0.75rem;color:#94a3b8;margin-top:0.2rem;">Submit this quote to a manager for approval</div></div><button id="btnSubmitForApproval" class="btn btn-primary btn-sm" style="white-space:nowrap;" data-quote-id="${q.id}">Submit for Approval</button></div>`;
-    }
-    // v3.0: Procurement Workspace + Smart Send Button
-    if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'procurement')) {
-        html += `<div style="margin: 0.75rem 0; display:flex; gap:0.5rem; flex-direction:column;"><button id="btnOpenProcurementWorkspace" class="btn btn-primary btn-sm" style="width:100%;" data-quote-id="${q.id}">Open Procurement Workspace</button><button id="btnOpenSendPanel" class="btn btn-secondary btn-sm" style="width:100%;" data-quote-id="${q.id}">Compose &amp; Send Email</button></div>`;
-    }
-    html += '<div class="detail-section-title mt-2">Update Quote</div>';
-    html += `<div class="form-group mt-1"><label>Status</label><select id="quoteStatus" class="form-control form-control-sm">${['Draft','Sent to Supplier','Received','Under Approval','Approved','Rejected'].map(s => `<option value="${s}" ${s===q.status?'selected':''}>${s}</option>`).join('')}</select></div>`;
-    html += `<div class="form-group mt-1"><label>Notes</label><textarea id="quoteNotes" class="form-control form-control-sm" rows="2">${q.notes || ''}</textarea></div>`;
-    html += '<div class="form-actions"><button id="btnSaveQuote" class="btn btn-primary btn-sm">Save</button></div>';
-    quoteDetailBody.innerHTML = html;
-    // v3.0: Attach Procurement Workspace button
-    const btnOpenWorkspace = document.getElementById('btnOpenProcurementWorkspace');
-    if (btnOpenWorkspace && typeof openQuoteLifecyclePanel === 'function') {
-        btnOpenWorkspace.addEventListener('click', () => {
-            openQuoteLifecyclePanel(parseInt(btnOpenWorkspace.dataset.quoteId, 10));
-        });
-    }
-    const btnOpenSend = document.getElementById('btnOpenSendPanel');
-    if (btnOpenSend && typeof openQuoteSendPanel === 'function') {
-        btnOpenSend.addEventListener('click', () => openQuoteSendPanel(parseInt(btnOpenSend.dataset.quoteId, 10)));
-    }
-    const btnSubmitApproval = document.getElementById('btnSubmitForApproval');
-    if (btnSubmitApproval && typeof openSubmitForApprovalDialog === 'function') {
-        btnSubmitApproval.addEventListener('click', () => openSubmitForApprovalDialog(parseInt(btnSubmitApproval.dataset.quoteId, 10)));
-    }
-    document.getElementById('btnSaveQuote').addEventListener('click', async () => {
-        const payload = { status: document.getElementById('quoteStatus').value, notes: document.getElementById('quoteNotes').value };
-        const res = await apiPut(`/quotes/${q.id}`, payload);
-        if (res.success) { alert('Quote updated'); loadQuotes(); } else { alert('Failed to update quote'); }
-    });
-}
-
-function openCreateQuoteDialog() {
-    if (!selectedOrderIds.size) {
-        switchTab('ordersTab');
-        alert('Select one or more orders first, then click "Create Quote from Selected"');
-        return;
-    }
-    // v3.0: Use enhanced wizard if available
-    if (typeof openEnhancedCreateQuoteModal === 'function') {
-        // Pass pre-selected supplier from the first selected order (if all share same supplier)
-        const selIds = Array.from(selectedOrderIds);
-        const firstOrder = ordersState.find(o => o.id === selIds[0]);
-        const preSupId = firstOrder && firstOrder.supplier_id ? firstOrder.supplier_id : null;
-        const preSupName = firstOrder && firstOrder.supplier_name ? firstOrder.supplier_name : '';
-        openEnhancedCreateQuoteModal(preSupId, preSupName);
-        return;
-    }
-    const modal = document.getElementById('createQuoteModal');
-    if (!modal) return;
-    const supplierSel = document.getElementById('cqSupplier');
-    if (supplierSel) {
-        supplierSel.innerHTML = '<option value="">Select supplier</option>' +
-            suppliersState.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
-    }
-    const orderCountEl = document.getElementById('cqOrderCount');
-    if (orderCountEl) orderCountEl.textContent = selectedOrderIds.size;
-    const notesEl = document.getElementById('cqNotes');
-    if (notesEl) notesEl.value = '';
-    const currencyEl = document.getElementById('cqCurrency');
-    if (currencyEl) currencyEl.value = 'EUR';
-    const validEl = document.getElementById('cqValidUntil');
-    if (validEl) validEl.value = '';
-    modal.classList.remove('hidden');
-}
-
-function closeCreateQuoteModal() {
-    const modal = document.getElementById('createQuoteModal');
-    if (modal) modal.classList.add('hidden');
-}
-
-async function handleCreateQuote(e) {
-    e.preventDefault();
-    const orders = ordersState.filter(o => selectedOrderIds.has(o.id));
-    const supplierId = document.getElementById('cqSupplier')?.value;
-    if (!supplierId) { alert('Please select a supplier'); return; }
-    const body = {
-        supplier_id: parseInt(supplierId, 10),
-        order_ids: orders.map(o => o.id),
-        notes: document.getElementById('cqNotes')?.value || null,
-        currency: document.getElementById('cqCurrency')?.value || 'EUR',
-        valid_until: document.getElementById('cqValidUntil')?.value || null
-    };
-    const res = await apiPost('/quotes', body);
-    if (res.success) {
-        closeCreateQuoteModal();
-        selectedOrderIds.clear();
-        updateSelectionUi();
-        loadOrders();
-        loadQuotes();
-        // v3.0: Open Procurement Lifecycle Panel
-        if (typeof openQuoteLifecyclePanel === 'function') {
-            openQuoteLifecyclePanel(res.quoteId);
-        } else if (typeof openQuoteSendPanel === 'function') {
-            openQuoteSendPanel(res.quoteId);
-        } else {
-            alert('Quote ' + res.quoteNumber + ' created');
-        }
-    } else {
-        alert('Failed to create quote: ' + (res.message || 'Unknown error'));
-    }
-}
-
-// ===================== BUILDINGS =====================
-
-async function loadBuildings() {
-    try {
-        const res = await apiGet('/buildings');
-        if (res.success) {
-            buildingsState = res.buildings;
-            populateBuildingSelects();
-            if (currentUser && currentUser.role === 'admin') renderBuildingsTable();
-        }
-    } catch (err) {
-        console.error('loadBuildings error:', err);
-        if (buildingsTable) buildingsTable.innerHTML = '<p>Failed to load buildings.</p>';
-    }
-}
-
-function populateBuildingSelects() {
-    if (buildingSelect) {
-        buildingSelect.innerHTML = '<option value="">Select Building</option>' +
-            buildingsState.filter(b => b.active).map(b => `<option value="${b.code}">${escapeHtml(b.code)} - ${escapeHtml(b.name)}</option>`).join('');
-        if (currentUser && currentUser.role === 'requester') { buildingSelect.value = currentUser.building; buildingSelect.disabled = true; }
-    }
-    if (userBuildingSelect) {
-        userBuildingSelect.innerHTML = '<option value="">None</option>' +
-            buildingsState.filter(b => b.active).map(b => `<option value="${b.code}">${escapeHtml(b.code)} - ${escapeHtml(b.name)}</option>`).join('');
-    }
-    if (filterBuilding) {
-        const currentVal = filterBuilding.value;
-        filterBuilding.innerHTML = '<option value="">Building: All</option>' +
-            buildingsState.filter(b => b.active).map(b => `<option value="${b.code}">${escapeHtml(b.code)} - ${escapeHtml(b.name)}</option>`).join('');
-        if (currentVal) filterBuilding.value = currentVal;
-    }
-}
-
-function renderBuildingsTable() {
-    if (!buildingsTable) return;
-    if (!buildingsState.length) { buildingsTable.innerHTML = '<p class="text-muted">No buildings yet.</p>'; return; }
-    let html = '<div class="table-wrapper"><table><thead><tr><th>Code</th><th>Name</th><th>Active</th><th></th></tr></thead><tbody>';
-    for (const b of buildingsState) {
-        html += `<tr data-id="${b.id}"><td>${escapeHtml(b.code)}</td><td>${escapeHtml(b.name)}</td><td>${b.active ? 'Yes' : 'No'}</td><td><button class="btn btn-secondary btn-sm btn-edit-building" data-id="${b.id}">Edit</button></td></tr>`;
-    }
-    html += '</tbody></table></div>';
-    buildingsTable.innerHTML = html;
-    document.querySelectorAll('.btn-edit-building').forEach(btn => {
-        btn.addEventListener('click', () => { const b = buildingsState.find(x => x.id === parseInt(btn.dataset.id, 10)); if (b) openBuildingForm(b); });
-    });
-}
-
-function openBuildingForm(building) {
-    if (!buildingFormCard) return;
-    if (building) {
-        buildingFormTitle.textContent = 'Edit Building';
-        buildingIdInput.value = building.id; buildingCodeInput.value = building.code || ''; buildingNameInput.value = building.name || ''; buildingDescriptionInput.value = building.description || ''; buildingActiveSelect.value = building.active ? '1' : '0';
-    } else {
-        buildingFormTitle.textContent = 'Create Building'; buildingForm.reset(); buildingIdInput.value = ''; buildingActiveSelect.value = '1';
-    }
-    buildingFormCard.hidden = false;
-}
-
-async function handleSaveBuilding(e) {
-    e.preventDefault();
-    const payload = { code: buildingCodeInput.value.trim(), name: buildingNameInput.value.trim(), description: buildingDescriptionInput.value.trim(), active: buildingActiveSelect.value === '1' };
-    if (!payload.code || !payload.name) { alert('Code and name are required'); return; }
-    const id = buildingIdInput.value;
-    const res = id ? await apiPut(`/buildings/${id}`, payload) : await apiPost('/buildings', payload);
-    if (res.success) { alert('Building saved'); buildingFormCard.hidden = true; loadBuildings(); loadCostCenters(); }
-    else { alert('Failed to save building: ' + (res.message || 'Unknown error')); }
-}
-
-// ===================== USERS =====================
-
-async function loadUsers() {
-    try {
-        const res = await apiGet('/users');
-        if (res.success) { usersState = res.users; renderUsersTable(); }
-    } catch (err) { console.error('loadUsers error:', err); usersTable.innerHTML = '<p>Failed to load users.</p>'; }
-}
-
-function renderUsersTable() {
-    if (!usersState.length) { usersTable.innerHTML = '<p class="text-muted">No users yet.</p>'; return; }
-    let html = '<div class="table-wrapper"><table><thead><tr><th>Username</th><th>Name</th><th>Email</th><th>Role</th><th>Building</th><th>Active</th><th></th></tr></thead><tbody>';
-    for (const u of usersState) {
-        html += `<tr data-id="${u.id}"><td>${escapeHtml(u.username)}</td><td>${escapeHtml(u.name || '')}</td><td>${escapeHtml(u.email || '')}</td><td>${u.role}</td><td>${u.building || ''}</td><td>${u.active ? 'Yes' : 'No'}</td><td><button class="btn btn-secondary btn-sm btn-edit-user" data-id="${u.id}">Edit</button> <button class="btn btn-secondary btn-sm btn-reset-pass" data-id="${u.id}">Reset Password</button></td></tr>`;
-    }
-    html += '</tbody></table></div>';
-    usersTable.innerHTML = html;
-    document.querySelectorAll('.btn-edit-user').forEach(btn => { btn.addEventListener('click', () => { const u = usersState.find(x => x.id === parseInt(btn.dataset.id, 10)); if (u) openUserForm(u); }); });
-    document.querySelectorAll('.btn-reset-pass').forEach(btn => { btn.addEventListener('click', () => resetUserPassword(parseInt(btn.dataset.id, 10))); });
-}
-
-function openUserForm(user) {
-    if (user) {
-        userFormTitle.textContent = 'Edit User'; userIdInput.value = user.id; userUsernameInput.value = user.username || ''; userNameInput.value = user.name || ''; userEmailInput.value = user.email || ''; userRoleSelect.value = user.role || 'requester'; userBuildingSelect.value = user.building || ''; userActiveSelect.value = user.active ? '1' : '0'; userPasswordInput.value = ''; userPasswordGroup.style.display = 'none';
-    } else {
-        userFormTitle.textContent = 'Create User'; userForm.reset(); userIdInput.value = ''; userActiveSelect.value = '1'; userPasswordGroup.style.display = '';
-    }
-    userFormCard.hidden = false;
-}
-
-async function handleSaveUser(e) {
-    e.preventDefault();
-    const payload = { username: userUsernameInput.value.trim(), name: userNameInput.value.trim(), email: userEmailInput.value.trim(), role: userRoleSelect.value, building: userBuildingSelect.value || null, active: userActiveSelect.value === '1', password: userPasswordGroup.style.display !== 'none' ? userPasswordInput.value.trim() : undefined };
-    if (!payload.username || !payload.name || !payload.email || !payload.role) { alert('Username, name, email and role are required'); return; }
-    const id = userIdInput.value;
-    let res;
-    if (id) { delete payload.password; res = await apiPut(`/users/${id}`, payload); }
-    else { res = await apiPost('/users', payload); }
-    if (res.success) { if (!id && res.password) { alert(`User created. Initial password: ${res.password}`); } else { alert('User saved'); } userFormCard.hidden = true; loadUsers(); }
-    else { alert('Failed to save user: ' + (res.message || 'Unknown error')); }
-}
-
-async function resetUserPassword(id) {
-    const pwd = prompt('Enter new password (min 6 characters):');
-    if (!pwd || pwd.trim().length < 6) { alert('Password too short. Nothing changed.'); return; }
-    const confirmPwd = prompt('Confirm new password:');
-    if (confirmPwd !== pwd) { alert('Passwords do not match. Nothing changed.'); return; }
-    try {
-        const res = await apiPost(`/users/${id}/reset-password`, { password: pwd });
-        if (res.success) { alert('Password reset successfully.'); } else { alert('Password reset failed: ' + (res.message || 'Unknown error')); }
-    } catch { alert('Password reset failed'); }
-}
-
-// ===================== SUPPLIERS =====================
-
-async function loadSuppliers() {
-    try {
-        const res = await apiGet('/suppliers');
-        if (res.success) { suppliersState = res.suppliers; renderSuppliersTable(); }
-    } catch { suppliersTable.innerHTML = '<p>Failed to load suppliers.</p>'; }
-}
-
-function renderSuppliersTable() {
-    if (!suppliersState.length) { suppliersTable.innerHTML = '<p class="text-muted">No suppliers yet.</p>'; return; }
-    let html = '<div class="table-wrapper"><table><thead><tr><th>Name</th><th>Contact</th><th>Email</th><th>Phone</th><th>Active</th><th></th></tr></thead><tbody>';
-    for (const s of suppliersState) {
-        html += `<tr data-id="${s.id}"><td>${escapeHtml(s.name)}</td><td>${escapeHtml(s.contact_person || '')}</td><td>${escapeHtml(s.email || '')}</td><td>${escapeHtml(s.phone || '')}</td><td>${s.active ? 'Yes' : 'No'}</td><td><button class="btn btn-secondary btn-sm btn-edit-supplier" data-id="${s.id}">Edit</button></td></tr>`;
-    }
-    html += '</tbody></table></div>';
-    suppliersTable.innerHTML = html;
-    document.querySelectorAll('.btn-edit-supplier').forEach(btn => { btn.addEventListener('click', () => { const s = suppliersState.find(x => x.id === parseInt(btn.dataset.id, 10)); if (s) openSupplierForm(s); }); });
-}
-
-function openSupplierForm(supplier) {
-    if (supplier) {
-        supplierFormTitle.textContent = 'Edit Supplier'; supplierIdInput.value = supplier.id; supplierNameInput.value = supplier.name || ''; supplierContactInput.value = supplier.contact_person || ''; supplierEmailInput.value = supplier.email || ''; supplierPhoneInput.value = supplier.phone || ''; supplierWebsiteInput.value = supplier.website || ''; supplierAddressInput.value = supplier.address || ''; supplierNotesInput.value = supplier.notes || ''; supplierActiveInput.value = supplier.active ? '1' : '0';
-    } else {
-        supplierFormTitle.textContent = 'Create Supplier'; supplierForm.reset(); supplierIdInput.value = ''; supplierActiveInput.value = '1';
-    }
-    supplierFormCard.hidden = false;
-}
-
-async function handleSaveSupplier(e) {
-    e.preventDefault();
-    const payload = { name: supplierNameInput.value.trim(), contact_person: supplierContactInput.value.trim(), email: supplierEmailInput.value.trim(), phone: supplierPhoneInput.value.trim(), website: supplierWebsiteInput.value.trim(), address: supplierAddressInput.value.trim(), notes: supplierNotesInput.value.trim(), active: parseInt(supplierActiveInput.value, 10) };
-    if (!payload.name) { alert('Name is required'); return; }
-    const id = supplierIdInput.value;
-    const res = id ? await apiPut(`/suppliers/${id}`, payload) : await apiPost('/suppliers', payload);
-    if (res.success) { alert('Supplier saved'); supplierFormCard.hidden = true; loadSuppliers(); populateSupplierFilter(); }
-    else { alert('Failed to save supplier'); }
-}
-
-function populateStatusFilter() {
-    filterStatus.innerHTML = '<option value="">Status: All</option>' + ORDER_STATUSES.map(s => `<option value="${s}">${s}</option>`).join('');
-}
-
-function populateSupplierFilter() {
-    filterSupplier.innerHTML = '<option value="">Supplier: All</option>' + suppliersState.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
-}
-
-function switchTab(tabId) {
-    if (currentTab === tabId) return;
-    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabId));
-    document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
-    document.getElementById(tabId).classList.remove('hidden');
-    currentTab = tabId;
-    if (tabId === 'suppliersTab' && currentUser && currentUser.role === 'admin') {
-        const brandTrainingCard = document.getElementById('brandTrainingCard');
-        if (brandTrainingCard) {
-            brandTrainingCard.hidden = false;
-            if (typeof loadBrandTrainingUI === 'function') loadBrandTrainingUI();
-        }
-    }
-}
-
-function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c] || c)); }
-function formatDate(dateStr) { if (!dateStr) return '-'; const d = new Date(dateStr); if (isNaN(d)) return dateStr; return d.toLocaleDateString(); }
-function formatDateTime(dateStr) { if (!dateStr) return '-'; const d = new Date(dateStr); if (isNaN(d)) return dateStr; return d.toLocaleString(); }
-function formatFileSize(bytes) { if (!bytes) return ''; const kb = bytes / 1024; if (kb < 1024) return kb.toFixed(1) + ' KB'; return (kb / 1024).toFixed(1) + ' MB'; }
-
-// ===================== PROCUREMENT CREATE ORDER MODAL =====================
+// =============== PROC CREATE ORDER MODAL ===============
 
 function openProcCreateOrderModal() {
     const modal = document.getElementById('procCreateOrderModal');
     if (!modal) return;
-    const bldgSel = document.getElementById('procBuilding');
-    if (bldgSel) {
-        bldgSel.innerHTML = '<option value="">Select Building</option>' +
-            buildingsState.filter(b => b.active).map(b => `<option value="${b.code}">${escapeHtml(b.code)} - ${escapeHtml(b.name)}</option>`).join('');
-    }
-    const ccContainer = document.getElementById('procCostCenterRadios');
-    if (ccContainer) ccContainer.innerHTML = '<span class="text-muted">Select a building first</span>';
-    const form = document.getElementById('procCreateOrderForm');
-    if (form) form.reset();
-    if (bldgSel) bldgSel.onchange = () => renderProcCostCenterRadios(bldgSel.value);
-    if (typeof initProcModalAutocomplete === 'function') initProcModalAutocomplete();
     modal.classList.remove('hidden');
-}
-
-function closeProcCreateOrderModal() {
-    const modal = document.getElementById('procCreateOrderModal');
-    if (modal) modal.classList.add('hidden');
+    const procBuildingSelect = document.getElementById('procBuilding');
+    if (procBuildingSelect) {
+        procBuildingSelect.addEventListener('change', () => {
+            renderProcCostCenterRadios(procBuildingSelect.value);
+        });
+    }
 }
 
 function renderProcCostCenterRadios(buildingCode) {
     const container = document.getElementById('procCostCenterRadios');
     if (!container) return;
-    if (!buildingCode) { container.innerHTML = '<span class="text-muted">Select a building first</span>'; return; }
-    const filtered = costCentersState.filter(cc => cc.building_code === buildingCode && cc.active);
-    if (!filtered.length) { container.innerHTML = '<span class="text-muted">No cost centers for this building</span>'; return; }
-    container.innerHTML = filtered.map(cc =>
-        `<label class="radio-label"><input type="radio" name="procCostCenter" value="${cc.id}" required><span class="radio-text"><strong>${escapeHtml(cc.code)}</strong> - ${escapeHtml(cc.name)}</span></label>`
+    const building = buildingsState.find(b => b.code === buildingCode);
+    if (!building) { container.innerHTML = '<p class="text-gray-400 text-sm">Select a building first</p>'; return; }
+    const ccs = costCentersState.filter(cc => cc.building_id === building.id && cc.is_active);
+    if (ccs.length === 0) {
+        container.innerHTML = '<p class="text-gray-400 text-sm">No cost centers for this building</p>';
+        return;
+    }
+    container.innerHTML = ccs.map(cc =>
+        `<label class="flex items-center gap-2 cursor-pointer">
+            <input type="radio" name="proc_cost_center_id" value="${cc.id}" class="accent-blue-500">
+            <span>${cc.code} - ${cc.name}</span>
+        </label>`
     ).join('');
 }
 
-async function handleProcCreateOrder(e) {
-    e.preventDefault();
-    const building = document.getElementById('procBuilding')?.value;
-    if (!building) { alert('Please select a building'); return; }
-    const selectedCC = document.querySelector('input[name="procCostCenter"]:checked');
-    if (!selectedCC) { alert('Please select a cost center'); return; }
-    const itemDescription = document.getElementById('procItemDescription')?.value.trim() || '';
-    const dateNeeded = document.getElementById('procDateNeeded')?.value || '';
-    if (!itemDescription) { alert('Item description is required'); return; }
-    if (!dateNeeded) { alert('Date needed is required'); return; }
-    const formData = new FormData();
-    formData.append('building', building);
-    formData.append('costCenterId', selectedCC.value);
-    formData.append('itemDescription', itemDescription);
-    formData.append('partNumber', document.getElementById('procPartNumber')?.value.trim() || '');
-    formData.append('category', document.getElementById('procCategory')?.value.trim() || '');
-    formData.append('quantity', document.getElementById('procQuantity')?.value || '1');
-    formData.append('dateNeeded', dateNeeded);
-    formData.append('priority', document.getElementById('procPriority')?.value || 'Normal');
-    formData.append('notes', document.getElementById('procNotes')?.value.trim() || '');
-    formData.append('requester', currentUser.name);
-    formData.append('requesterEmail', currentUser.email);
-    const procFiles = document.getElementById('procAttachments');
-    if (procFiles && procFiles.files) {
-        for (let i = 0; i < procFiles.files.length; i++) formData.append('files', procFiles.files[i]);
-    }
-    if (window.UploadProgress) window.UploadProgress.show();
-    return new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.upload.addEventListener('progress', (evt) => {
-            if (evt.lengthComputable && window.UploadProgress) window.UploadProgress.update((evt.loaded / evt.total) * 100);
-        });
-        xhr.addEventListener('load', () => {
-            if (window.UploadProgress) window.UploadProgress.hide();
+const procCreateOrderModal = document.getElementById('procCreateOrderModal');
+if (procCreateOrderModal) {
+    const closeBtn = document.getElementById('btnCloseProcModal');
+    if (closeBtn) closeBtn.addEventListener('click', () => procCreateOrderModal.classList.add('hidden'));
+
+    const procForm = document.getElementById('procCreateOrderForm');
+    if (procForm) {
+        procForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(procForm);
+            const costCenterId = formData.get('proc_cost_center_id');
+            if (!costCenterId) { showToast('Please select a cost center', true); return; }
+            // Rename key for backend
+            formData.set('cost_center_id', costCenterId);
+            formData.delete('proc_cost_center_id');
             try {
-                const data = JSON.parse(xhr.responseText);
-                if (!data.success) { alert('Failed to create order: ' + (data.message || 'Unknown error')); reject(new Error(data.message)); return; }
-                alert('Order created successfully!');
-                closeProcCreateOrderModal();
-                loadOrders();
-                resolve(data);
-            } catch (err) { alert('Failed to process server response.'); reject(err); }
+                const res = await fetch(`${API_BASE}/orders`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${authToken}` },
+                    body: formData
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('Order created!');
+                    procCreateOrderModal.classList.add('hidden');
+                    procForm.reset();
+                    await loadOrders();
+                } else {
+                    showToast(data.message || 'Failed to create order', true);
+                }
+            } catch (err) {
+                showToast('Failed to create order', true);
+            }
         });
-        xhr.addEventListener('error', () => { if (window.UploadProgress) window.UploadProgress.hide(); alert('Failed to create order. Network error.'); reject(new Error('Network error')); });
-        xhr.addEventListener('abort', () => { if (window.UploadProgress) window.UploadProgress.hide(); alert('Upload cancelled.'); reject(new Error('Upload cancelled')); });
-        xhr.open('POST', `${API_BASE}/orders`);
-        xhr.setRequestHeader('Authorization', `Bearer ${authToken}`);
-        xhr.send(formData);
-    });
+    }
 }
 
-// Attach form handlers on DOMContentLoaded
-document.addEventListener('DOMContentLoaded', () => {
-    const procForm = document.getElementById('procCreateOrderForm');
-    if (procForm) procForm.addEventListener('submit', handleProcCreateOrder);
-    const cqForm = document.getElementById('createQuoteForm');
-    if (cqForm) cqForm.addEventListener('submit', handleCreateQuote);
-});
+// =============== QUOTES ===============
 
-// v3.0: showToast - global toast notification function
-function showToast(message, type) {
-    if (typeof window.showToast === 'function' && window.showToast !== showToast) {
-        window.showToast(message, type);
+function renderQuotesTable() {
+    const tbody = document.getElementById('quotesTableBody');
+    if (!tbody) return;
+    if (quotesState.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-gray-400 py-8">No quotes found</td></tr>';
         return;
     }
-    const container = document.getElementById('toastContainer') || (() => {
-        const c = document.createElement('div');
-        c.id = 'toastContainer';
-        c.style.cssText = 'position:fixed;bottom:1rem;right:1rem;z-index:9999;display:flex;flex-direction:column;gap:0.5rem;';
-        document.body.appendChild(c);
-        return c;
-    })();
+    tbody.innerHTML = quotesState.map(q => `
+        <tr class="hover:bg-gray-700 cursor-pointer" onclick="showQuoteDetail(${q.id})">
+            <td class="px-3 py-2 text-sm font-mono">${q.quote_number || '-'}</td>
+            <td class="px-3 py-2 text-xs">${q.supplier_name || '-'}</td>
+            <td class="px-3 py-2 text-xs">${q.status || '-'}</td>
+            <td class="px-3 py-2 text-xs">${q.order_count || 0} orders</td>
+            <td class="px-3 py-2 text-xs">${q.total_amount ? fmtPrice(q.total_amount) : '-'}</td>
+            <td class="px-3 py-2 text-xs">${q.created_by_name || '-'}</td>
+            <td class="px-3 py-2 text-xs text-gray-400">${q.created_at ? new Date(q.created_at).toLocaleDateString() : '-'}</td>
+        </tr>`).join('');
+}
+
+async function showQuoteDetail(quoteId) {
+    const quote = quotesState.find(q => q.id === quoteId);
+    if (!quote) return;
+
+    try {
+        const data = await apiGet(`/quotes/${quoteId}`);
+        if (!data.success) { showToast('Failed to load quote', true); return; }
+        const q = data.quote;
+
+        const ordersHtml = (q.orders || []).map(o =>
+            `<tr class="hover:bg-gray-700">
+                <td class="px-2 py-1 text-xs">#${o.id}</td>
+                <td class="px-2 py-1 text-xs">${o.item_description || ''}</td>
+                <td class="px-2 py-1 text-xs">${o.building || ''}</td>
+                <td class="px-2 py-1 text-xs">${fmtPrice(o.unit_price)}</td>
+                <td class="px-2 py-1 text-xs">${o.quantity || ''}</td>
+            </tr>`
+        ).join('');
+
+        const statusOptions = ['Draft', 'Sent', 'Received', 'Approved', 'Rejected'].map(s =>
+            `<option value="${s}" ${q.status === s ? 'selected' : ''}>${s}</option>`
+        ).join('');
+
+        // Attachments for quote
+        const quoteAttachments = (q.files || []).map(f => {
+            let url;
+            if (f.path && (f.path.startsWith('/') || f.path.startsWith('http'))) {
+                url = f.path;
+            } else {
+                const filename = f.path || f.name;
+                url = `/uploads/${filename}`;
+            }
+            return `<a href="${url}" target="_blank" class="text-blue-400 hover:underline text-sm">${f.name || f.path}</a>`;
+        }).join(', ');
+
+        quoteDetailBody.innerHTML = `
+            <div class="space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div><span class="text-gray-400 text-xs">Quote Number</span><p class="text-sm font-mono">${q.quote_number}</p></div>
+                    <div><span class="text-gray-400 text-xs">Supplier</span><p class="text-sm">${q.supplier_name || '-'}</p></div>
+                    <div><span class="text-gray-400 text-xs">Status</span><p class="text-sm">${q.status}</p></div>
+                    <div><span class="text-gray-400 text-xs">Total Amount</span><p class="text-sm">${fmtPrice(q.total_amount)}</p></div>
+                    <div><span class="text-gray-400 text-xs">Created By</span><p class="text-sm">${q.created_by_name || '-'}</p></div>
+                    <div><span class="text-gray-400 text-xs">Created At</span><p class="text-sm">${q.created_at ? new Date(q.created_at).toLocaleString() : '-'}</p></div>
+                    ${q.notes ? `<div class="col-span-2"><span class="text-gray-400 text-xs">Notes</span><p class="text-sm">${q.notes}</p></div>` : ''}
+                    ${quoteAttachments ? `<div class="col-span-2"><span class="text-gray-400 text-xs">Attachments</span><p class="text-sm">${quoteAttachments}</p></div>` : ''}
+                </div>
+                <div>
+                    <h4 class="text-sm font-semibold text-gray-300 mb-2">Orders in Quote</h4>
+                    <table class="w-full text-left">
+                        <thead><tr class="text-gray-400 text-xs border-b border-gray-700">
+                            <th class="px-2 py-1">ID</th><th class="px-2 py-1">Description</th><th class="px-2 py-1">Building</th><th class="px-2 py-1">Unit Price</th><th class="px-2 py-1">Qty</th>
+                        </tr></thead>
+                        <tbody>${ordersHtml}</tbody>
+                    </table>
+                </div>
+                <div class="mt-4 p-4 bg-gray-750 rounded-lg border border-gray-600">
+                    <h4 class="text-sm font-semibold text-gray-300 mb-3">Update Quote</h4>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-xs text-gray-400">Status</label>
+                            <select id="quoteDetailStatus" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm mt-1">${statusOptions}</select>
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-400">Total Amount</label>
+                            <input id="quoteDetailAmount" type="number" step="0.01" min="0" value="${q.total_amount || ''}" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm mt-1">
+                        </div>
+                        <div class="col-span-2">
+                            <label class="text-xs text-gray-400">Upload Quote Document</label>
+                            <input id="quoteDetailFile" type="file" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm mt-1">
+                        </div>
+                        <div class="col-span-2">
+                            <label class="text-xs text-gray-400">Notes</label>
+                            <textarea id="quoteDetailNotes" rows="2" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm mt-1">${q.notes || ''}</textarea>
+                        </div>
+                    </div>
+                    <div class="flex gap-2 mt-3">
+                        <button onclick="saveQuoteChanges(${q.id})" class="btn-primary text-sm px-4 py-1.5">Save Changes</button>
+                        <button onclick="deleteQuote(${q.id})" class="bg-red-600 hover:bg-red-700 text-white text-sm px-4 py-1.5 rounded">Delete Quote</button>
+                    </div>
+                </div>
+            </div>`;
+        quoteDetailPanel.classList.remove('hidden');
+    } catch (err) {
+        showToast('Failed to load quote details', true);
+    }
+}
+
+async function saveQuoteChanges(quoteId) {
+    const status = document.getElementById('quoteDetailStatus').value;
+    const total_amount = document.getElementById('quoteDetailAmount').value;
+    const notes = document.getElementById('quoteDetailNotes').value.trim();
+    const fileInput = document.getElementById('quoteDetailFile');
+
+    try {
+        const formData = new FormData();
+        formData.append('status', status);
+        formData.append('total_amount', total_amount || '');
+        formData.append('notes', notes);
+        if (fileInput && fileInput.files.length > 0) {
+            formData.append('file', fileInput.files[0]);
+        }
+        const res = await fetch(`${API_BASE}/quotes/${quoteId}`, {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${authToken}` },
+            body: formData
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast('Quote updated!');
+            await loadQuotes();
+            showQuoteDetail(quoteId);
+        } else {
+            showToast(data.message || 'Update failed', true);
+        }
+    } catch (err) {
+        showToast('Update failed', true);
+    }
+}
+
+async function deleteQuote(quoteId) {
+    if (!confirm('Delete this quote?')) return;
+    try {
+        const res = await apiDelete(`/quotes/${quoteId}`);
+        if (res.success) {
+            showToast('Quote deleted');
+            quoteDetailPanel.classList.add('hidden');
+            await loadQuotes();
+        } else {
+            showToast(res.message || 'Delete failed', true);
+        }
+    } catch { showToast('Delete failed', true); }
+}
+
+function openCreateQuoteDialog() {
+    if (selectedOrderIds.size === 0) { showToast('Select at least one order', true); return; }
+    const modal = document.getElementById('createQuoteModal');
+    if (!modal) return;
+    const supplierSelect = document.getElementById('quoteSupplier');
+    if (supplierSelect) {
+        supplierSelect.innerHTML = '<option value="">-- Select Supplier --</option>' +
+            suppliersState.filter(s => s.is_active).map(s =>
+                `<option value="${s.id}">${s.name}</option>`).join('');
+    }
+    modal.classList.remove('hidden');
+}
+
+const createQuoteModal = document.getElementById('createQuoteModal');
+if (createQuoteModal) {
+    const closeBtn = document.getElementById('btnCloseQuoteModal');
+    if (closeBtn) closeBtn.addEventListener('click', () => createQuoteModal.classList.add('hidden'));
+
+    const quoteForm = document.getElementById('createQuoteForm');
+    if (quoteForm) {
+        quoteForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const supplier_id = document.getElementById('quoteSupplier').value;
+            const notes = document.getElementById('quoteNotes').value.trim();
+            if (!supplier_id) { showToast('Select a supplier', true); return; }
+            const order_ids = Array.from(selectedOrderIds);
+            try {
+                const res = await apiPost('/quotes', { supplier_id: parseInt(supplier_id), order_ids, notes });
+                if (res.success) {
+                    showToast('Quote created!');
+                    createQuoteModal.classList.add('hidden');
+                    selectedOrderIds.clear();
+                    updateSelectedCount();
+                    await loadQuotes();
+                    await loadOrders();
+                    switchTab('quotesTab');
+                } else {
+                    showToast(res.message || 'Failed', true);
+                }
+            } catch { showToast('Failed to create quote', true); }
+        });
+    }
+}
+
+// =============== APPROVALS ===============
+
+async function loadApprovals() {
+    try {
+        const data = await apiGet('/approvals/pending');
+        const approvalsTableBody = document.getElementById('approvalsTableBody');
+        if (!approvalsTableBody) return;
+        if (!data.success || data.orders.length === 0) {
+            approvalsTableBody.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-8">No pending approvals</td></tr>';
+            return;
+        }
+        approvalsTableBody.innerHTML = data.orders.map(o => `
+            <tr class="hover:bg-gray-700">
+                <td class="px-3 py-2 text-xs">#${o.id}</td>
+                <td class="px-3 py-2 text-sm">${o.item_description}</td>
+                <td class="px-3 py-2 text-xs">${o.building}</td>
+                <td class="px-3 py-2 text-xs">${o.requester_name}</td>
+                <td class="px-3 py-2">${renderStatusBadge(o.status)}</td>
+                <td class="px-3 py-2">
+                    <button onclick="approveOrder(${o.id})" class="bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1 rounded mr-2">Approve</button>
+                    <button onclick="rejectOrder(${o.id})" class="bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-1 rounded">Reject</button>
+                </td>
+            </tr>`).join('');
+    } catch (err) { console.error('Failed to load approvals:', err); }
+}
+
+async function approveOrder(orderId) {
+    try {
+        const res = await apiPut(`/orders/${orderId}`, { status: 'Approved' });
+        if (res.success) { showToast('Order approved!'); loadApprovals(); loadOrders(); }
+        else showToast(res.message || 'Failed', true);
+    } catch { showToast('Failed', true); }
+}
+
+async function rejectOrder(orderId) {
+    const reason = prompt('Rejection reason (optional):');
+    try {
+        const res = await apiPut(`/orders/${orderId}`, { status: 'Cancelled', internal_notes: reason || '' });
+        if (res.success) { showToast('Order rejected'); loadApprovals(); loadOrders(); }
+        else showToast(res.message || 'Failed', true);
+    } catch { showToast('Failed', true); }
+}
+
+// =============== TAB SWITCHING ===============
+
+function switchTab(tabId) {
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'));
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    const targetTab = document.getElementById(tabId);
+    if (targetTab) targetTab.classList.remove('hidden');
+    const tabButton = document.querySelector(`.tab[data-tab="${tabId}"]`);
+    if (tabButton) tabButton.classList.add('active');
+    currentTab = tabId;
+    if (tabId === 'quotesTab') loadQuotes();
+    if (tabId === 'approvalsTab') loadApprovals();
+}
+
+// =============== SUPPLIERS ===============
+
+function renderSuppliersTable() {
+    const tbody = suppliersTable ? suppliersTable.querySelector('tbody') : null;
+    if (!tbody) return;
+    if (suppliersState.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-4">No suppliers</td></tr>';
+        return;
+    }
+    tbody.innerHTML = suppliersState.map(s => `
+        <tr class="hover:bg-gray-700">
+            <td class="px-3 py-2 text-sm">${s.name}</td>
+            <td class="px-3 py-2 text-xs">${s.contact_name || '-'}</td>
+            <td class="px-3 py-2 text-xs">${s.email || '-'}</td>
+            <td class="px-3 py-2 text-xs">${s.phone || '-'}</td>
+            <td class="px-3 py-2 text-xs">${s.is_active ? '<span class="text-green-400">Active</span>' : '<span class="text-gray-500">Inactive</span>'}</td>
+            <td class="px-3 py-2">
+                <button onclick="openSupplierForm(${s.id})" class="text-blue-400 hover:text-blue-300 text-xs mr-2">Edit</button>
+            </td>
+        </tr>`).join('');
+}
+
+function openSupplierForm(supplierId) {
+    supplierFormCard.hidden = false;
+    if (!supplierId) {
+        supplierFormTitle.textContent = 'New Supplier';
+        supplierIdInput.value = '';
+        supplierNameInput.value = '';
+        supplierContactInput.value = '';
+        supplierEmailInput.value = '';
+        supplierPhoneInput.value = '';
+        supplierWebsiteInput.value = '';
+        supplierAddressInput.value = '';
+        supplierNotesInput.value = '';
+        supplierActiveInput.checked = true;
+    } else {
+        const s = suppliersState.find(x => x.id === supplierId);
+        if (!s) return;
+        supplierFormTitle.textContent = 'Edit Supplier';
+        supplierIdInput.value = s.id;
+        supplierNameInput.value = s.name;
+        supplierContactInput.value = s.contact_name || '';
+        supplierEmailInput.value = s.email || '';
+        supplierPhoneInput.value = s.phone || '';
+        supplierWebsiteInput.value = s.website || '';
+        supplierAddressInput.value = s.address || '';
+        supplierNotesInput.value = s.notes || '';
+        supplierActiveInput.checked = s.is_active;
+    }
+    supplierFormCard.scrollIntoView({ behavior: 'smooth' });
+}
+
+async function handleSaveSupplier(e) {
+    e.preventDefault();
+    const id = supplierIdInput.value;
+    const body = {
+        name: supplierNameInput.value.trim(),
+        contact_name: supplierContactInput.value.trim(),
+        email: supplierEmailInput.value.trim(),
+        phone: supplierPhoneInput.value.trim(),
+        website: supplierWebsiteInput.value.trim(),
+        address: supplierAddressInput.value.trim(),
+        notes: supplierNotesInput.value.trim(),
+        is_active: supplierActiveInput.checked
+    };
+    try {
+        const res = id ? await apiPut(`/suppliers/${id}`, body) : await apiPost('/suppliers', body);
+        if (res.success) {
+            showToast(id ? 'Supplier updated' : 'Supplier created');
+            supplierFormCard.hidden = true;
+            await loadSuppliers();
+            populateSupplierFilter();
+        } else {
+            showToast(res.message || 'Save failed', true);
+        }
+    } catch { showToast('Save failed', true); }
+}
+
+// =============== BUILDINGS ===============
+
+function renderBuildingsTable() {
+    const tbody = buildingsTable ? buildingsTable.querySelector('tbody') : null;
+    if (!tbody) return;
+    if (buildingsState.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-gray-400 py-4">No buildings</td></tr>';
+        return;
+    }
+    tbody.innerHTML = buildingsState.map(b => `
+        <tr class="hover:bg-gray-700">
+            <td class="px-3 py-2 text-sm font-mono">${b.code}</td>
+            <td class="px-3 py-2 text-sm">${b.name}</td>
+            <td class="px-3 py-2 text-xs">${b.is_active ? '<span class="text-green-400">Active</span>' : '<span class="text-gray-500">Inactive</span>'}</td>
+            <td class="px-3 py-2">
+                <button onclick="openBuildingForm(${b.id})" class="text-blue-400 hover:text-blue-300 text-xs">Edit</button>
+            </td>
+        </tr>`).join('');
+}
+
+function openBuildingForm(buildingId) {
+    buildingFormCard.hidden = false;
+    if (!buildingId) {
+        buildingFormTitle.textContent = 'New Building';
+        buildingIdInput.value = '';
+        buildingCodeInput.value = '';
+        buildingNameInput.value = '';
+        buildingDescriptionInput.value = '';
+        buildingActiveSelect.value = 'true';
+    } else {
+        const b = buildingsState.find(x => x.id === buildingId);
+        if (!b) return;
+        buildingFormTitle.textContent = 'Edit Building';
+        buildingIdInput.value = b.id;
+        buildingCodeInput.value = b.code;
+        buildingNameInput.value = b.name;
+        buildingDescriptionInput.value = b.description || '';
+        buildingActiveSelect.value = String(b.is_active);
+    }
+    buildingFormCard.scrollIntoView({ behavior: 'smooth' });
+}
+
+async function handleSaveBuilding(e) {
+    e.preventDefault();
+    const id = buildingIdInput.value;
+    const body = {
+        code: buildingCodeInput.value.trim().toUpperCase(),
+        name: buildingNameInput.value.trim(),
+        description: buildingDescriptionInput.value.trim(),
+        is_active: buildingActiveSelect.value === 'true'
+    };
+    try {
+        const res = id ? await apiPut(`/buildings/${id}`, body) : await apiPost('/buildings', body);
+        if (res.success) {
+            showToast(id ? 'Building updated' : 'Building created');
+            buildingFormCard.hidden = true;
+            await loadBuildings();
+            populateBuildingSelects();
+            populateBuildingFilter();
+        } else {
+            showToast(res.message || 'Save failed', true);
+        }
+    } catch { showToast('Save failed', true); }
+}
+
+// =============== COST CENTERS ===============
+
+function renderCostCentersTable() {
+    const tbody = costCentersTable ? costCentersTable.querySelector('tbody') : null;
+    if (!tbody) return;
+    const filterVal = ccFilterBuilding ? parseInt(ccFilterBuilding.value) : null;
+    let filtered = costCentersState;
+    if (filterVal) filtered = filtered.filter(cc => cc.building_id === filterVal);
+    if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-gray-400 py-4">No cost centers</td></tr>';
+        return;
+    }
+    tbody.innerHTML = filtered.map(cc => {
+        const building = buildingsState.find(b => b.id === cc.building_id);
+        return `<tr class="hover:bg-gray-700">
+            <td class="px-3 py-2 text-sm font-mono">${cc.code}</td>
+            <td class="px-3 py-2 text-sm">${cc.name}</td>
+            <td class="px-3 py-2 text-xs">${building ? building.code : '-'}</td>
+            <td class="px-3 py-2 text-xs">${cc.is_active ? '<span class="text-green-400">Active</span>' : '<span class="text-gray-500">Inactive</span>'}</td>
+            <td class="px-3 py-2">
+                <button onclick="openCostCenterForm(${cc.id})" class="text-blue-400 hover:text-blue-300 text-xs">Edit</button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function openCostCenterForm(costCenterId) {
+    costCenterFormCard.hidden = false;
+    if (btnDeleteCostCenter) btnDeleteCostCenter.hidden = !costCenterId;
+    if (!costCenterId) {
+        costCenterFormTitle.textContent = 'New Cost Center';
+        costCenterIdInput.value = '';
+        ccBuildingSelect.value = '';
+        ccCodeInput.value = '';
+        ccNameInput.value = '';
+        ccDescriptionInput.value = '';
+        ccActiveSelect.value = 'true';
+    } else {
+        const cc = costCentersState.find(x => x.id === costCenterId);
+        if (!cc) return;
+        costCenterFormTitle.textContent = 'Edit Cost Center';
+        costCenterIdInput.value = cc.id;
+        ccBuildingSelect.value = cc.building_id;
+        ccCodeInput.value = cc.code;
+        ccNameInput.value = cc.name;
+        ccDescriptionInput.value = cc.description || '';
+        ccActiveSelect.value = String(cc.is_active);
+    }
+    costCenterFormCard.scrollIntoView({ behavior: 'smooth' });
+}
+
+async function handleSaveCostCenter(e) {
+    e.preventDefault();
+    const id = costCenterIdInput.value;
+    const body = {
+        building_id: parseInt(ccBuildingSelect.value),
+        code: ccCodeInput.value.trim().toUpperCase(),
+        name: ccNameInput.value.trim(),
+        description: ccDescriptionInput.value.trim(),
+        is_active: ccActiveSelect.value === 'true'
+    };
+    try {
+        const res = id ? await apiPut(`/cost-centers/${id}`, body) : await apiPost('/cost-centers', body);
+        if (res.success) {
+            showToast(id ? 'Cost center updated' : 'Cost center created');
+            costCenterFormCard.hidden = true;
+            await loadCostCenters();
+            populateBuildingSelects();
+        } else {
+            showToast(res.message || 'Save failed', true);
+        }
+    } catch { showToast('Save failed', true); }
+}
+
+async function handleDeleteCostCenter() {
+    const id = costCenterIdInput.value;
+    if (!id || !confirm('Delete this cost center?')) return;
+    try {
+        const res = await apiDelete(`/cost-centers/${id}`);
+        if (res.success) {
+            showToast('Cost center deleted');
+            costCenterFormCard.hidden = true;
+            await loadCostCenters();
+        } else {
+            showToast(res.message || 'Delete failed', true);
+        }
+    } catch { showToast('Delete failed', true); }
+}
+
+// =============== USERS ===============
+
+function renderUsersTable() {
+    const tbody = usersTable ? usersTable.querySelector('tbody') : null;
+    if (!tbody) return;
+    if (usersState.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-4">No users</td></tr>';
+        return;
+    }
+    tbody.innerHTML = usersState.map(u => `
+        <tr class="hover:bg-gray-700">
+            <td class="px-3 py-2 text-sm">${u.username}</td>
+            <td class="px-3 py-2 text-sm">${u.name}</td>
+            <td class="px-3 py-2 text-xs">${u.email || '-'}</td>
+            <td class="px-3 py-2 text-xs capitalize">${u.role}</td>
+            <td class="px-3 py-2 text-xs">${u.building || '-'}</td>
+            <td class="px-3 py-2">
+                <button onclick="openUserForm(${u.id})" class="text-blue-400 hover:text-blue-300 text-xs">Edit</button>
+            </td>
+        </tr>`).join('');
+}
+
+function openUserForm(userId) {
+    userFormCard.hidden = false;
+    if (!userId) {
+        userFormTitle.textContent = 'New User';
+        userIdInput.value = '';
+        userUsernameInput.value = '';
+        userNameInput.value = '';
+        userEmailInput.value = '';
+        userRoleSelect.value = 'requester';
+        userBuildingSelect.value = '';
+        userActiveSelect.value = 'true';
+        userPasswordInput.value = '';
+        userPasswordGroup.classList.remove('hidden');
+        userUsernameInput.readOnly = false;
+    } else {
+        const u = usersState.find(x => x.id === userId);
+        if (!u) return;
+        userFormTitle.textContent = 'Edit User';
+        userIdInput.value = u.id;
+        userUsernameInput.value = u.username;
+        userNameInput.value = u.name;
+        userEmailInput.value = u.email || '';
+        userRoleSelect.value = u.role;
+        userBuildingSelect.value = u.building || '';
+        userActiveSelect.value = String(u.is_active);
+        userPasswordInput.value = '';
+        userPasswordGroup.classList.add('hidden');
+        userUsernameInput.readOnly = true;
+    }
+    userFormCard.scrollIntoView({ behavior: 'smooth' });
+}
+
+async function handleSaveUser(e) {
+    e.preventDefault();
+    const id = userIdInput.value;
+    const body = {
+        username: userUsernameInput.value.trim(),
+        name: userNameInput.value.trim(),
+        email: userEmailInput.value.trim(),
+        role: userRoleSelect.value,
+        building: userBuildingSelect.value || null,
+        is_active: userActiveSelect.value === 'true',
+        password: userPasswordInput.value || undefined
+    };
+    try {
+        const res = id ? await apiPut(`/users/${id}`, body) : await apiPost('/users', body);
+        if (res.success) {
+            showToast(id ? 'User updated' : 'User created');
+            userFormCard.hidden = true;
+            await loadUsers();
+        } else {
+            showToast(res.message || 'Save failed', true);
+        }
+    } catch { showToast('Save failed', true); }
+}
+
+// =============== TOAST ===============
+
+function showToast(message, isError = false) {
+    const container = document.getElementById('toastContainer');
+    if (!container) return;
     const toast = document.createElement('div');
-    const colors = { success: '#10b981', error: '#ef4444', info: '#06b6d4', warning: '#f59e0b' };
-    toast.style.cssText = 'background:' + (colors[type] || colors.success) + ';color:white;padding:0.75rem 1.25rem;border-radius:0.5rem;font-size:0.875rem;box-shadow:0 4px 6px rgba(0,0,0,0.3);animation:slideInRight 0.3s ease;max-width:320px;';
+    toast.className = `toast ${isError ? 'toast-error' : 'toast-success'}`;
     toast.textContent = message;
     container.appendChild(toast);
     setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; setTimeout(() => toast.remove(), 300); }, 3500);

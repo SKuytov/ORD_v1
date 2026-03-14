@@ -4,11 +4,19 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 
-// Create uploads directory if it doesn't exist
-const uploadDir = process.env.UPLOAD_DIR || './uploads';
+// Use absolute path relative to THIS file (__dirname = backend/middleware)
+// so uploads always go to backend/uploads/ regardless of PM2 cwd
+// PM2 runs from /var/www/partpulse-orders but __dirname here is backend/middleware
+// so this resolves to /var/www/partpulse-orders/backend/uploads/ consistently
+const uploadDir = process.env.UPLOAD_DIR
+    ? path.resolve(process.env.UPLOAD_DIR)
+    : path.join(__dirname, '..', 'uploads');
+
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
 }
+
+console.log(`\ud83d\udcc1 Upload directory: ${uploadDir}`);
 
 // Allowed MIME types and extensions
 const allowedMimeTypes = [
@@ -41,9 +49,9 @@ const storage = multer.diskStorage({
 const fileFilter = (req, file, cb) => {
     const mimeTypeValid = allowedMimeTypes.includes(file.mimetype);
     const extValid = allowedExtensions.test(path.extname(file.originalname).toLowerCase());
-    
+
     file.originalname = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
-    
+
     if (mimeTypeValid && extValid) {
         cb(null, true);
     } else {

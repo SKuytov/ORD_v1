@@ -829,11 +829,10 @@ function renderGroupedOrders(activeOrders, oldDelivered) {
     }
     if (oldDelivered.length > 0) {
         html += '<div class="old-delivered-section" style="margin-top: 1.5rem;">';
-        html += `<div class="old-delivered-header" onclick="this.parentElement.classList.toggle('expanded')">`;
-        html += `<span class="old-delivered-title">Delivered Orders (>7 days ago)</span><span class="old-delivered-count">${oldDelivered.length} orders</span><span class="old-delivered-chevron">v</span></div>`;
+        html += `<div class="old-delivered-header" onclick="this.parentElement.classList.toggle('expanded')"><span class="old-delivered-title">Delivered Orders (>7 days ago)</span><span class="old-delivered-count">${oldDelivered.length} orders</span><span class="old-delivered-chevron">v</span></div>`;
         html += '<div class="old-delivered-body"><div class="table-wrapper"><table><thead><tr>';
-        if (canSelectOrders) html += '<th class="sticky"></th>';
-        html += '<th>ID</th><th></th><th>Item</th><th>Cost Center</th><th>Qty</th><th>Priority</th><th>Files</th>';
+        if (canSelectOrders) html += '<th class="sticky"><input type="checkbox" id="selectAllOldOrders"></th>';
+        html += '<th>ID</th><th></th><th>Item</th><th>Cost Center</th><th>Qty</th><th>Status</th><th>Priority</th><th>Files</th>';
         if (isAdminView) html += '<th>Requester</th><th>Delivered</th><th>Supplier</th><th>Building</th><th>Unit</th><th>Total</th>';
         else html += '<th>Delivered</th>';
         html += '</tr></thead><tbody>';
@@ -841,382 +840,366 @@ function renderGroupedOrders(activeOrders, oldDelivered) {
         html += '</tbody></table></div></div></div>';
     }
     ordersTable.innerHTML = html;
-    attachOrderEventListeners(canSelectOrders);
     document.querySelectorAll('.status-group-header').forEach(header => {
-        header.addEventListener('click', () => header.closest('.status-group').classList.toggle('collapsed'));
+        header.addEventListener('click', () => {
+            const status = header.dataset.status;
+            const body = document.querySelector(`.status-group-body[data-status="${status}"]`);
+            if (body) { body.classList.toggle('collapsed'); header.classList.toggle('collapsed'); }
+        });
     });
+    attachOrderEventListeners(canSelectOrders);
 }
 
-function renderOrderRow(order, canSelect, isAdminView) {
-    const statusClass = 'status-' + (order.status || 'new').toLowerCase().replace(/ /g, '-');
-    const priorityClass = 'priority-' + (order.priority || 'normal').toLowerCase();
+function renderOrderRow(order, canSelectOrders, isAdminView) {
+    const statusClass = 'status-' + order.status.toLowerCase().replace(/ /g, '-');
+    const priorityClass = 'priority-' + (order.priority || 'Normal').toLowerCase();
+    const hasFiles = order.files && order.files.length > 0;
     const deliveryStatus = getDeliveryStatus(order);
-    const deliveryBadge = isAdminView ? getDeliveryBadgeHtml(deliveryStatus) : '';
-    const filesHtml = (order.files && order.files.length)
-        ? `<span class="file-count-badge" title="${order.files.length} file(s)">${order.files.length} file${order.files.length > 1 ? 's' : ''}</span>`
-        : '-';
-    const isChecked = selectedOrderIds.has(order.id) ? 'checked' : '';
-    const lifecycleBadge = (isAdminView && typeof renderLifecycleBadge === 'function')
-        ? renderLifecycleBadge(order)
-        : '';
-
-    let row = '<tr class="order-row" data-id="' + order.id + '">';
-    if (canSelect) row += `<td class="sticky"><input type="checkbox" class="order-checkbox" data-id="${order.id}" ${isChecked}></td>`;
-    row += `<td>${order.id}</td>`;
-    row += `<td><button class="btn btn-secondary btn-sm btn-view-order" data-id="${order.id}">View</button></td>`;
-    row += `<td title="${escapeHtml(order.item_description || '')}"><div class="item-desc">${escapeHtml((order.item_description || '').substring(0, 60))}${(order.item_description || '').length > 60 ? '...' : ''}</div>${order.part_number ? '<div class="part-number">' + escapeHtml(order.part_number) + '</div>' : ''}</td>`;
-    row += `<td>${escapeHtml(order.cost_center_code || '')}${order.cost_center_name ? '<br><span class="text-muted small">' + escapeHtml(order.cost_center_name) + '</span>' : ''}</td>`;
-    row += `<td>${order.quantity || 1}</td>`;
-    row += `<td><span class="status-badge ${statusClass}">${escapeHtml(order.status || 'New')}</span></td>`;
-    row += `<td><span class="priority-badge ${priorityClass}">${escapeHtml(order.priority || 'Normal')}</span></td>`;
-    row += `<td>${filesHtml}</td>`;
-    if (isAdminView) {
-        row += `<td>${escapeHtml(order.requester_name || '')}</td>`;
-        if (order.status === 'Delivered' && isOldDelivered(order)) {
-            const deliveredDate = getDeliveredDate(order);
-            row += `<td>${deliveredDate ? fmtDate(deliveredDate) : '-'}</td>`;
-        } else {
-            row += `<td>${getDeliveryBadgeHtml(deliveryStatus)}</td>`;
-        }
-        row += `<td>${order.expected_delivery_date ? fmtDate(order.expected_delivery_date) : '-'}</td>`;
-        row += `<td>${escapeHtml(order.supplier_name || '-')}</td>`;
-        row += `<td>${lifecycleBadge}</td>`;
-        row += `<td>${escapeHtml(order.building || '')}</td>`;
-        row += `<td>${order.unit_price ? fmtPrice(order.unit_price) : '-'}</td>`;
-        row += `<td>${order.total_price ? fmtPrice(order.total_price) : '-'}</td>`;
-    } else {
-        if (order.status === 'Delivered') {
-            const deliveredDate = getDeliveredDate(order);
-            row += `<td>${deliveredDate ? fmtDate(deliveredDate) : '-'}</td>`;
-        } else {
-            row += `<td>${getDeliveryBadgeHtml(deliveryStatus)}</td>`;
-        }
-        row += `<td>${order.expected_delivery_date ? fmtDate(order.expected_delivery_date) : '-'}</td>`;
+    const deliveredDate = getDeliveredDate(order);
+    let html = '<tr data-id="' + order.id + '">';
+    if (canSelectOrders) html += `<td class="sticky"><input type="checkbox" class="row-select" data-id="${order.id}"></td>`;
+    html += `<td>#${order.id}</td>`;
+    html += `<td><button class="btn btn-secondary btn-sm btn-view-order" data-id="${order.id}">View</button></td>`;
+    html += `<td title="${escapeHtml(order.item_description)}">${escapeHtml(order.item_description.substring(0, 40))}${order.item_description.length > 40 ? '...' : ''}</td>`;
+    html += `<td>${order.cost_center_code || '-'}</td>`;
+    html += `<td>${order.quantity}</td>`;
+    if (isOldDelivered(order) || viewMode === 'flat') {
+        html += `<td><span class="status-badge ${statusClass}">${order.status}</span></td>`;
     }
-    row += '</tr>';
-    return row;
+    html += `<td><span class="priority-pill ${priorityClass}">${order.priority || 'Normal'}</span></td>`;
+    html += `<td>${hasFiles ? order.files.length + ' file(s)' : '-'}</td>`;
+    if (isAdminView) {
+        html += `<td>${order.requester_name}</td>`;
+        if (isOldDelivered(order)) {
+            html += `<td>${deliveredDate ? formatDate(deliveredDate) : '<span class="status-badge status-delivered">Delivered</span>'}</td>`;
+        } else {
+            html += `<td>${getDeliveryBadgeHtml(deliveryStatus)}</td>`;
+        }
+        if (!isOldDelivered(order)) html += `<td>${formatDate(order.date_needed)}</td>`;
+        html += `<td>${order.supplier_name || '-'}</td>`;
+        html += `<td>${typeof renderLifecycleBadge === 'function' ? renderLifecycleBadge(order) : (order.po_number ? order.po_number : '-')}</td>`;
+        html += `<td>${order.building}</td>`;
+        html += `<td class="text-right">${fmtPrice(order.unit_price)}</td>`;
+        html += `<td class="text-right">${fmtPrice(order.total_price)}</td>`;
+    } else {
+        if (isOldDelivered(order)) {
+            html += `<td>${deliveredDate ? formatDate(deliveredDate) : '<span class="status-badge status-delivered">Delivered</span>'}</td>`;
+        } else {
+            html += `<td>${getDeliveryBadgeHtml(deliveryStatus)}</td>`;
+            html += `<td>${formatDate(order.date_needed)}</td>`;
+        }
+    }
+    html += '</tr>';
+    return html;
 }
 
 function attachOrderEventListeners(canSelectOrders) {
+    if (canSelectOrders) {
+        const selectAll = document.getElementById('selectAllOrders');
+        if (selectAll) {
+            selectAll.addEventListener('change', e => {
+                const checked = e.target.checked;
+                selectedOrderIds.clear();
+                if (checked) filteredOrders.forEach(o => selectedOrderIds.add(o.id));
+                document.querySelectorAll('.row-select').forEach(cb => { cb.checked = checked; });
+                updateSelectionUi();
+            });
+        }
+        document.querySelectorAll('.row-select').forEach(cb => {
+            cb.addEventListener('change', e => {
+                const id = parseInt(e.target.dataset.id, 10);
+                if (e.target.checked) selectedOrderIds.add(id);
+                else selectedOrderIds.delete(id);
+                updateSelectionUi();
+            });
+        });
+    }
     document.querySelectorAll('.btn-view-order').forEach(btn => {
-        btn.addEventListener('click', () => showOrderDetail(parseInt(btn.dataset.id, 10)));
-    });
-    if (!canSelectOrders) return;
-    document.querySelectorAll('.order-checkbox').forEach(cb => {
-        cb.addEventListener('change', () => {
-            const id = parseInt(cb.dataset.id, 10);
-            if (cb.checked) selectedOrderIds.add(id); else selectedOrderIds.delete(id);
-            updateSelectionUi();
-        });
-    });
-    const selectAll = document.getElementById('selectAllOrders');
-    if (selectAll) {
-        selectAll.addEventListener('change', () => {
-            const ids = filteredOrders.filter(o => !isOldDelivered(o)).map(o => o.id);
-            const startIdx = (currentPage - 1) * ORDERS_PER_PAGE;
-            const endIdx = startIdx + ORDERS_PER_PAGE;
-            const pageIds = ids.slice(startIdx, endIdx);
-            if (selectAll.checked) pageIds.forEach(id => selectedOrderIds.add(id));
-            else pageIds.forEach(id => selectedOrderIds.delete(id));
-            updateSelectionUi();
-            renderOrdersTable();
-        });
-    }
-    const selectAllOld = document.getElementById('selectAllOldOrders');
-    if (selectAllOld) {
-        selectAllOld.addEventListener('change', () => {
-            const ids = filteredOrders.filter(o => isOldDelivered(o)).map(o => o.id);
-            if (selectAllOld.checked) ids.forEach(id => selectedOrderIds.add(id));
-            else ids.forEach(id => selectedOrderIds.delete(id));
-            updateSelectionUi();
-            renderOrdersTable();
-        });
-    }
-    document.querySelectorAll('.select-all-group').forEach(cb => {
-        cb.addEventListener('change', () => {
-            const status = cb.dataset.status;
-            const ids = filteredOrders.filter(o => o.status === status).map(o => o.id);
-            if (cb.checked) ids.forEach(id => selectedOrderIds.add(id));
-            else ids.forEach(id => selectedOrderIds.delete(id));
-            updateSelectionUi();
-        });
+        btn.addEventListener('click', () => openOrderDetail(parseInt(btn.dataset.id, 10)));
     });
 }
 
 function updateSelectionUi() {
     const count = selectedOrderIds.size;
-    if (selectedCount) selectedCount.textContent = count + ' selected';
-    if (orderActionsBar) orderActionsBar.classList.toggle('hidden', count === 0);
+    if (count > 0) { orderActionsBar.hidden = false; selectedCount.textContent = `${count} selected`; }
+    else { orderActionsBar.hidden = true; }
 }
 
-function showOrderDetail(orderId) {
-    const order = ordersState.find(o => o.id === orderId);
-    if (!order) return;
-    const statusClass = 'status-' + (order.status || 'new').toLowerCase().replace(/ /g, '-');
-    const priorityClass = 'priority-' + (order.priority || 'normal').toLowerCase();
-    const canEdit = currentUser.role !== 'requester';
-    const deliveryStatus = getDeliveryStatus(order);
+async function openOrderDetail(orderId) {
+    try {
+        const res = await apiGet(`/orders/${orderId}`);
+        if (!res.success) return;
+        renderOrderDetail(res.order);
+        orderDetailPanel.classList.remove('hidden');
+        if (typeof loadOrderDocuments === 'function') loadOrderDocuments(orderId);
+    } catch { alert('Failed to load order details'); }
+}
 
-    let filesHtml = '';
-    if (order.files && order.files.length) {
-        filesHtml = '<div class="detail-files"><strong>Attachments:</strong><ul>';
-        order.files.forEach(f => {
-            filesHtml += `<li><a href="/api/files/${f.filename}" target="_blank" class="file-link">${escapeHtml(f.name || f.filename)}</a></li>`;
-        });
-        filesHtml += '</ul></div>';
+function renderOrderDetail(o) {
+    const statusClass = 'status-' + o.status.toLowerCase().replace(/ /g, '-');
+    const priorityClass = 'priority-' + (o.priority || 'Normal').toLowerCase();
+    const deliveryStatus = getDeliveryStatus(o);
+    const deliveredDate = getDeliveredDate(o);
+    const canSeeSensitiveData = currentUser.role !== 'requester';
+    let html = '';
+    html += `<div class="detail-grid">
+        <div><div class="detail-label">Order ID</div><div class="detail-value">#${o.id}</div></div>
+        <div><div class="detail-label">Building</div><div class="detail-value">${o.building}</div></div>
+        <div><div class="detail-label">Cost Center</div><div class="detail-value">${o.cost_center_code ? `${o.cost_center_code} - ${o.cost_center_name}` : '-'}</div></div>
+        <div><div class="detail-label">Status</div><div class="detail-value"><span class="status-badge ${statusClass}">${o.status}</span></div></div>
+        <div><div class="detail-label">Quantity</div><div class="detail-value">${o.quantity || '-'}</div></div>
+        <div><div class="detail-label">Priority</div><div class="detail-value"><span class="priority-pill ${priorityClass}">${o.priority || 'Normal'}</span></div></div>
+        <div><div class="detail-label">Date Needed</div><div class="detail-value">${formatDate(o.date_needed)}</div></div>
+        <div><div class="detail-label">Expected Delivery</div><div class="detail-value">${o.expected_delivery_date ? formatDate(o.expected_delivery_date) : '-'}</div></div>`;
+    if (deliveredDate) {
+        html += `<div><div class="detail-label">Delivered Date</div><div class="detail-value">${formatDate(deliveredDate)}</div></div>`;
+    } else {
+        html += `<div><div class="detail-label">Delivery Status</div><div class="detail-value">${getDeliveryBadgeHtml(deliveryStatus)}</div></div>`;
     }
-
-    let statusEditHtml = '';
-    if (canEdit) {
-        const statusOptions = ORDER_STATUSES.map(s => `<option value="${s}" ${s === order.status ? 'selected' : ''}>${s}</option>`).join('');
-        statusEditHtml = `
-            <div class="detail-edit-section">
-                <strong>Update Status:</strong>
-                <select id="orderStatusSelect" class="detail-select">${statusOptions}</select>
-                <input type="text" id="orderStatusNote" class="detail-input" placeholder="Add a note (optional)">
-                <div class="detail-edit-row">
-                    <div class="detail-edit-col">
-                        <label>Supplier</label>
-                        <select id="orderSupplierSelect" class="detail-select">
-                            <option value="">No supplier</option>
-                            ${suppliersState.filter(s => s.active).map(s => `<option value="${s.id}" ${order.supplier_id === s.id ? 'selected' : ''}>${escapeHtml(s.name)}</option>`).join('')}
-                        </select>
-                    </div>
-                    <div class="detail-edit-col">
-                        <label>Expected Delivery</label>
-                        <input type="date" id="orderExpectedDelivery" class="detail-input date-picker" value="${order.expected_delivery_date || ''}">
-                    </div>
-                    <div class="detail-edit-col">
-                        <label>Unit Price</label>
-                        <input type="number" id="orderUnitPrice" class="detail-input" value="${order.unit_price || ''}" step="0.01" min="0">
-                    </div>
-                    <div class="detail-edit-col">
-                        <label>Total Price</label>
-                        <input type="number" id="orderTotalPrice" class="detail-input" value="${order.total_price || ''}" step="0.01" min="0">
-                    </div>
-                </div>
-                <button id="btnUpdateOrder" class="btn btn-primary">Update Order</button>
-                <button id="btnAddAttachment" class="btn btn-secondary" style="margin-left: 0.5rem;">+ Add Attachment</button>
-                <input type="file" id="attachmentInput" style="display:none" multiple>
-            </div>`;
+    html += `<div><div class="detail-label">Requester</div><div class="detail-value">${o.requester_name}</div></div>`;
+    if (canSeeSensitiveData) {
+        html += `<div><div class="detail-label">Supplier</div><div class="detail-value">${o.supplier_name || '-'}</div></div>
+        <div><div class="detail-label">Unit Price</div><div class="detail-value">${fmtPrice(o.unit_price)}</div></div>
+        <div><div class="detail-label">Total Price</div><div class="detail-value">${fmtPrice(o.total_price)}</div></div>`;
     }
-
-    let historyHtml = '';
-    if (order.history && order.history.length) {
-        historyHtml = '<div class="detail-history"><strong>History:</strong><table class="history-table"><thead><tr><th>Date</th><th>Field</th><th>From</th><th>To</th><th>Note</th></tr></thead><tbody>';
-        order.history.slice().reverse().forEach(h => {
-            historyHtml += `<tr><td>${fmtDateTime(h.changed_at)}</td><td>${escapeHtml(h.field_name || '')}</td><td>${escapeHtml(h.old_value || '-')}</td><td>${escapeHtml(h.new_value || '-')}</td><td>${escapeHtml(h.note || '')}</td></tr>`;
-        });
-        historyHtml += '</tbody></table></div>';
+    html += `</div>`;
+    html += `<div class="detail-section-title">Item Description</div><div class="text-muted mt-1">${escapeHtml(o.item_description)}</div>`;
+    if (o.part_number || o.category) {
+        html += '<div class="detail-grid mt-1">';
+        if (o.part_number) html += `<div><div class="detail-label">Part Number</div><div class="detail-value">${escapeHtml(o.part_number)}</div></div>`;
+        if (o.category) html += `<div><div class="detail-label">Category</div><div class="detail-value">${escapeHtml(o.category)}</div></div>`;
+        html += '</div>';
     }
-
-    const deliveryInfo = order.status !== 'Delivered' && order.expected_delivery_date
-        ? `<div class="detail-delivery">${getDeliveryBadgeHtml(deliveryStatus)} Expected: ${fmtDate(order.expected_delivery_date)}</div>`
-        : '';
-
-    orderDetailBody.innerHTML = `
-        <div class="detail-header">
-            <span class="status-badge ${statusClass}">${escapeHtml(order.status || 'New')}</span>
-            <span class="priority-badge ${priorityClass}">${escapeHtml(order.priority || 'Normal')}</span>
-        </div>
-        <table class="detail-table">
-            <tr><th>ID</th><td>${order.id}</td></tr>
-            <tr><th>Item</th><td>${escapeHtml(order.item_description || '')}</td></tr>
-            ${order.part_number ? `<tr><th>Part #</th><td>${escapeHtml(order.part_number)}</td></tr>` : ''}
-            ${order.category ? `<tr><th>Category</th><td>${escapeHtml(order.category)}</td></tr>` : ''}
-            <tr><th>Building</th><td>${escapeHtml(order.building || '')}</td></tr>
-            <tr><th>Cost Center</th><td>${escapeHtml(order.cost_center_code || '')}${order.cost_center_name ? ' - ' + escapeHtml(order.cost_center_name) : ''}</td></tr>
-            <tr><th>Quantity</th><td>${order.quantity || 1}</td></tr>
-            <tr><th>Requester</th><td>${escapeHtml(order.requester_name || '')}</td></tr>
-            ${order.requester_email ? `<tr><th>Email</th><td>${escapeHtml(order.requester_email)}</td></tr>` : ''}
-            <tr><th>Date Needed</th><td>${order.expected_delivery_date ? fmtDate(order.expected_delivery_date) : '-'}</td></tr>
-            ${order.notes ? `<tr><th>Notes</th><td>${escapeHtml(order.notes)}</td></tr>` : ''}
-            ${order.supplier_name ? `<tr><th>Supplier</th><td>${escapeHtml(order.supplier_name)}</td></tr>` : ''}
-            ${order.unit_price ? `<tr><th>Unit Price</th><td>${fmtPrice(order.unit_price)}</td></tr>` : ''}
-            ${order.total_price ? `<tr><th>Total Price</th><td>${fmtPrice(order.total_price)}</td></tr>` : ''}
-            ${order.quote_number ? `<tr><th>Quote</th><td>${escapeHtml(order.quote_number)}</td></tr>` : ''}
-        </table>
-        ${deliveryInfo}
-        ${filesHtml}
-        ${statusEditHtml}
-        ${historyHtml}
-    `;
-    orderDetailPanel.classList.remove('hidden');
-
-    if (canEdit) {
-        const btnUpdate = document.getElementById('btnUpdateOrder');
-        if (btnUpdate) {
-            btnUpdate.addEventListener('click', () => handleUpdateOrder(order.id));
-        }
-        const btnAdd = document.getElementById('btnAddAttachment');
-        const attachInput = document.getElementById('attachmentInput');
-        if (btnAdd && attachInput) {
-            btnAdd.addEventListener('click', () => attachInput.click());
-            attachInput.addEventListener('change', () => handleAddAttachment(order.id, attachInput.files));
+    if (o.notes) html += `<div class="detail-section-title mt-1">Notes</div><div class="text-muted mt-1">${escapeHtml(o.notes)}</div>`;
+    if (canSeeSensitiveData) {
+        if (o.supplier_notes) html += '<div class="detail-section-title mt-1">Supplier Notes</div><div class="text-muted mt-1">' + escapeHtml(o.supplier_notes) + '</div>';
+        if (o.alternative_product_name || o.alternative_product_description) {
+            html += '<div class="detail-section-title mt-1">Alternative Product</div>';
+            if (o.alternative_product_name) html += '<div class="text-muted mt-1"><strong>Name:</strong> ' + escapeHtml(o.alternative_product_name) + '</div>';
+            if (o.alternative_product_description) html += '<div class="text-muted mt-1"><strong>Description:</strong> ' + escapeHtml(o.alternative_product_description) + '</div>';
         }
     }
-}
-
-async function handleUpdateOrder(orderId) {
-    const status = document.getElementById('orderStatusSelect').value;
-    const note = document.getElementById('orderStatusNote').value.trim();
-    const supplierId = document.getElementById('orderSupplierSelect')?.value || null;
-    const expectedDelivery = document.getElementById('orderExpectedDelivery')?.value || null;
-    const unitPrice = document.getElementById('orderUnitPrice')?.value || null;
-    const totalPrice = document.getElementById('orderTotalPrice')?.value || null;
-    const payload = { status, note };
-    if (supplierId) payload.supplier_id = parseInt(supplierId, 10);
-    if (expectedDelivery) payload.expected_delivery_date = expectedDelivery;
-    if (unitPrice) payload.unit_price = parseFloat(unitPrice);
-    if (totalPrice) payload.total_price = parseFloat(totalPrice);
-    try {
-        const res = await apiPut(`/orders/${orderId}`, payload);
-        if (res.success) { alert('Order updated'); orderDetailPanel.classList.add('hidden'); loadOrders(); }
-        else { alert('Failed: ' + (res.message || 'Unknown error')); }
-    } catch (err) { alert('Failed to update order. Network error.'); }
-}
-
-async function handleAddAttachment(orderId, files) {
-    if (!files || !files.length) return;
-    const formData = new FormData();
-    for (const f of files) formData.append('files', f);
-    try {
-        const res = await fetch(`${API_BASE}/orders/${orderId}/attachments`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${authToken}` },
-            body: formData
+    html += '<div class="detail-section-title mt-2">Attachments</div>';
+    if (o.files && o.files.length) {
+        html += '<ul class="file-list">';
+        for (const f of o.files) {
+            const url = f.file_path.replace('./', '/');
+            html += `<li><a class="file-link" href="${url}" target="_blank" rel="noopener">${escapeHtml(f.file_name)}</a><span class="text-muted">${formatFileSize(f.file_size)}</span></li>`;
+        }
+        html += '</ul>';
+    } else {
+        html += '<div class="text-muted mt-1">No attachments.</div>';
+    }
+    if (currentUser.role !== 'requester' && currentUser.role !== 'manager' && o.history && o.history.length) {
+        html += '<div class="detail-section-title mt-2">History</div>';
+        html += '<div class="text-muted" style="max-height: 120px; overflow-y: auto; font-size: 0.78rem;">';
+        for (const h of o.history) {
+            html += `<div>[${formatDateTime(h.changed_at)}] <strong>${escapeHtml(h.changed_by)}</strong> changed <strong>${escapeHtml(h.field_name)}</strong> from "${escapeHtml(h.old_value || '')}" to "${escapeHtml(h.new_value || '')}"</div>`;
+        }
+        html += '</div>';
+    }
+    if (currentUser.role === 'admin' || currentUser.role === 'procurement') {
+        html += '<hr class="mt-2" style="border-color: rgba(31,41,55,0.9); margin-bottom: 0.6rem;">';
+        html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;"><div>';
+        html += '<div class="detail-section-title" style="margin:0;">Suggested Suppliers</div>';
+        html += '<div style="font-size:0.75rem;color:#94a3b8;margin-top:0.2rem;">AI-powered recommendations based on item description and history</div>';
+        html += '</div>';
+        if (typeof openSupplierSelector === 'function') {
+            html += '<button class="btn btn-secondary btn-sm" onclick="openSupplierSelector(' + o.id + ', ' + (o.supplier_id || 'null') + ')" style="white-space:nowrap;">Browse All</button>';
+        }
+        html += '</div><div id="supplierSuggestionsContainer"></div>';
+    }
+    if (currentUser.role === 'admin' || currentUser.role === 'procurement') {
+        html += '<hr class="mt-2" style="border-color: rgba(31,41,55,0.9); margin-bottom: 0.6rem;">';
+        html += '<div class="detail-section-title">Update Order</div>';
+        html += `<div class="form-group mt-1"><label>Status</label><select id="detailStatus" class="form-control form-control-sm">${ORDER_STATUSES.map(s => `<option value="${s}" ${s === o.status ? 'selected' : ''}>${s}</option>`).join('')}</select></div>`;
+        html += `<div class="form-group"><label>Supplier</label><div style="display: flex; align-items: center; gap: 0.5rem;"><input type="text" id="detailSupplierDisplay" class="form-control form-control-sm" value="${o.supplier_name || 'No supplier selected'}" readonly style="flex: 1; background: #0f172a; cursor: pointer;" /><button id="btnSelectSupplier" class="btn btn-primary btn-sm" style="white-space: nowrap;">Select</button></div></div>`;
+        html += `<div class="detail-grid"><div><div class="form-group"><label>Expected Delivery</label><input type="date" id="detailExpected" class="form-control form-control-sm date-picker" value="${o.expected_delivery_date ? o.expected_delivery_date.substring(0,10) : ''}"></div></div><div><div class="form-group"><label>Unit Price</label><input type="number" step="0.01" id="detailUnitPrice" class="form-control form-control-sm" value="${parseFloat(o.unit_price) || ''}"></div></div></div>`;
+        html += `<div class="form-group"><label>Total Price</label><input type="number" step="0.01" id="detailTotalPrice" class="form-control form-control-sm" value="${parseFloat(o.total_price) || ''}"></div>`;
+        html += `<div class="form-group"><label>Supplier Notes</label><textarea id="detailSupplierNotes" class="form-control form-control-sm" rows="2" placeholder="Internal notes about the supplier for this order">${o.supplier_notes || ''}</textarea></div>`;
+        html += `<div class="form-group"><label>Alternative Product Name</label><input type="text" id="detailAltProductName" class="form-control form-control-sm" placeholder="Alternative product name" value="${escapeHtml(o.alternative_product_name || '')}"></div>`;
+        html += `<div class="form-group"><label>Alternative Product Description</label><textarea id="detailAltProductDesc" class="form-control form-control-sm" rows="2" placeholder="Description of the alternative product">${o.alternative_product_description || ''}</textarea></div>`;
+        html += `<div class="form-actions"><button id="btnSaveOrder" class="btn btn-primary btn-sm">Save</button></div>`;
+    }
+    orderDetailBody.innerHTML = html;
+    if ((currentUser.role === 'admin' || currentUser.role === 'procurement') && typeof loadSupplierSuggestions === 'function') {
+        loadSupplierSuggestions(o.id, o.supplier_id);
+    }
+    const btnSelectSupplier = document.getElementById('btnSelectSupplier');
+    if (btnSelectSupplier && typeof openSupplierSelector === 'function') {
+        btnSelectSupplier.addEventListener('click', () => openSupplierSelector(o.id, o.supplier_id));
+    }
+    const btnSave = document.getElementById('btnSaveOrder');
+    if (btnSave) {
+        btnSave.addEventListener('click', async () => {
+            const payload = {
+                status: document.getElementById('detailStatus').value,
+                supplier_id: o.supplier_id || null,
+                expected_delivery_date: document.getElementById('detailExpected').value || null,
+                unit_price: parseFloat(document.getElementById('detailUnitPrice').value || 0) || null,
+                total_price: parseFloat(document.getElementById('detailTotalPrice').value || 0) || null,
+                supplier_notes: document.getElementById('detailSupplierNotes') ? document.getElementById('detailSupplierNotes').value || null : null,
+                alternative_product_name: document.getElementById('detailAltProductName') ? document.getElementById('detailAltProductName').value || null : null,
+                alternative_product_description: document.getElementById('detailAltProductDesc') ? document.getElementById('detailAltProductDesc').value || null : null
+            };
+            const res = await apiPut(`/orders/${o.id}`, payload);
+            if (res.success) { alert('Order updated'); loadOrders(); openOrderDetail(o.id); }
+            else { alert('Failed to update order: ' + (res.message || 'Unknown error')); }
         });
-        const data = await res.json();
-        if (data.success) { alert('File(s) uploaded'); loadOrders(); showOrderDetail(orderId); }
-        else { alert('Upload failed: ' + (data.message || '')); }
-    } catch (err) { alert('Upload failed. Network error.'); }
+    }
 }
 
 // ===================== QUOTES =====================
 
 async function loadQuotes() {
-    if (typeof window.loadQuotes === 'function' && window.loadQuotes !== loadQuotes) {
-        return window.loadQuotes();
-    }
-    const tbody = document.getElementById('quotesTableBody');
-    if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="7">Loading...</td></tr>';
     try {
         const res = await apiGet('/quotes');
-        if (!res.success || !res.quotes || !res.quotes.length) {
-            tbody.innerHTML = '<tr><td colspan="7" class="text-muted" style="text-align:center;padding:2rem;">No quotes found.</td></tr>';
-            return;
-        }
-        quotesState = res.quotes;
-        tbody.innerHTML = res.quotes.map(q => `
-            <tr class="quote-row" data-id="${q.id}">
-                <td style="font-weight:600;">${escapeHtml(q.quote_number || '-')}</td>
-                <td>${escapeHtml(q.supplier_name || '-')}</td>
-                <td>${fmtDate(q.created_at)}</td>
-                <td>${fmtDate(q.valid_until)}</td>
-                <td><span class="status-badge status-${(q.status || '').toLowerCase().replace(/ /g, '-')}">${escapeHtml(q.status || '-')}</span></td>
-                <td>${q.total_value ? fmtPrice(q.total_value) : '-'}</td>
-                <td>
-                    <button class="btn btn-secondary btn-sm btn-open-lifecycle" data-id="${q.id}">Open</button>
-                </td>
-            </tr>`
-        ).join('');
-        document.querySelectorAll('.btn-open-lifecycle').forEach(btn => {
-            btn.addEventListener('click', () => {
-                if (typeof openQuoteLifecyclePanel === 'function') {
-                    openQuoteLifecyclePanel(parseInt(btn.dataset.id, 10));
-                }
-            });
-        });
-    } catch (err) {
-        console.error('loadQuotes error:', err);
-        tbody.innerHTML = '<tr><td colspan="7" style="color:red;">Error loading quotes.</td></tr>';
-    }
+        if (res.success) { quotesState = res.quotes; renderQuotesTable(); }
+    } catch { if (quotesTable) quotesTable.innerHTML = '<p>Failed to load quotes.</p>'; }
 }
 
-function openCreateQuoteDialog() {
-    if (selectedOrderIds.size === 0) {
-        alert('Please select at least one order first.');
-        return;
-    }
-    if (typeof openEnhancedCreateQuoteModal === 'function') {
-        openEnhancedCreateQuoteModal();
-    } else {
-        alert('Enhanced quote creation not available. Please refresh the page.');
-    }
-}
-
-// ===================== SUPPLIERS =====================
-
-async function loadSuppliers() {
-    try {
-        const res = await apiGet('/suppliers');
-        if (res.success) {
-            suppliersState = res.suppliers;
-            renderSuppliersTable();
-        }
-    } catch (err) { console.error('loadSuppliers error:', err); }
-}
-
-function populateSupplierFilter() {
-    if (!filterSupplier) return;
-    filterSupplier.innerHTML = '<option value="">All Suppliers</option>' +
-        suppliersState.filter(s => s.active).map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
-}
-
-function renderSuppliersTable() {
-    if (!suppliersTable) return;
-    if (!suppliersState.length) { suppliersTable.innerHTML = '<p class="text-muted">No suppliers found.</p>'; return; }
-    let html = '<div class="table-wrapper"><table><thead><tr><th>Name</th><th>Contact</th><th>Email</th><th>Phone</th><th>Active</th><th></th></tr></thead><tbody>';
-    for (const s of suppliersState) {
-        html += `<tr><td>${escapeHtml(s.name)}</td><td>${escapeHtml(s.contact_person || '')}</td><td>${escapeHtml(s.email || '')}</td><td>${escapeHtml(s.phone || '')}</td><td>${s.active ? 'Yes' : 'No'}</td><td><button class="btn btn-secondary btn-sm btn-edit-supplier" data-id="${s.id}">Edit</button></td></tr>`;
+function renderQuotesTable() {
+    if (!quotesTable) return;
+    if (!quotesState.length) { quotesTable.innerHTML = '<p class="text-muted">No quotes yet.</p>'; return; }
+    let html = '<div class="table-wrapper"><table><thead><tr><th>Quote #</th><th>Supplier</th><th>Status</th><th>Items</th><th>Total</th><th>Valid Until</th><th>Created</th><th></th></tr></thead><tbody>';
+    for (const q of quotesState) {
+        const isSent = q.status === 'Sent to Supplier';
+        const sentBadge = isSent ? '<span class="quote-sent-badge sent">Sent</span>' : '<span class="quote-sent-badge not-sent">Pending</span>';
+        html += `<tr data-id="${q.id}"><td>${q.quote_number}</td><td>${q.supplier_name || '-'}</td><td>${q.status}</td><td>${q.item_count || 0}</td><td class="text-right">${fmtPrice(q.total_amount)}</td><td>${q.valid_until ? formatDate(q.valid_until) : '-'}</td><td>${formatDateTime(q.created_at)}</td><td style="display:flex;gap:0.4rem;align-items:center;">${sentBadge}<button class="btn btn-secondary btn-sm btn-view-quote" data-id="${q.id}">View</button><button class="btn btn-primary btn-sm btn-send-quote" data-id="${q.id}" title="Compose &amp; Send">Send</button></td></tr>`;
     }
     html += '</tbody></table></div>';
-    suppliersTable.innerHTML = html;
-    document.querySelectorAll('.btn-edit-supplier').forEach(btn => {
-        btn.addEventListener('click', () => { const id = parseInt(btn.dataset.id, 10); const s = suppliersState.find(x => x.id === id); if (s) openSupplierForm(s); });
+    quotesTable.innerHTML = html;
+    document.querySelectorAll('.btn-view-quote').forEach(btn => {
+        btn.addEventListener('click', () => openQuoteDetail(parseInt(btn.dataset.id, 10)));
+    });
+    document.querySelectorAll('.btn-send-quote').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (typeof openQuoteSendPanel === 'function') openQuoteSendPanel(parseInt(btn.dataset.id, 10));
+        });
     });
 }
 
-function openSupplierForm(supplier) {
-    if (!supplierFormCard) return;
-    if (supplier) {
-        supplierFormTitle.textContent = 'Edit Supplier';
-        supplierIdInput.value = supplier.id;
-        supplierNameInput.value = supplier.name || '';
-        supplierContactInput.value = supplier.contact_person || '';
-        supplierEmailInput.value = supplier.email || '';
-        supplierPhoneInput.value = supplier.phone || '';
-        supplierWebsiteInput.value = supplier.website || '';
-        supplierAddressInput.value = supplier.address || '';
-        supplierNotesInput.value = supplier.notes || '';
-        supplierActiveInput.value = supplier.active ? '1' : '0';
-    } else {
-        supplierFormTitle.textContent = 'Add Supplier';
-        supplierForm.reset();
-        supplierIdInput.value = '';
-        supplierActiveInput.value = '1';
-    }
-    supplierFormCard.hidden = false;
+async function openQuoteDetail(id) {
+    try {
+        const res = await apiGet(`/quotes/${id}`);
+        if (!res.success) return;
+        renderQuoteDetail(res.quote);
+        quoteDetailPanel.classList.remove('hidden');
+    } catch { alert('Failed to load quote details'); }
 }
 
-async function handleSaveSupplier(e) {
+function renderQuoteDetail(q) {
+    let html = `<div class="detail-grid"><div><div class="detail-label">Quote #</div><div class="detail-value">${q.quote_number}</div></div><div><div class="detail-label">Status</div><div class="detail-value">${q.status}</div></div><div><div class="detail-label">Supplier</div><div class="detail-value">${q.supplier_name || '-'}</div></div><div><div class="detail-label">Valid Until</div><div class="detail-value">${q.valid_until ? formatDate(q.valid_until) : '-'}</div></div><div><div class="detail-label">Total Amount</div><div class="detail-value">${fmtPrice(q.total_amount)}</div></div><div><div class="detail-label">Currency</div><div class="detail-value">${q.currency}</div></div></div>`;
+    if (q.notes) html += `<div class="detail-section-title mt-1">Notes</div><div class="text-muted mt-1">${escapeHtml(q.notes)}</div>`;
+    if (q.items && q.items.length) {
+        html += '<div class="detail-section-title mt-2">Items</div><div class="table-wrapper"><table><thead><tr><th>Order</th><th>Building</th><th>Description</th><th>Qty</th><th>Unit</th><th>Total</th></tr></thead><tbody>';
+        for (const it of q.items) html += `<tr><td>#${it.order_id}</td><td>${it.building}</td><td>${escapeHtml(it.item_description.substring(0,40))}${it.item_description.length>40?'...':''}</td><td>${it.quantity}</td><td class="text-right">${fmtPrice(it.unit_price)}</td><td class="text-right">${fmtPrice(it.total_price)}</td></tr>`;
+        html += '</tbody></table></div>';
+    }
+    if ((currentUser.role === 'admin' || currentUser.role === 'procurement') && (q.status === 'Draft' || q.status === 'Received')) {
+        html += `<hr class="mt-2" style="border-color: rgba(31,41,55,0.9); margin-bottom: 0.6rem;"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;"><div><div class="detail-section-title" style="margin:0;">Approval Workflow</div><div style="font-size:0.75rem;color:#94a3b8;margin-top:0.2rem;">Submit this quote to a manager for approval</div></div><button id="btnSubmitForApproval" class="btn btn-primary btn-sm" style="white-space:nowrap;" data-quote-id="${q.id}">Submit for Approval</button></div>`;
+    }
+    // v3.0: Procurement Workspace + Smart Send Button
+    if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'procurement')) {
+        html += `<div style="margin: 0.75rem 0; display:flex; gap:0.5rem; flex-direction:column;"><button id="btnOpenProcurementWorkspace" class="btn btn-primary btn-sm" style="width:100%;" data-quote-id="${q.id}">Open Procurement Workspace</button><button id="btnOpenSendPanel" class="btn btn-secondary btn-sm" style="width:100%;" data-quote-id="${q.id}">Compose &amp; Send Email</button></div>`;
+    }
+    html += '<div class="detail-section-title mt-2">Update Quote</div>';
+    html += `<div class="form-group mt-1"><label>Status</label><select id="quoteStatus" class="form-control form-control-sm">${['Draft','Sent to Supplier','Received','Under Approval','Approved','Rejected'].map(s => `<option value="${s}" ${s===q.status?'selected':''}>${s}</option>`).join('')}</select></div>`;
+    html += `<div class="form-group mt-1"><label>Notes</label><textarea id="quoteNotes" class="form-control form-control-sm" rows="2">${q.notes || ''}</textarea></div>`;
+    html += '<div class="form-actions"><button id="btnSaveQuote" class="btn btn-primary btn-sm">Save</button></div>';
+    quoteDetailBody.innerHTML = html;
+    // v3.0: Attach Procurement Workspace button
+    const btnOpenWorkspace = document.getElementById('btnOpenProcurementWorkspace');
+    if (btnOpenWorkspace && typeof openQuoteLifecyclePanel === 'function') {
+        btnOpenWorkspace.addEventListener('click', () => {
+            openQuoteLifecyclePanel(parseInt(btnOpenWorkspace.dataset.quoteId, 10));
+        });
+    }
+    const btnOpenSend = document.getElementById('btnOpenSendPanel');
+    if (btnOpenSend && typeof openQuoteSendPanel === 'function') {
+        btnOpenSend.addEventListener('click', () => openQuoteSendPanel(parseInt(btnOpenSend.dataset.quoteId, 10)));
+    }
+    const btnSubmitApproval = document.getElementById('btnSubmitForApproval');
+    if (btnSubmitApproval && typeof openSubmitForApprovalDialog === 'function') {
+        btnSubmitApproval.addEventListener('click', () => openSubmitForApprovalDialog(parseInt(btnSubmitApproval.dataset.quoteId, 10)));
+    }
+    document.getElementById('btnSaveQuote').addEventListener('click', async () => {
+        const payload = { status: document.getElementById('quoteStatus').value, notes: document.getElementById('quoteNotes').value };
+        const res = await apiPut(`/quotes/${q.id}`, payload);
+        if (res.success) { alert('Quote updated'); loadQuotes(); } else { alert('Failed to update quote'); }
+    });
+}
+
+function openCreateQuoteDialog() {
+    if (!selectedOrderIds.size) {
+        switchTab('ordersTab');
+        alert('Select one or more orders first, then click "Create Quote from Selected"');
+        return;
+    }
+    // v3.0: Use enhanced wizard if available
+    if (typeof openEnhancedCreateQuoteModal === 'function') {
+        // Pass pre-selected supplier from the first selected order (if all share same supplier)
+        const selIds = Array.from(selectedOrderIds);
+        const firstOrder = ordersState.find(o => o.id === selIds[0]);
+        const preSupId = firstOrder && firstOrder.supplier_id ? firstOrder.supplier_id : null;
+        const preSupName = firstOrder && firstOrder.supplier_name ? firstOrder.supplier_name : '';
+        openEnhancedCreateQuoteModal(preSupId, preSupName);
+        return;
+    }
+    const modal = document.getElementById('createQuoteModal');
+    if (!modal) return;
+    const supplierSel = document.getElementById('cqSupplier');
+    if (supplierSel) {
+        supplierSel.innerHTML = '<option value="">Select supplier</option>' +
+            suppliersState.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
+    }
+    const orderCountEl = document.getElementById('cqOrderCount');
+    if (orderCountEl) orderCountEl.textContent = selectedOrderIds.size;
+    const notesEl = document.getElementById('cqNotes');
+    if (notesEl) notesEl.value = '';
+    const currencyEl = document.getElementById('cqCurrency');
+    if (currencyEl) currencyEl.value = 'EUR';
+    const validEl = document.getElementById('cqValidUntil');
+    if (validEl) validEl.value = '';
+    modal.classList.remove('hidden');
+}
+
+function closeCreateQuoteModal() {
+    const modal = document.getElementById('createQuoteModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+async function handleCreateQuote(e) {
     e.preventDefault();
-    const payload = {
-        name: supplierNameInput.value.trim(),
-        contact_person: supplierContactInput.value.trim(),
-        email: supplierEmailInput.value.trim(),
-        phone: supplierPhoneInput.value.trim(),
-        website: supplierWebsiteInput.value.trim(),
-        address: supplierAddressInput.value.trim(),
-        notes: supplierNotesInput.value.trim(),
-        active: supplierActiveInput.value === '1'
+    const orders = ordersState.filter(o => selectedOrderIds.has(o.id));
+    const supplierId = document.getElementById('cqSupplier')?.value;
+    if (!supplierId) { alert('Please select a supplier'); return; }
+    const body = {
+        supplier_id: parseInt(supplierId, 10),
+        order_ids: orders.map(o => o.id),
+        notes: document.getElementById('cqNotes')?.value || null,
+        currency: document.getElementById('cqCurrency')?.value || 'EUR',
+        valid_until: document.getElementById('cqValidUntil')?.value || null
     };
-    if (!payload.name) { alert('Supplier name is required'); return; }
-    const id = supplierIdInput.value;
-    const res = id ? await apiPut(`/suppliers/${id}`, payload) : await apiPost('/suppliers', payload);
-    if (res.success) { alert('Supplier saved'); supplierFormCard.hidden = true; loadSuppliers().then(() => populateSupplierFilter()); }
-    else { alert('Failed to save supplier: ' + (res.message || 'Unknown error')); }
+    const res = await apiPost('/quotes', body);
+    if (res.success) {
+        closeCreateQuoteModal();
+        selectedOrderIds.clear();
+        updateSelectionUi();
+        loadOrders();
+        loadQuotes();
+        // v3.0: Open Procurement Lifecycle Panel
+        if (typeof openQuoteLifecyclePanel === 'function') {
+            openQuoteLifecyclePanel(res.quoteId);
+        } else if (typeof openQuoteSendPanel === 'function') {
+            openQuoteSendPanel(res.quoteId);
+        } else {
+            alert('Quote ' + res.quoteNumber + ' created');
+        }
+    } else {
+        alert('Failed to create quote: ' + (res.message || 'Unknown error'));
+    }
 }
 
 // ===================== BUILDINGS =====================
@@ -1226,46 +1209,44 @@ async function loadBuildings() {
         const res = await apiGet('/buildings');
         if (res.success) {
             buildingsState = res.buildings;
-            populateBuildingFilter();
-            populateBuildingSelect();
-            if (currentUser.role === 'requester') {
-                const userBuilding = buildingsState.find(b => b.code === currentUser.building);
-                buildingSelect.value = currentUser.building;
-                renderCostCenterRadios(currentUser.building);
-            }
-            if (currentUser.role === 'admin') {
-                renderBuildingsTable();
-                populateCCBuildingSelects();
-            }
+            populateBuildingSelects();
+            if (currentUser && currentUser.role === 'admin') renderBuildingsTable();
         }
-    } catch (err) { console.error('loadBuildings error:', err); }
+    } catch (err) {
+        console.error('loadBuildings error:', err);
+        if (buildingsTable) buildingsTable.innerHTML = '<p>Failed to load buildings.</p>';
+    }
 }
 
-function populateBuildingFilter() {
-    if (!filterBuilding) return;
-    filterBuilding.innerHTML = '<option value="">All Buildings</option>' +
-        buildingsState.filter(b => b.active).map(b => `<option value="${b.code}">${escapeHtml(b.code)} - ${escapeHtml(b.name)}</option>`).join('');
-}
-
-function populateBuildingSelect() {
-    if (!buildingSelect) return;
-    const current = buildingSelect.value;
-    buildingSelect.innerHTML = '<option value="">Select Building</option>' +
-        buildingsState.filter(b => b.active).map(b => `<option value="${b.code}">${escapeHtml(b.code)} - ${escapeHtml(b.name)}</option>`).join('');
-    if (current) buildingSelect.value = current;
+function populateBuildingSelects() {
+    if (buildingSelect) {
+        buildingSelect.innerHTML = '<option value="">Select Building</option>' +
+            buildingsState.filter(b => b.active).map(b => `<option value="${b.code}">${escapeHtml(b.code)} - ${escapeHtml(b.name)}</option>`).join('');
+        if (currentUser && currentUser.role === 'requester') { buildingSelect.value = currentUser.building; buildingSelect.disabled = true; }
+    }
+    if (userBuildingSelect) {
+        userBuildingSelect.innerHTML = '<option value="">None</option>' +
+            buildingsState.filter(b => b.active).map(b => `<option value="${b.code}">${escapeHtml(b.code)} - ${escapeHtml(b.name)}</option>`).join('');
+    }
+    if (filterBuilding) {
+        const currentVal = filterBuilding.value;
+        filterBuilding.innerHTML = '<option value="">Building: All</option>' +
+            buildingsState.filter(b => b.active).map(b => `<option value="${b.code}">${escapeHtml(b.code)} - ${escapeHtml(b.name)}</option>`).join('');
+        if (currentVal) filterBuilding.value = currentVal;
+    }
 }
 
 function renderBuildingsTable() {
     if (!buildingsTable) return;
-    if (!buildingsState.length) { buildingsTable.innerHTML = '<p class="text-muted">No buildings found.</p>'; return; }
-    let html = '<div class="table-wrapper"><table><thead><tr><th>Code</th><th>Name</th><th>Description</th><th>Active</th><th></th></tr></thead><tbody>';
+    if (!buildingsState.length) { buildingsTable.innerHTML = '<p class="text-muted">No buildings yet.</p>'; return; }
+    let html = '<div class="table-wrapper"><table><thead><tr><th>Code</th><th>Name</th><th>Active</th><th></th></tr></thead><tbody>';
     for (const b of buildingsState) {
-        html += `<tr><td>${escapeHtml(b.code)}</td><td>${escapeHtml(b.name)}</td><td>${escapeHtml(b.description || '')}</td><td>${b.active ? 'Yes' : 'No'}</td><td><button class="btn btn-secondary btn-sm btn-edit-building" data-id="${b.id}">Edit</button></td></tr>`;
+        html += `<tr data-id="${b.id}"><td>${escapeHtml(b.code)}</td><td>${escapeHtml(b.name)}</td><td>${b.active ? 'Yes' : 'No'}</td><td><button class="btn btn-secondary btn-sm btn-edit-building" data-id="${b.id}">Edit</button></td></tr>`;
     }
     html += '</tbody></table></div>';
     buildingsTable.innerHTML = html;
     document.querySelectorAll('.btn-edit-building').forEach(btn => {
-        btn.addEventListener('click', () => { const id = parseInt(btn.dataset.id, 10); const b = buildingsState.find(x => x.id === id); if (b) openBuildingForm(b); });
+        btn.addEventListener('click', () => { const b = buildingsState.find(x => x.id === parseInt(btn.dataset.id, 10)); if (b) openBuildingForm(b); });
     });
 }
 
@@ -1273,32 +1254,20 @@ function openBuildingForm(building) {
     if (!buildingFormCard) return;
     if (building) {
         buildingFormTitle.textContent = 'Edit Building';
-        buildingIdInput.value = building.id;
-        buildingCodeInput.value = building.code || '';
-        buildingNameInput.value = building.name || '';
-        buildingDescriptionInput.value = building.description || '';
-        buildingActiveSelect.value = building.active ? '1' : '0';
+        buildingIdInput.value = building.id; buildingCodeInput.value = building.code || ''; buildingNameInput.value = building.name || ''; buildingDescriptionInput.value = building.description || ''; buildingActiveSelect.value = building.active ? '1' : '0';
     } else {
-        buildingFormTitle.textContent = 'Add Building';
-        buildingForm.reset();
-        buildingIdInput.value = '';
-        buildingActiveSelect.value = '1';
+        buildingFormTitle.textContent = 'Create Building'; buildingForm.reset(); buildingIdInput.value = ''; buildingActiveSelect.value = '1';
     }
     buildingFormCard.hidden = false;
 }
 
 async function handleSaveBuilding(e) {
     e.preventDefault();
-    const payload = {
-        code: buildingCodeInput.value.trim(),
-        name: buildingNameInput.value.trim(),
-        description: buildingDescriptionInput.value.trim(),
-        active: buildingActiveSelect.value === '1'
-    };
-    if (!payload.code || !payload.name) { alert('Building code and name are required'); return; }
+    const payload = { code: buildingCodeInput.value.trim(), name: buildingNameInput.value.trim(), description: buildingDescriptionInput.value.trim(), active: buildingActiveSelect.value === '1' };
+    if (!payload.code || !payload.name) { alert('Code and name are required'); return; }
     const id = buildingIdInput.value;
     const res = id ? await apiPut(`/buildings/${id}`, payload) : await apiPost('/buildings', payload);
-    if (res.success) { alert('Building saved'); buildingFormCard.hidden = true; loadBuildings(); }
+    if (res.success) { alert('Building saved'); buildingFormCard.hidden = true; loadBuildings(); loadCostCenters(); }
     else { alert('Failed to save building: ' + (res.message || 'Unknown error')); }
 }
 
@@ -1308,316 +1277,231 @@ async function loadUsers() {
     try {
         const res = await apiGet('/users');
         if (res.success) { usersState = res.users; renderUsersTable(); }
-    } catch (err) { console.error('loadUsers error:', err); }
+    } catch (err) { console.error('loadUsers error:', err); usersTable.innerHTML = '<p>Failed to load users.</p>'; }
 }
 
 function renderUsersTable() {
-    if (!usersTable) return;
-    if (!usersState.length) { usersTable.innerHTML = '<p class="text-muted">No users found.</p>'; return; }
+    if (!usersState.length) { usersTable.innerHTML = '<p class="text-muted">No users yet.</p>'; return; }
     let html = '<div class="table-wrapper"><table><thead><tr><th>Username</th><th>Name</th><th>Email</th><th>Role</th><th>Building</th><th>Active</th><th></th></tr></thead><tbody>';
     for (const u of usersState) {
-        html += `<tr><td>${escapeHtml(u.username)}</td><td>${escapeHtml(u.name || '')}</td><td>${escapeHtml(u.email || '')}</td><td>${escapeHtml(u.role)}</td><td>${escapeHtml(u.building || '-')}</td><td>${u.active ? 'Yes' : 'No'}</td><td><button class="btn btn-secondary btn-sm btn-edit-user" data-id="${u.id}">Edit</button></td></tr>`;
+        html += `<tr data-id="${u.id}"><td>${escapeHtml(u.username)}</td><td>${escapeHtml(u.name || '')}</td><td>${escapeHtml(u.email || '')}</td><td>${u.role}</td><td>${u.building || ''}</td><td>${u.active ? 'Yes' : 'No'}</td><td><button class="btn btn-secondary btn-sm btn-edit-user" data-id="${u.id}">Edit</button> <button class="btn btn-secondary btn-sm btn-reset-pass" data-id="${u.id}">Reset Password</button></td></tr>`;
     }
     html += '</tbody></table></div>';
     usersTable.innerHTML = html;
-    document.querySelectorAll('.btn-edit-user').forEach(btn => {
-        btn.addEventListener('click', () => { const id = parseInt(btn.dataset.id, 10); const u = usersState.find(x => x.id === id); if (u) openUserForm(u); });
-    });
+    document.querySelectorAll('.btn-edit-user').forEach(btn => { btn.addEventListener('click', () => { const u = usersState.find(x => x.id === parseInt(btn.dataset.id, 10)); if (u) openUserForm(u); }); });
+    document.querySelectorAll('.btn-reset-pass').forEach(btn => { btn.addEventListener('click', () => resetUserPassword(parseInt(btn.dataset.id, 10))); });
 }
 
 function openUserForm(user) {
-    if (!userFormCard) return;
-    populateUserBuildingSelect();
     if (user) {
-        userFormTitle.textContent = 'Edit User';
-        userIdInput.value = user.id;
-        userUsernameInput.value = user.username || '';
-        userNameInput.value = user.name || '';
-        userEmailInput.value = user.email || '';
-        userRoleSelect.value = user.role || 'requester';
-        userBuildingSelect.value = user.building || '';
-        userActiveSelect.value = user.active ? '1' : '0';
-        if (userPasswordGroup) userPasswordGroup.style.display = 'none';
-        if (userPasswordInput) userPasswordInput.removeAttribute('required');
+        userFormTitle.textContent = 'Edit User'; userIdInput.value = user.id; userUsernameInput.value = user.username || ''; userNameInput.value = user.name || ''; userEmailInput.value = user.email || ''; userRoleSelect.value = user.role || 'requester'; userBuildingSelect.value = user.building || ''; userActiveSelect.value = user.active ? '1' : '0'; userPasswordInput.value = ''; userPasswordGroup.style.display = 'none';
     } else {
-        userFormTitle.textContent = 'Add User';
-        userForm.reset();
-        userIdInput.value = '';
-        userActiveSelect.value = '1';
-        if (userPasswordGroup) userPasswordGroup.style.display = 'block';
-        if (userPasswordInput) userPasswordInput.setAttribute('required', '');
+        userFormTitle.textContent = 'Create User'; userForm.reset(); userIdInput.value = ''; userActiveSelect.value = '1'; userPasswordGroup.style.display = '';
     }
     userFormCard.hidden = false;
 }
 
-function populateUserBuildingSelect() {
-    if (!userBuildingSelect) return;
-    userBuildingSelect.innerHTML = '<option value="">No building (admin/procurement)</option>' +
-        buildingsState.filter(b => b.active).map(b => `<option value="${b.code}">${escapeHtml(b.code)} - ${escapeHtml(b.name)}</option>`).join('');
-}
-
 async function handleSaveUser(e) {
     e.preventDefault();
+    const payload = { username: userUsernameInput.value.trim(), name: userNameInput.value.trim(), email: userEmailInput.value.trim(), role: userRoleSelect.value, building: userBuildingSelect.value || null, active: userActiveSelect.value === '1', password: userPasswordGroup.style.display !== 'none' ? userPasswordInput.value.trim() : undefined };
+    if (!payload.username || !payload.name || !payload.email || !payload.role) { alert('Username, name, email and role are required'); return; }
     const id = userIdInput.value;
-    const payload = {
-        username: userUsernameInput.value.trim(),
-        name: userNameInput.value.trim(),
-        email: userEmailInput.value.trim(),
-        role: userRoleSelect.value,
-        building: userBuildingSelect.value || null,
-        active: userActiveSelect.value === '1'
-    };
-    if (!id && userPasswordInput) payload.password = userPasswordInput.value;
-    if (!payload.username || !payload.name || !payload.role) { alert('Username, name, and role are required'); return; }
-    const res = id ? await apiPut(`/users/${id}`, payload) : await apiPost('/users', payload);
-    if (res.success) { alert('User saved'); userFormCard.hidden = true; loadUsers(); }
+    let res;
+    if (id) { delete payload.password; res = await apiPut(`/users/${id}`, payload); }
+    else { res = await apiPost('/users', payload); }
+    if (res.success) { if (!id && res.password) { alert(`User created. Initial password: ${res.password}`); } else { alert('User saved'); } userFormCard.hidden = true; loadUsers(); }
     else { alert('Failed to save user: ' + (res.message || 'Unknown error')); }
 }
 
-// ===================== TAB SWITCHING =====================
-
-function switchTab(tabId) {
-    document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    const el = document.getElementById(tabId);
-    if (el) el.classList.remove('hidden');
-    const btn = document.querySelector(`.tab[data-tab="${tabId}"]`);
-    if (btn) btn.classList.add('active');
-    currentTab = tabId;
-    if (tabId === 'quotesTab') loadQuotes();
-    if (tabId === 'suppliersTab') loadSuppliers();
-    if (tabId === 'usersTab') loadUsers();
-    if (tabId === 'buildingsTab') loadBuildings();
-    if (tabId === 'costCentersTab') loadCostCenters();
-    if (tabId === 'approvalsTab' && typeof loadApprovals === 'function') loadApprovals();
+async function resetUserPassword(id) {
+    const pwd = prompt('Enter new password (min 6 characters):');
+    if (!pwd || pwd.trim().length < 6) { alert('Password too short. Nothing changed.'); return; }
+    const confirmPwd = prompt('Confirm new password:');
+    if (confirmPwd !== pwd) { alert('Passwords do not match. Nothing changed.'); return; }
+    try {
+        const res = await apiPost(`/users/${id}/reset-password`, { password: pwd });
+        if (res.success) { alert('Password reset successfully.'); } else { alert('Password reset failed: ' + (res.message || 'Unknown error')); }
+    } catch { alert('Password reset failed'); }
 }
 
-// ===================== STATUS / BUILDING FILTERS =====================
+// ===================== SUPPLIERS =====================
+
+async function loadSuppliers() {
+    try {
+        const res = await apiGet('/suppliers');
+        if (res.success) { suppliersState = res.suppliers; renderSuppliersTable(); }
+    } catch { suppliersTable.innerHTML = '<p>Failed to load suppliers.</p>'; }
+}
+
+function renderSuppliersTable() {
+    if (!suppliersState.length) { suppliersTable.innerHTML = '<p class="text-muted">No suppliers yet.</p>'; return; }
+    let html = '<div class="table-wrapper"><table><thead><tr><th>Name</th><th>Contact</th><th>Email</th><th>Phone</th><th>Active</th><th></th></tr></thead><tbody>';
+    for (const s of suppliersState) {
+        html += `<tr data-id="${s.id}"><td>${escapeHtml(s.name)}</td><td>${escapeHtml(s.contact_person || '')}</td><td>${escapeHtml(s.email || '')}</td><td>${escapeHtml(s.phone || '')}</td><td>${s.active ? 'Yes' : 'No'}</td><td><button class="btn btn-secondary btn-sm btn-edit-supplier" data-id="${s.id}">Edit</button></td></tr>`;
+    }
+    html += '</tbody></table></div>';
+    suppliersTable.innerHTML = html;
+    document.querySelectorAll('.btn-edit-supplier').forEach(btn => { btn.addEventListener('click', () => { const s = suppliersState.find(x => x.id === parseInt(btn.dataset.id, 10)); if (s) openSupplierForm(s); }); });
+}
+
+function openSupplierForm(supplier) {
+    if (supplier) {
+        supplierFormTitle.textContent = 'Edit Supplier'; supplierIdInput.value = supplier.id; supplierNameInput.value = supplier.name || ''; supplierContactInput.value = supplier.contact_person || ''; supplierEmailInput.value = supplier.email || ''; supplierPhoneInput.value = supplier.phone || ''; supplierWebsiteInput.value = supplier.website || ''; supplierAddressInput.value = supplier.address || ''; supplierNotesInput.value = supplier.notes || ''; supplierActiveInput.value = supplier.active ? '1' : '0';
+    } else {
+        supplierFormTitle.textContent = 'Create Supplier'; supplierForm.reset(); supplierIdInput.value = ''; supplierActiveInput.value = '1';
+    }
+    supplierFormCard.hidden = false;
+}
+
+async function handleSaveSupplier(e) {
+    e.preventDefault();
+    const payload = { name: supplierNameInput.value.trim(), contact_person: supplierContactInput.value.trim(), email: supplierEmailInput.value.trim(), phone: supplierPhoneInput.value.trim(), website: supplierWebsiteInput.value.trim(), address: supplierAddressInput.value.trim(), notes: supplierNotesInput.value.trim(), active: parseInt(supplierActiveInput.value, 10) };
+    if (!payload.name) { alert('Name is required'); return; }
+    const id = supplierIdInput.value;
+    const res = id ? await apiPut(`/suppliers/${id}`, payload) : await apiPost('/suppliers', payload);
+    if (res.success) { alert('Supplier saved'); supplierFormCard.hidden = true; loadSuppliers(); populateSupplierFilter(); }
+    else { alert('Failed to save supplier'); }
+}
 
 function populateStatusFilter() {
-    if (!filterStatus) return;
-    filterStatus.innerHTML = '<option value="">All Statuses</option>' +
-        ORDER_STATUSES.map(s => `<option value="${s}">${s}</option>`).join('');
+    filterStatus.innerHTML = '<option value="">Status: All</option>' + ORDER_STATUSES.map(s => `<option value="${s}">${s}</option>`).join('');
 }
 
-// ===================== FORMAT HELPERS =====================
-
-function fmtDate(d) {
-    if (!d) return '-';
-    const dt = new Date(d);
-    if (isNaN(dt.getTime())) return '-';
-    return dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+function populateSupplierFilter() {
+    filterSupplier.innerHTML = '<option value="">Supplier: All</option>' + suppliersState.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
 }
 
-function fmtDateTime(d) {
-    if (!d) return '-';
-    const dt = new Date(d);
-    if (isNaN(dt.getTime())) return '-';
-    return dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) +
-        ' ' + dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+function switchTab(tabId) {
+    if (currentTab === tabId) return;
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabId));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+    document.getElementById(tabId).classList.remove('hidden');
+    currentTab = tabId;
+    if (tabId === 'suppliersTab' && currentUser && currentUser.role === 'admin') {
+        const brandTrainingCard = document.getElementById('brandTrainingCard');
+        if (brandTrainingCard) {
+            brandTrainingCard.hidden = false;
+            if (typeof loadBrandTrainingUI === 'function') loadBrandTrainingUI();
+        }
+    }
 }
 
-function escapeHtml(str) {
-    if (str === null || str === undefined) return '';
-    return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-}
+function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c] || c)); }
+function formatDate(dateStr) { if (!dateStr) return '-'; const d = new Date(dateStr); if (isNaN(d)) return dateStr; return d.toLocaleDateString(); }
+function formatDateTime(dateStr) { if (!dateStr) return '-'; const d = new Date(dateStr); if (isNaN(d)) return dateStr; return d.toLocaleString(); }
+function formatFileSize(bytes) { if (!bytes) return ''; const kb = bytes / 1024; if (kb < 1024) return kb.toFixed(1) + ' KB'; return (kb / 1024).toFixed(1) + ' MB'; }
 
 // ===================== PROCUREMENT CREATE ORDER MODAL =====================
 
 function openProcCreateOrderModal() {
-    const existing = document.getElementById('procCreateOrderModal');
-    if (existing) existing.remove();
+    const modal = document.getElementById('procCreateOrderModal');
+    if (!modal) return;
+    const bldgSel = document.getElementById('procBuilding');
+    if (bldgSel) {
+        bldgSel.innerHTML = '<option value="">Select Building</option>' +
+            buildingsState.filter(b => b.active).map(b => `<option value="${b.code}">${escapeHtml(b.code)} - ${escapeHtml(b.name)}</option>`).join('');
+    }
+    const ccContainer = document.getElementById('procCostCenterRadios');
+    if (ccContainer) ccContainer.innerHTML = '<span class="text-muted">Select a building first</span>';
+    const form = document.getElementById('procCreateOrderForm');
+    if (form) form.reset();
+    if (bldgSel) bldgSel.onchange = () => renderProcCostCenterRadios(bldgSel.value);
+    if (typeof initProcModalAutocomplete === 'function') initProcModalAutocomplete();
+    modal.classList.remove('hidden');
+}
 
-    const suppliers = suppliersState.filter(s => s.active);
-    const buildings = buildingsState.filter(b => b.active);
+function closeProcCreateOrderModal() {
+    const modal = document.getElementById('procCreateOrderModal');
+    if (modal) modal.classList.add('hidden');
+}
 
-    const modal = document.createElement('div');
-    modal.id = 'procCreateOrderModal';
-    modal.className = 'pw-modal-overlay';
-    modal.innerHTML = `
-        <div class="pw-modal-card" style="max-width:600px;width:100%;">
-            <div class="pw-modal-header">
-                <h3 class="pw-modal-title">Create Order</h3>
-                <button class="pw-close-btn" id="btnCloseProcModal">X</button>
-            </div>
-            <form id="procCreateOrderForm" style="padding:1.5rem;">
-                <div class="pw-form-row">
-                    <div class="pw-form-group">
-                        <label class="pw-label">Building *</label>
-                        <select id="procBuilding" class="pw-form-control" required>
-                            <option value="">Select building</option>
-                            ${buildings.map(b => `<option value="${b.code}">${escapeHtml(b.code)} - ${escapeHtml(b.name)}</option>`).join('')}
-                        </select>
-                    </div>
-                    <div class="pw-form-group">
-                        <label class="pw-label">Cost Center *</label>
-                        <select id="procCostCenter" class="pw-form-control" required>
-                            <option value="">Select building first</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="pw-form-group">
-                    <label class="pw-label">Item Description *</label>
-                    <input type="text" id="procItemDesc" class="pw-form-control" required placeholder="Describe the item needed">
-                </div>
-                <div class="pw-form-row">
-                    <div class="pw-form-group">
-                        <label class="pw-label">Part Number</label>
-                        <input type="text" id="procPartNumber" class="pw-form-control" placeholder="Optional">
-                    </div>
-                    <div class="pw-form-group">
-                        <label class="pw-label">Category</label>
-                        <input type="text" id="procCategory" class="pw-form-control" placeholder="Optional">
-                    </div>
-                </div>
-                <div class="pw-form-row">
-                    <div class="pw-form-group">
-                        <label class="pw-label">Quantity *</label>
-                        <input type="number" id="procQuantity" class="pw-form-control" value="1" min="1" required>
-                    </div>
-                    <div class="pw-form-group">
-                        <label class="pw-label">Priority</label>
-                        <select id="procPriority" class="pw-form-control">
-                            <option value="Normal">Normal</option>
-                            <option value="High">High</option>
-                            <option value="Urgent">Urgent</option>
-                            <option value="Low">Low</option>
-                        </select>
-                    </div>
-                    <div class="pw-form-group">
-                        <label class="pw-label">Date Needed</label>
-                        <input type="date" id="procDateNeeded" class="pw-form-control date-picker">
-                    </div>
-                </div>
-                <div class="pw-form-group">
-                    <label class="pw-label">Requester Name *</label>
-                    <input type="text" id="procRequester" class="pw-form-control" required placeholder="Name of the person requesting">
-                </div>
-                <div class="pw-form-group">
-                    <label class="pw-label">Notes</label>
-                    <textarea id="procNotes" class="pw-form-control" rows="2" placeholder="Additional notes"></textarea>
-                </div>
-                <div class="pw-wizard-footer" style="padding:0;margin-top:1.5rem;">
-                    <button type="button" class="btn btn-secondary" id="btnCancelProcModal">Cancel</button>
-                    <div style="flex:1"></div>
-                    <button type="submit" class="btn btn-primary" id="btnSubmitProcOrder">Create Order</button>
-                </div>
-            </form>
-        </div>`;
+function renderProcCostCenterRadios(buildingCode) {
+    const container = document.getElementById('procCostCenterRadios');
+    if (!container) return;
+    if (!buildingCode) { container.innerHTML = '<span class="text-muted">Select a building first</span>'; return; }
+    const filtered = costCentersState.filter(cc => cc.building_code === buildingCode && cc.active);
+    if (!filtered.length) { container.innerHTML = '<span class="text-muted">No cost centers for this building</span>'; return; }
+    container.innerHTML = filtered.map(cc =>
+        `<label class="radio-label"><input type="radio" name="procCostCenter" value="${cc.id}" required><span class="radio-text"><strong>${escapeHtml(cc.code)}</strong> - ${escapeHtml(cc.name)}</span></label>`
+    ).join('');
+}
 
-    document.body.appendChild(modal);
-
-    document.getElementById('btnCloseProcModal').addEventListener('click', () => modal.remove());
-    document.getElementById('btnCancelProcModal').addEventListener('click', () => modal.remove());
-    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
-
-    const procBuildingSel = document.getElementById('procBuilding');
-    const procCCsel = document.getElementById('procCostCenter');
-    procBuildingSel.addEventListener('change', () => {
-        const bCode = procBuildingSel.value;
-        const ccs = costCentersState.filter(cc => cc.building_code === bCode && cc.active);
-        procCCsel.innerHTML = ccs.length
-            ? '<option value="">Select cost center</option>' + ccs.map(cc => `<option value="${cc.id}">${escapeHtml(cc.code)} - ${escapeHtml(cc.name)}</option>`).join('')
-            : '<option value="">No cost centers for this building</option>';
-    });
-
-    document.getElementById('procCreateOrderForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const btn = document.getElementById('btnSubmitProcOrder');
-        btn.disabled = true;
-        btn.textContent = 'Creating...';
-        const payload = {
-            building: procBuildingSel.value,
-            costCenterId: procCCsel.value || null,
-            itemDescription: document.getElementById('procItemDesc').value.trim(),
-            partNumber: document.getElementById('procPartNumber').value.trim(),
-            category: document.getElementById('procCategory').value.trim(),
-            quantity: parseInt(document.getElementById('procQuantity').value, 10) || 1,
-            priority: document.getElementById('procPriority').value,
-            dateNeeded: document.getElementById('procDateNeeded').value || null,
-            requester: document.getElementById('procRequester').value.trim(),
-            notes: document.getElementById('procNotes').value.trim()
-        };
-        if (!payload.building || !payload.itemDescription || !payload.requester) {
-            alert('Building, item description, and requester name are required');
-            btn.disabled = false;
-            btn.textContent = 'Create Order';
-            return;
-        }
-        try {
-            const res = await apiPost('/orders/create-direct', payload);
-            if (res.success) {
-                modal.remove();
-                alert('Order #' + (res.orderId || '') + ' created successfully');
+async function handleProcCreateOrder(e) {
+    e.preventDefault();
+    const building = document.getElementById('procBuilding')?.value;
+    if (!building) { alert('Please select a building'); return; }
+    const selectedCC = document.querySelector('input[name="procCostCenter"]:checked');
+    if (!selectedCC) { alert('Please select a cost center'); return; }
+    const itemDescription = document.getElementById('procItemDescription')?.value.trim() || '';
+    const dateNeeded = document.getElementById('procDateNeeded')?.value || '';
+    if (!itemDescription) { alert('Item description is required'); return; }
+    if (!dateNeeded) { alert('Date needed is required'); return; }
+    const formData = new FormData();
+    formData.append('building', building);
+    formData.append('costCenterId', selectedCC.value);
+    formData.append('itemDescription', itemDescription);
+    formData.append('partNumber', document.getElementById('procPartNumber')?.value.trim() || '');
+    formData.append('category', document.getElementById('procCategory')?.value.trim() || '');
+    formData.append('quantity', document.getElementById('procQuantity')?.value || '1');
+    formData.append('dateNeeded', dateNeeded);
+    formData.append('priority', document.getElementById('procPriority')?.value || 'Normal');
+    formData.append('notes', document.getElementById('procNotes')?.value.trim() || '');
+    formData.append('requester', currentUser.name);
+    formData.append('requesterEmail', currentUser.email);
+    const procFiles = document.getElementById('procAttachments');
+    if (procFiles && procFiles.files) {
+        for (let i = 0; i < procFiles.files.length; i++) formData.append('files', procFiles.files[i]);
+    }
+    if (window.UploadProgress) window.UploadProgress.show();
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.upload.addEventListener('progress', (evt) => {
+            if (evt.lengthComputable && window.UploadProgress) window.UploadProgress.update((evt.loaded / evt.total) * 100);
+        });
+        xhr.addEventListener('load', () => {
+            if (window.UploadProgress) window.UploadProgress.hide();
+            try {
+                const data = JSON.parse(xhr.responseText);
+                if (!data.success) { alert('Failed to create order: ' + (data.message || 'Unknown error')); reject(new Error(data.message)); return; }
+                alert('Order created successfully!');
+                closeProcCreateOrderModal();
                 loadOrders();
-            } else {
-                alert('Failed to create order: ' + (res.message || 'Unknown error'));
-                btn.disabled = false;
-                btn.textContent = 'Create Order';
-            }
-        } catch (err) {
-            console.error('procCreateOrder error:', err);
-            alert('Network error creating order');
-            btn.disabled = false;
-            btn.textContent = 'Create Order';
-        }
+                resolve(data);
+            } catch (err) { alert('Failed to process server response.'); reject(err); }
+        });
+        xhr.addEventListener('error', () => { if (window.UploadProgress) window.UploadProgress.hide(); alert('Failed to create order. Network error.'); reject(new Error('Network error')); });
+        xhr.addEventListener('abort', () => { if (window.UploadProgress) window.UploadProgress.hide(); alert('Upload cancelled.'); reject(new Error('Upload cancelled')); });
+        xhr.open('POST', `${API_BASE}/orders`);
+        xhr.setRequestHeader('Authorization', `Bearer ${authToken}`);
+        xhr.send(formData);
     });
 }
 
-// ===================== APPROVALS =====================
+// Attach form handlers on DOMContentLoaded
+document.addEventListener('DOMContentLoaded', () => {
+    const procForm = document.getElementById('procCreateOrderForm');
+    if (procForm) procForm.addEventListener('submit', handleProcCreateOrder);
+    const cqForm = document.getElementById('createQuoteForm');
+    if (cqForm) cqForm.addEventListener('submit', handleCreateQuote);
+});
 
-async function loadApprovals() {
-    const tbody = document.getElementById('approvalsTableBody');
-    if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Loading...</td></tr>';
-    try {
-        const res = await apiGet('/procurement/approvals/pending');
-        if (!res.success || !res.approvals || !res.approvals.length) {
-            tbody.innerHTML = '<tr><td colspan="6" class="text-muted" style="text-align:center;padding:2rem;">No pending approvals.</td></tr>';
-            return;
-        }
-        tbody.innerHTML = res.approvals.map(a => `
-            <tr>
-                <td style="font-weight:600;">${escapeHtml(a.quote_number || '-')}</td>
-                <td>${escapeHtml(a.supplier_name || '-')}</td>
-                <td>${a.total_value ? fmtPrice(a.total_value) + ' ' + (a.currency || 'EUR') : '-'}</td>
-                <td>${fmtDate(a.created_at)}</td>
-                <td><span class="status-badge status-under-approval">${escapeHtml(a.status || 'Under Approval')}</span></td>
-                <td>
-                    <button class="btn btn-primary btn-sm btn-approve-quote" data-id="${a.id}" style="margin-right:0.5rem;">Approve</button>
-                    <button class="btn btn-sm btn-reject-quote" data-id="${a.id}" style="background:#ef4444;color:#fff;">Reject</button>
-                    <button class="btn btn-secondary btn-sm btn-view-approval" data-id="${a.id}" style="margin-left:0.5rem;">View</button>
-                </td>
-            </tr>`
-        ).join('');
-        document.querySelectorAll('.btn-approve-quote').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                if (!confirm('Approve this quote?')) return;
-                const res = await apiPost('/procurement/approve-quote', { quote_id: parseInt(btn.dataset.id, 10), decision: 'approved' });
-                if (res.success) { alert('Quote approved'); loadApprovals(); loadOrders(); }
-                else alert('Failed: ' + (res.message || ''));
-            });
-        });
-        document.querySelectorAll('.btn-reject-quote').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                if (!confirm('Reject this quote?')) return;
-                const res = await apiPost('/procurement/approve-quote', { quote_id: parseInt(btn.dataset.id, 10), decision: 'rejected' });
-                if (res.success) { alert('Quote rejected'); loadApprovals(); loadOrders(); }
-                else alert('Failed: ' + (res.message || ''));
-            });
-        });
-        document.querySelectorAll('.btn-view-approval').forEach(btn => {
-            btn.addEventListener('click', () => {
-                if (typeof openQuoteLifecyclePanel === 'function') openQuoteLifecyclePanel(parseInt(btn.dataset.id, 10));
-            });
-        });
-    } catch (err) {
-        console.error('loadApprovals error:', err);
-        tbody.innerHTML = '<tr><td colspan="6" style="color:red;">Error loading approvals.</td></tr>';
+// v3.0: showToast - global toast notification function
+function showToast(message, type) {
+    if (typeof window.showToast === 'function' && window.showToast !== showToast) {
+        window.showToast(message, type);
+        return;
     }
+    const container = document.getElementById('toastContainer') || (() => {
+        const c = document.createElement('div');
+        c.id = 'toastContainer';
+        c.style.cssText = 'position:fixed;bottom:1rem;right:1rem;z-index:9999;display:flex;flex-direction:column;gap:0.5rem;';
+        document.body.appendChild(c);
+        return c;
+    })();
+    const toast = document.createElement('div');
+    const colors = { success: '#10b981', error: '#ef4444', info: '#06b6d4', warning: '#f59e0b' };
+    toast.style.cssText = 'background:' + (colors[type] || colors.success) + ';color:white;padding:0.75rem 1.25rem;border-radius:0.5rem;font-size:0.875rem;box-shadow:0 4px 6px rgba(0,0,0,0.3);animation:slideInRight 0.3s ease;max-width:320px;';
+    toast.textContent = message;
+    container.appendChild(toast);
+    setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; setTimeout(() => toast.remove(), 300); }, 3500);
 }

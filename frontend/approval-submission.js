@@ -8,13 +8,8 @@
  */
 async function openSubmitForApprovalDialog(quoteId) {
     try {
-        // Load managers list, quote data, and responses in parallel
-        const [managersRes, quoteRes, responsesRes] = await Promise.all([
-            apiGet('/users'),
-            apiGet(`/quotes/${quoteId}`),
-            apiGet(`/procurement/quotes/${quoteId}/responses`).catch(() => ({ success: false, responses: [] }))
-        ]);
-
+        // Load managers list
+        const managersRes = await apiGet('/users');
         if (!managersRes.success) {
             alert('Failed to load managers list');
             return;
@@ -28,20 +23,17 @@ async function openSubmitForApprovalDialog(quoteId) {
             return;
         }
 
+        // Get the current quote data
+        const quoteRes = await apiGet(`/quotes/${quoteId}`);
         if (!quoteRes.success) {
             alert('Failed to load quote details');
             return;
         }
 
         const quote = quoteRes.quote;
-        // Collect PDF document IDs from responses
-        const responses = (responsesRes.success ? responsesRes.responses : []) || [];
-        const pdfDocIds = responses
-            .filter(r => r.response_document_id)
-            .map(r => ({ docId: r.response_document_id, label: r.item_description || 'All items', status: r.status }));
 
         // Build the approval submission form
-        showApprovalSubmissionDialog(quoteId, quote, managers, pdfDocIds);
+        showApprovalSubmissionDialog(quoteId, quote, managers);
     } catch (err) {
         console.error('openSubmitForApprovalDialog error:', err);
         alert('Failed to open approval submission dialog');
@@ -50,35 +42,14 @@ async function openSubmitForApprovalDialog(quoteId) {
 
 /**
  * Shows the approval submission dialog with form
- * @param {number} quoteId
- * @param {Object} quote
- * @param {Array} managers
- * @param {Array} pdfDocIds - array of { docId, label, status } for response PDFs
  */
-function showApprovalSubmissionDialog(quoteId, quote, managers, pdfDocIds) {
-    pdfDocIds = pdfDocIds || [];
+function showApprovalSubmissionDialog(quoteId, quote, managers) {
     const overlay = document.createElement('div');
     overlay.id = 'approvalSubmissionOverlay';
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.85);display:flex;align-items:center;justify-content:center;z-index:100;';
     
     const dialog = document.createElement('div');
-    dialog.style.cssText = 'background:#020617;padding:1.5rem;border-radius:12px;border:1px solid rgba(148,163,184,0.5);min-width:480px;max-width:620px;max-height:90vh;overflow-y:auto;color:white;';
-
-    // Build PDF section
-    const pdfSection = pdfDocIds.length > 0 ? `
-        <div style="background:#0f172a;padding:0.75rem;border-radius:6px;margin-bottom:1rem;border-left:3px solid #06b6d4;">
-            <div style="font-size:0.8rem;color:#06b6d4;font-weight:600;margin-bottom:0.5rem;">📄 Supplier Quote PDF Attachments</div>
-            <div style="font-size:0.8rem;color:#94a3b8;margin-bottom:0.5rem;">These PDFs will be visible to the manager in the approval request:</div>
-            ${pdfDocIds.map(p => `
-                <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.35rem;">
-                    <a href="/api/documents/${p.docId}/download" target="_blank"
-                        style="color:#06b6d4;font-size:0.8rem;text-decoration:none;background:rgba(6,182,212,0.1);padding:0.2rem 0.6rem;border-radius:4px;border:1px solid rgba(6,182,212,0.3);"
-                        title="Open PDF">
-                        📄 PDF — ${escapeHtml(p.label)}
-                    </a>
-                    <span style="font-size:0.75rem;color:#64748b;">(status: ${escapeHtml(p.status || '')})</span>
-                </div>`).join('')}
-        </div>` : '';
+    dialog.style.cssText = 'background:#020617;padding:1.5rem;border-radius:12px;border:1px solid rgba(148,163,184,0.5);min-width:480px;max-width:600px;color:white;';
     
     let html = `
         <div style="margin-bottom:1rem;">
@@ -121,8 +92,6 @@ function showApprovalSubmissionDialog(quoteId, quote, managers, pdfDocIds) {
             </div>
         </div>
 
-        ${pdfSection}
-
         <div style="display:flex;justify-content:flex-end;gap:0.5rem;">
             <button id="btnCancelApprovalSubmission" class="btn btn-secondary btn-sm">Cancel</button>
             <button id="btnConfirmApprovalSubmission" class="btn btn-primary btn-sm">Submit for Approval</button>
@@ -151,76 +120,94 @@ async function handleApprovalSubmission(quoteId, overlay) {
     const priority = document.getElementById('approvalPrioritySelect').value;
     const comments = document.getElementById('approvalCommentsInput').value.trim();
 
-    if (!managerId) { alert('Please select a manager'); return; }
-    if (!priority) { alert('Please select a priority'); return; }
+    // Validation
+    if (!managerId) {
+        alert('Please select a manager');
+        return;
+    }
 
+    if (!priority) {
+        alert('Please select a priority');
+        return;
+    }
+
+    // Disable button to prevent double submission
     const btnSubmit = document.getElementById('btnConfirmApprovalSubmission');
     btnSubmit.disabled = true;
     btnSubmit.textContent = 'Submitting...';
 
     try {
-        // Fetch all order IDs linked to this quote
+        // Fetch quote items to get the order_ids (backend requires order_id, not quote_id)
         const quoteRes = await apiGet(`/quotes/${quoteId}`);
-        if (!quoteRes.success || !quoteRes.quote) throw new Error('Could not load quote details');
+        const quoteItems = (quoteRes.success && quoteRes.quote && quoteRes.quote.items)
+            ? quoteRes.quote.items
+            : [];
 
-        const quote = quoteRes.quote;
-        const items = quoteRes.items || quoteRes.quote.items || [];
+        // Collect unique order IDs from quote items
+        let orderIds = [...new Set(quoteItems.map(i => i.order_id).filter(Boolean))];
 
-        // Extract unique order IDs from quote items
-        let orderIds = [];
-        if (items.length > 0) {
-            orderIds = [...new Set(items.map(i => i.order_id).filter(Boolean))];
+        // Fallback: if no items, try fetching quote items separately
+        if (!orderIds.length) {
+            try {
+                const itemsRes = await apiGet(`/quotes/${quoteId}/items`);
+                if (itemsRes.success && itemsRes.items) {
+                    orderIds = [...new Set(itemsRes.items.map(i => i.order_id).filter(Boolean))];
+                }
+            } catch (_) { /* ignore */ }
         }
 
-        // Fallback: if quote has a single order_id field
-        if (!orderIds.length && quote.order_id) orderIds = [quote.order_id];
+        // If still no order IDs, submit a single approval with quote_id as fallback
+        // (ensures backward compatibility if quote has no items yet)
+        const payloads = orderIds.length
+            ? orderIds.map(order_id => ({
+                order_id,
+                quote_id: quoteId,
+                manager_id: parseInt(managerId, 10),
+                priority,
+                comments: comments || null
+            }))
+            : [{
+                order_id: null,
+                quote_id: quoteId,
+                manager_id: parseInt(managerId, 10),
+                priority,
+                comments: comments || null
+            }];
 
-        if (!orderIds.length) {
-            alert('No orders found linked to this quote. Cannot submit for approval.');
+        // Submit one approval per order_id
+        const results = await Promise.all(payloads.map(p => apiPost('/approvals', p).catch(e => ({ success: false, message: e.message }))));
+        const failed = results.filter(r => !r.success);
+        const succeeded = results.filter(r => r.success);
+
+        if (succeeded.length > 0) {
+            // Close dialog
+            document.body.removeChild(overlay);
+
+            const approvalInfo = succeeded[0].approval
+                ? `\n\nApproval ID: ${succeeded[0].approval.id}\nManager: ${succeeded[0].approval.manager_name}`
+                : '';
+            alert(`Approval request submitted successfully! (${succeeded.length} order(s) submitted)${approvalInfo}${failed.length ? `\n\nWarning: ${failed.length} failed.` : ''}`);
+
+            // Reload quotes to update status
+            await loadQuotes();
+
+            // Update the quote status to "Under Approval"
+            await apiPut(`/quotes/${quoteId}`, { status: 'Under Approval' });
+            await loadQuotes();
+
+            // If quote detail panel is open, refresh it
+            if (typeof quoteDetailPanel !== 'undefined' && !quoteDetailPanel.classList.contains('hidden')) {
+                openQuoteDetail(quoteId);
+            }
+        } else {
+            const errMsg = failed.map(r => r.message || 'Unknown error').join('; ');
+            alert('Failed to submit approval request: ' + errMsg);
             btnSubmit.disabled = false;
             btnSubmit.textContent = 'Submit for Approval';
-            return;
         }
-
-        // Submit one approval per order
-        let successCount = 0;
-        const errors = [];
-        for (const orderId of orderIds) {
-            const payload = {
-                order_id: orderId,
-                assigned_to: parseInt(managerId, 10),
-                supplier_id: quote.supplier_id || null,
-                estimated_cost: quote.total_amount ? parseFloat(quote.total_amount) / orderIds.length : null,
-                priority: priority,
-                comments: comments || null
-            };
-            const res = await apiPost('/approvals', payload);
-            if (res.success) {
-                successCount++;
-            } else {
-                errors.push(`Order #${orderId}: ${res.message || 'failed'}`);
-            }
-        }
-
-        // Update quote status to Under Approval
-        await apiPut(`/quotes/${quoteId}`, { status: 'Under Approval' });
-
-        document.body.removeChild(overlay);
-
-        if (errors.length === 0) {
-            showToast(`Approval submitted for ${successCount} order(s)`, 'success');
-        } else {
-            alert('Submitted ' + successCount + '/' + orderIds.length + ' approvals.\nErrors:\n' + errors.join('\n'));
-        }
-
-        await loadQuotes();
-        if (typeof quoteDetailPanel !== 'undefined' && !quoteDetailPanel.classList.contains('hidden')) {
-            openQuoteDetail(quoteId);
-        }
-
     } catch (err) {
         console.error('handleApprovalSubmission error:', err);
-        alert('Failed to submit approval request: ' + err.message);
+        alert('Failed to submit approval request. Please try again.');
         btnSubmit.disabled = false;
         btnSubmit.textContent = 'Submit for Approval';
     }

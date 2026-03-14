@@ -1,14 +1,6 @@
-// frontend/app.js — PartPulse Orders v3.1.0 — Clean Rewrite
-// Stack: Vanilla JS, no frameworks. All tabs wired here.
-
-'use strict';
-
-// ============================================================
-//  CONSTANTS & GLOBAL STATE
-// ============================================================
+// frontend/app.js - PartPulse Orders v3.1.0
 
 const API_BASE = '/api';
-
 let currentUser = null;
 let authToken = null;
 
@@ -21,9 +13,10 @@ let buildingsState = [];
 let costCentersState = [];
 let selectedOrderIds = new Set();
 let currentTab = 'ordersTab';
-let viewMode = 'flat';
+let viewMode = 'flat'; // 'flat' or 'grouped'
+let approvalsState = [];
 
-// Pagination
+// ⭐ NEW: Pagination state
 let currentPage = 1;
 const ORDERS_PER_PAGE = 20;
 
@@ -38,6 +31,113 @@ let filterState = {
     quickFilter: ''
 };
 
+// DOM
+const loginScreen = document.getElementById('loginScreen');
+const dashboardScreen = document.getElementById('dashboardScreen');
+const loginForm = document.getElementById('loginForm');
+const loginError = document.getElementById('loginError');
+const logoutBtn = document.getElementById('logoutBtn');
+const userName = document.getElementById('userName');
+const userRoleBadge = document.getElementById('userRole');
+const createOrderSection = document.getElementById('createOrderSection');
+const requesterBuildingBadge = document.getElementById('requesterBuildingBadge');
+const createOrderForm = document.getElementById('createOrderForm');
+const buildingSelect = document.getElementById('building');
+const costCenterRadios = document.getElementById('costCenterRadios');
+const ordersTable = document.getElementById('ordersTable');
+const navTabs = document.getElementById('navTabs');
+const filterStatus = document.getElementById('filterStatus');
+const filterBuilding = document.getElementById('filterBuilding');
+const filterPriority = document.getElementById('filterPriority');
+const filterSupplier = document.getElementById('filterSupplier');
+const filterSearch = document.getElementById('filterSearch');
+const filterDelivery = document.getElementById('filterDelivery');
+const btnClearFilters = document.getElementById('btnClearFilters');
+const btnViewFlat = document.getElementById('btnViewFlat');
+const btnViewGrouped = document.getElementById('btnViewGrouped');
+const orderDetailPanel = document.getElementById('orderDetailPanel');
+const orderDetailBody = document.getElementById('orderDetailBody');
+const btnCloseDetail = document.getElementById('btnCloseDetail');
+const selectedCount = document.getElementById('selectedCount');
+const orderActionsBar = document.getElementById('orderActionsBar');
+const btnCreateQuote = document.getElementById('btnCreateQuote');
+
+const quotesTable = document.getElementById('quotesTab') ? document.getElementById('quotesTable') : null;
+const quoteDetailPanel = document.getElementById('quoteDetailPanel');
+const quoteDetailBody = document.getElementById('quoteDetailBody');
+const btnCloseQuoteDetail = document.getElementById('btnCloseQuoteDetail');
+const btnRefreshQuotes = document.getElementById('btnRefreshQuotes');
+
+const approvalsTabButton = document.getElementById('approvalsTabButton');
+const procurementTabButton = document.getElementById('procurementTabButton');
+const btnProcurementCreateOrder = document.getElementById('btnProcurementCreateOrder');
+
+const suppliersTable = document.getElementById('suppliersTable');
+const supplierFormCard = document.getElementById('supplierFormCard');
+const supplierFormTitle = document.getElementById('supplierFormTitle');
+const supplierForm = document.getElementById('supplierForm');
+const btnNewSupplier = document.getElementById('btnNewSupplier');
+const btnCancelSupplier = document.getElementById('btnCancelSupplier');
+
+const supplierIdInput = document.getElementById('supplierId');
+const supplierNameInput = document.getElementById('supplierName');
+const supplierContactInput = document.getElementById('supplierContact');
+const supplierEmailInput = document.getElementById('supplierEmail');
+const supplierPhoneInput = document.getElementById('supplierPhone');
+const supplierWebsiteInput = document.getElementById('supplierWebsite');
+const supplierAddressInput = document.getElementById('supplierAddress');
+const supplierNotesInput = document.getElementById('supplierNotes');
+const supplierActiveInput = document.getElementById('supplierActive');
+
+const buildingsTabButton = document.getElementById('buildingsTabButton');
+const buildingsTable = document.getElementById('buildingsTable');
+const buildingFormCard = document.getElementById('buildingFormCard');
+const buildingFormTitle = document.getElementById('buildingFormTitle');
+const buildingForm = document.getElementById('buildingForm');
+const btnNewBuilding = document.getElementById('btnNewBuilding');
+const btnCancelBuilding = document.getElementById('btnCancelBuilding');
+
+const buildingIdInput = document.getElementById('buildingId');
+const buildingCodeInput = document.getElementById('buildingCode');
+const buildingNameInput = document.getElementById('buildingName');
+const buildingDescriptionInput = document.getElementById('buildingDescription');
+const buildingActiveSelect = document.getElementById('buildingActive');
+
+const costCentersTabButton = document.getElementById('costCentersTabButton');
+const costCentersTable = document.getElementById('costCentersTable');
+const costCenterFormCard = document.getElementById('costCenterFormCard');
+const costCenterFormTitle = document.getElementById('costCenterFormTitle');
+const costCenterForm = document.getElementById('costCenterForm');
+const btnNewCostCenter = document.getElementById('btnNewCostCenter');
+const btnCancelCostCenter = document.getElementById('btnCancelCostCenter');
+const btnDeleteCostCenter = document.getElementById('btnDeleteCostCenter');
+const ccFilterBuilding = document.getElementById('ccFilterBuilding');
+
+const costCenterIdInput = document.getElementById('costCenterId');
+const ccBuildingSelect = document.getElementById('ccBuilding');
+const ccCodeInput = document.getElementById('ccCode');
+const ccNameInput = document.getElementById('ccName');
+const ccDescriptionInput = document.getElementById('ccDescription');
+const ccActiveSelect = document.getElementById('ccActive');
+
+const usersTabButton = document.getElementById('usersTabButton');
+const usersTable = document.getElementById('usersTable');
+const userFormCard = document.getElementById('userFormCard');
+const userFormTitle = document.getElementById('userFormTitle');
+const userForm = document.getElementById('userForm');
+const btnNewUser = document.getElementById('btnNewUser');
+const btnCancelUser = document.getElementById('btnCancelUser');
+
+const userIdInput = document.getElementById('userId');
+const userUsernameInput = document.getElementById('userUsername');
+const userNameInput = document.getElementById('userNameInput');
+const userEmailInput = document.getElementById('userEmail');
+const userRoleSelect = document.getElementById('userRoleSelect');
+const userBuildingSelect = document.getElementById('userBuilding');
+const userActiveSelect = document.getElementById('userActive');
+const userPasswordInput = document.getElementById('userPassword');
+const userPasswordGroup = document.getElementById('userPasswordGroup');
+
 const ORDER_STATUSES = [
     'New', 'Pending', 'Quote Requested', 'Quote Received',
     'Quote Under Approval', 'Approved', 'Ordered',
@@ -45,12 +145,16 @@ const ORDER_STATUSES = [
     'Cancelled', 'On Hold'
 ];
 
-const PRIORITY_ORDER = { Urgent: 1, High: 2, Normal: 3, Low: 4 };
+// ⭐ NEW: Priority order for sorting (Urgent first!)
+const PRIORITY_ORDER = { 'Urgent': 1, 'High': 2, 'Normal': 3, 'Low': 4 };
 
-// ============================================================
-//  INIT
-// ============================================================
+function fmtPrice(val) {
+    const n = parseFloat(val);
+    if (isNaN(n) || n === 0) return '-';
+    return n.toFixed(2);
+}
 
+// Init
 window.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
     setupDatePickers();
@@ -58,52 +162,47 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 function setupDatePickers() {
-    document.addEventListener('click', e => {
-        const di = e.target.closest('input[type="date"].date-picker');
-        if (di && typeof di.showPicker === 'function') {
-            try { di.showPicker(); } catch (_) {}
+    document.addEventListener('click', (e) => {
+        const dateInput = e.target.closest('input[type="date"].date-picker');
+        if (dateInput && typeof dateInput.showPicker === 'function') {
+            try { dateInput.showPicker(); } catch (_) {}
         }
     });
 }
 
-// ============================================================
-//  EVENT LISTENERS
-// ============================================================
-
 function setupEventListeners() {
-    // Auth
-    document.getElementById('loginForm').addEventListener('submit', handleLogin);
-    document.getElementById('logoutBtn').addEventListener('click', handleLogout);
+    loginForm.addEventListener('submit', handleLogin);
+    logoutBtn.addEventListener('click', handleLogout);
+    createOrderForm.addEventListener('submit', handleCreateOrder);
 
-    // Tabs
+    buildingSelect.addEventListener('change', () => {
+        renderCostCenterRadios(buildingSelect.value);
+    });
+
     document.querySelectorAll('.tab').forEach(tab => {
         tab.addEventListener('click', () => switchTab(tab.dataset.tab));
     });
 
-    // Requester create order
-    document.getElementById('createOrderForm').addEventListener('submit', handleCreateOrder);
-    document.getElementById('building').addEventListener('change', e => renderCostCenterRadios(e.target.value));
+    // Real-time filtering
+    if (filterSearch) filterSearch.addEventListener('input', () => { filterState.search = filterSearch.value.trim(); currentPage = 1; applyFilters(); });
+    if (filterStatus) filterStatus.addEventListener('change', () => { filterState.status = filterStatus.value; currentPage = 1; applyFilters(); });
+    if (filterBuilding) filterBuilding.addEventListener('change', () => { filterState.building = filterBuilding.value; currentPage = 1; applyFilters(); });
+    if (filterPriority) filterPriority.addEventListener('change', () => { filterState.priority = filterPriority.value; currentPage = 1; applyFilters(); });
+    if (filterSupplier) filterSupplier.addEventListener('change', () => { filterState.supplier = filterSupplier.value; currentPage = 1; applyFilters(); });
+    if (filterDelivery) filterDelivery.addEventListener('change', () => { filterState.delivery = filterDelivery.value; currentPage = 1; applyFilters(); });
 
-    // Orders filters
-    const fs = id => document.getElementById(id);
-    fs('filterSearch').addEventListener('input', () => { filterState.search = fs('filterSearch').value.trim(); currentPage = 1; applyFilters(); });
-    fs('filterStatus').addEventListener('change', () => { filterState.status = fs('filterStatus').value; currentPage = 1; applyFilters(); });
-    fs('filterBuilding').addEventListener('change', () => { filterState.building = fs('filterBuilding').value; currentPage = 1; applyFilters(); });
-    fs('filterPriority').addEventListener('change', () => { filterState.priority = fs('filterPriority').value; currentPage = 1; applyFilters(); });
-    fs('filterSupplier').addEventListener('change', () => { filterState.supplier = fs('filterSupplier').value; currentPage = 1; applyFilters(); });
-    fs('filterDelivery').addEventListener('change', () => { filterState.delivery = fs('filterDelivery').value; currentPage = 1; applyFilters(); });
-    fs('btnClearFilters').addEventListener('click', clearFilters);
+    if (btnClearFilters) btnClearFilters.addEventListener('click', clearFilters);
 
     // Quick filter chips
     document.querySelectorAll('.quick-filter-chip').forEach(chip => {
         chip.addEventListener('click', () => {
-            const f = chip.dataset.filter;
-            if (filterState.quickFilter === f) {
+            const filter = chip.dataset.filter;
+            if (filterState.quickFilter === filter) {
                 filterState.quickFilter = '';
                 chip.classList.remove('active');
             } else {
                 document.querySelectorAll('.quick-filter-chip').forEach(c => c.classList.remove('active'));
-                filterState.quickFilter = f;
+                filterState.quickFilter = filter;
                 chip.classList.add('active');
             }
             currentPage = 1;
@@ -111,88 +210,230 @@ function setupEventListeners() {
         });
     });
 
-    // View mode
-    document.getElementById('btnViewFlat').addEventListener('click', () => setViewMode('flat'));
-    document.getElementById('btnViewGrouped').addEventListener('click', () => setViewMode('grouped'));
+    // View mode toggle
+    if (btnViewFlat) btnViewFlat.addEventListener('click', () => setViewMode('flat'));
+    if (btnViewGrouped) btnViewGrouped.addEventListener('click', () => setViewMode('grouped'));
 
-    // Order detail panel
-    document.getElementById('btnCloseDetail').addEventListener('click', () => {
-        document.getElementById('orderDetailPanel').classList.add('hidden');
-    });
+    btnCloseDetail.addEventListener('click', () => { orderDetailPanel.classList.add('hidden'); });
+    if (btnCloseQuoteDetail) btnCloseQuoteDetail.addEventListener('click', () => { quoteDetailPanel.classList.add('hidden'); });
 
-    // Quote detail panel
-    document.getElementById('btnCloseQuoteDetail').addEventListener('click', () => {
-        document.getElementById('quoteDetailPanel').classList.add('hidden');
-    });
-    document.getElementById('btnRefreshQuotes').addEventListener('click', loadQuotes);
-    document.getElementById('btnNewQuoteFromQuotesTab').addEventListener('click', () => {
-        switchTab('ordersTab');
-        showToast('Select orders then click "Create Quote from Selected"');
-    });
+    if (btnCreateQuote) btnCreateQuote.addEventListener('click', openCreateQuoteDialog);
+    if (btnRefreshQuotes) btnRefreshQuotes.addEventListener('click', loadQuotes);
 
-    // Create quote modal
-    document.getElementById('btnCreateQuote').addEventListener('click', openCreateQuoteDialog);
-    document.getElementById('btnCloseQuoteModal').addEventListener('click', () => closeModal('createQuoteModal'));
-    document.getElementById('btnCancelQuoteModal').addEventListener('click', () => closeModal('createQuoteModal'));
-    document.getElementById('createQuoteModalOverlay').addEventListener('click', () => closeModal('createQuoteModal'));
-    document.getElementById('createQuoteForm').addEventListener('submit', handleCreateQuoteSubmit);
+    if (btnNewSupplier) btnNewSupplier.addEventListener('click', () => openSupplierForm());
+    if (btnCancelSupplier) btnCancelSupplier.addEventListener('click', () => { supplierFormCard.hidden = true; });
+    if (supplierForm) supplierForm.addEventListener('submit', handleSaveSupplier);
 
-    // Approvals tab
-    document.getElementById('btnRefreshApprovals').addEventListener('click', loadApprovals);
-    document.getElementById('btnClearApprovalFilters').addEventListener('click', clearApprovalFilters);
-    document.getElementById('approvalSearch').addEventListener('input', renderApprovalsTable);
-    document.getElementById('approvalStatusFilter').addEventListener('change', renderApprovalsTable);
-    document.getElementById('approvalPriorityFilter').addEventListener('change', renderApprovalsTable);
-    document.getElementById('btnCloseApprovalDetail').addEventListener('click', () => {
-        document.getElementById('approvalDetailPanel').classList.add('hidden');
-    });
+    if (btnNewBuilding) btnNewBuilding.addEventListener('click', () => openBuildingForm());
+    if (btnCancelBuilding) btnCancelBuilding.addEventListener('click', () => { buildingFormCard.hidden = true; });
+    if (buildingForm) buildingForm.addEventListener('submit', handleSaveBuilding);
 
-    // Suppliers
-    document.getElementById('btnNewSupplier').addEventListener('click', () => openSupplierForm());
-    document.getElementById('btnCancelSupplier').addEventListener('click', () => { document.getElementById('supplierFormCard').hidden = true; });
-    document.getElementById('supplierForm').addEventListener('submit', handleSaveSupplier);
+    if (btnNewCostCenter) btnNewCostCenter.addEventListener('click', () => openCostCenterForm());
+    if (btnCancelCostCenter) btnCancelCostCenter.addEventListener('click', () => { costCenterFormCard.hidden = true; });
+    if (btnDeleteCostCenter) btnDeleteCostCenter.addEventListener('click', handleDeleteCostCenter);
+    if (costCenterForm) costCenterForm.addEventListener('submit', handleSaveCostCenter);
+    if (ccFilterBuilding) ccFilterBuilding.addEventListener('change', () => renderCostCentersTable());
 
-    // Buildings
-    document.getElementById('btnNewBuilding').addEventListener('click', () => openBuildingForm());
-    document.getElementById('btnCancelBuilding').addEventListener('click', () => { document.getElementById('buildingFormCard').hidden = true; });
-    document.getElementById('buildingForm').addEventListener('submit', handleSaveBuilding);
-
-    // Cost Centers
-    document.getElementById('btnNewCostCenter').addEventListener('click', () => openCostCenterForm());
-    document.getElementById('btnCancelCostCenter').addEventListener('click', () => { document.getElementById('costCenterFormCard').hidden = true; });
-    document.getElementById('btnDeleteCostCenter').addEventListener('click', handleDeleteCostCenter);
-    document.getElementById('costCenterForm').addEventListener('submit', handleSaveCostCenter);
-    document.getElementById('ccFilterBuilding').addEventListener('change', renderCostCentersTable);
-
-    // Users
-    document.getElementById('btnNewUser').addEventListener('click', () => openUserForm());
-    document.getElementById('btnCancelUser').addEventListener('click', () => { document.getElementById('userFormCard').hidden = true; });
-    document.getElementById('userForm').addEventListener('submit', handleSaveUser);
-
-    // Procurement create order modal
-    document.getElementById('btnCreateOrderGlobal').addEventListener('click', openProcCreateOrderModal);
-    document.getElementById('btnCloseProcModal').addEventListener('click', () => closeModal('procCreateOrderModal'));
-    document.getElementById('procCreateOrderModalOverlay').addEventListener('click', () => closeModal('procCreateOrderModal'));
-    document.getElementById('procBuilding').addEventListener('change', e => renderProcCostCenterRadios(e.target.value));
-    document.getElementById('procCreateOrderForm').addEventListener('submit', handleProcCreateOrderSubmit);
-
-    // Language selectors
-    const langLogin = document.getElementById('languageSelectorLogin');
-    const langMain = document.getElementById('languageSelector');
-    if (langLogin) langLogin.addEventListener('change', e => { if (typeof i18n !== 'undefined') i18n.setLanguage(e.target.value); });
-    if (langMain) langMain.addEventListener('change', e => { if (typeof i18n !== 'undefined') i18n.setLanguage(e.target.value); });
+    if (btnNewUser) btnNewUser.addEventListener('click', () => openUserForm());
+    if (btnCancelUser) btnCancelUser.addEventListener('click', () => { userFormCard.hidden = true; });
+    if (userForm) userForm.addEventListener('submit', handleSaveUser);
 }
 
-// ============================================================
-//  MODAL HELPERS
-// ============================================================
+function setViewMode(mode) {
+    viewMode = mode;
+    if (mode === 'flat') {
+        btnViewFlat.classList.add('active');
+        btnViewGrouped.classList.remove('active');
+    } else {
+        btnViewFlat.classList.remove('active');
+        btnViewGrouped.classList.add('active');
+    }
+    currentPage = 1; // Reset to page 1 when changing view mode
+    renderOrdersTable();
+}
 
-function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
-function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+function clearFilters() {
+    filterState = { search: '', status: '', building: '', priority: '', supplier: '', delivery: '', quickFilter: '' };
+    if (filterSearch) filterSearch.value = '';
+    if (filterStatus) filterStatus.value = '';
+    if (filterBuilding) filterBuilding.value = '';
+    if (filterPriority) filterPriority.value = '';
+    if (filterSupplier) filterSupplier.value = '';
+    if (filterDelivery) filterDelivery.value = '';
+    document.querySelectorAll('.quick-filter-chip').forEach(c => c.classList.remove('active'));
+    currentPage = 1;
+    applyFilters();
+}
 
-// ============================================================
-//  AUTH
-// ============================================================
+function resetFiltersOnLogout() {
+    // Reset filter state
+    filterState = { search: '', status: '', building: '', priority: '', supplier: '', delivery: '', quickFilter: '' };
+    
+    // Reset filter UI elements
+    if (filterSearch) filterSearch.value = '';
+    if (filterStatus) filterStatus.value = '';
+    if (filterBuilding) filterBuilding.value = '';
+    if (filterPriority) filterPriority.value = '';
+    if (filterSupplier) filterSupplier.value = '';
+    if (filterDelivery) filterDelivery.value = '';
+    
+    // Clear quick filter chips
+    document.querySelectorAll('.quick-filter-chip').forEach(c => c.classList.remove('active'));
+    
+    // Reset view mode
+    viewMode = 'flat';
+    if (btnViewFlat) btnViewFlat.classList.add('active');
+    if (btnViewGrouped) btnViewGrouped.classList.remove('active');
+    
+    // Reset pagination
+    currentPage = 1;
+}
+
+// ===================== DELIVERY TIMELINE LOGIC =====================
+
+// ⭐ FIX: Delivered orders should never show "Late"
+function getDeliveryStatus(order) {
+    // If already delivered, no status needed
+    if (order.status === 'Delivered') return 'delivered';
+    
+    if (!order.expected_delivery_date) return 'none';
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const expected = new Date(order.expected_delivery_date);
+    expected.setHours(0, 0, 0, 0);
+    const diffDays = Math.ceil((expected - today) / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) return 'late';
+    if (diffDays <= 7) return 'due7';
+    if (diffDays <= 14) return 'due14';
+    return 'ontrack';
+}
+
+function getDeliveryBadgeHtml(status) {
+    const badges = {
+        'delivered': '<span class="delivery-badge delivery-ontrack">✓ Delivered</span>',
+        'late': '<span class="delivery-badge delivery-late">⚠ Late</span>',
+        'due7': '<span class="delivery-badge delivery-due7">🕒 Due 7d</span>',
+        'due14': '<span class="delivery-badge delivery-due14">📅 Due 14d</span>',
+        'ontrack': '<span class="delivery-badge delivery-ontrack">✓ On Track</span>',
+        'none': '-'
+    };
+    return badges[status] || '-';
+}
+
+// ⭐ NEW: Get delivered date from history
+function getDeliveredDate(order) {
+    if (order.status !== 'Delivered') return null;
+    
+    // Try to find the delivered date from history
+    if (order.history && order.history.length) {
+        const deliveredHistory = order.history
+            .filter(h => h.field_name === 'status' && h.new_value === 'Delivered')
+            .sort((a, b) => new Date(b.changed_at) - new Date(a.changed_at));
+        
+        if (deliveredHistory.length > 0) {
+            return deliveredHistory[0].changed_at;
+        }
+    }
+    
+    return null;
+}
+
+// ⭐ NEW: Check if order is old delivered (delivered >7 days ago)
+function isOldDelivered(order) {
+    if (order.status !== 'Delivered') return false;
+    
+    const deliveredDate = getDeliveredDate(order);
+    if (deliveredDate) {
+        const delivered = new Date(deliveredDate);
+        const today = new Date();
+        const daysSince = Math.floor((today - delivered) / (1000 * 60 * 60 * 24));
+        return daysSince > 7;
+    }
+    
+    // Fallback: If no history, check created_at (conservative)
+    if (order.created_at) {
+        const createdDate = new Date(order.created_at);
+        const today = new Date();
+        const daysSince = Math.floor((today - createdDate) / (1000 * 60 * 60 * 24));
+        return daysSince > 14; // More conservative for created_at
+    }
+    
+    return false;
+}
+
+// ===================== FILTERING =====================
+
+function applyFilters() {
+    filteredOrders = ordersState.filter(order => {
+        // Full-text search (across all fields)
+        if (filterState.search) {
+            const term = filterState.search.toLowerCase();
+            const searchFields = [
+                order.item_description || '',
+                order.part_number || '',
+                order.category || '',
+                order.notes || '',
+                order.requester_name || '',
+                order.cost_center_code || '',
+                order.cost_center_name || '',
+                order.supplier_name || '',
+                order.building || '',
+                order.status || ''
+            ].join(' ').toLowerCase();
+
+            if (!searchFields.includes(term)) return false;
+        }
+
+        // Status filter
+        if (filterState.status && order.status !== filterState.status) return false;
+
+        // Building filter
+        if (filterState.building && order.building !== filterState.building) return false;
+
+        // Priority filter
+        if (filterState.priority && order.priority !== filterState.priority) return false;
+
+        // Supplier filter
+        if (filterState.supplier && order.supplier_id !== parseInt(filterState.supplier, 10)) return false;
+
+        // Delivery timeline filter
+        if (filterState.delivery) {
+            const deliveryStatus = getDeliveryStatus(order);
+            if (filterState.delivery !== deliveryStatus) return false;
+        }
+
+        // Quick filters
+        if (filterState.quickFilter) {
+            const qf = filterState.quickFilter;
+            if (qf === 'late' || qf === 'due7' || qf === 'due14') {
+                const deliveryStatus = getDeliveryStatus(order);
+                if (deliveryStatus !== qf) return false;
+            } else if (qf === 'new' && order.status !== 'New') return false;
+            else if (qf === 'ordered' && order.status !== 'Ordered') return false;
+            else if (qf === 'transit' && order.status !== 'In Transit') return false;
+        }
+
+        return true;
+    });
+
+    // ⭐ NEW: Sort by priority (Urgent → High → Normal → Low)
+    filteredOrders.sort((a, b) => {
+        const priorityA = PRIORITY_ORDER[a.priority] || PRIORITY_ORDER['Normal'];
+        const priorityB = PRIORITY_ORDER[b.priority] || PRIORITY_ORDER['Normal'];
+        
+        if (priorityA !== priorityB) {
+            return priorityA - priorityB; // Lower number = higher priority
+        }
+        
+        // Secondary sort by ID (newer orders first)
+        return b.id - a.id;
+    });
+
+    renderOrdersTable();
+}
+
+// ===================== AUTH =====================
 
 async function checkAuth() {
     const token = localStorage.getItem('authToken');
@@ -207,7 +448,6 @@ async function checkAuth() {
 
 async function handleLogin(e) {
     e.preventDefault();
-    const loginError = document.getElementById('loginError');
     loginError.classList.add('hidden');
     const username = document.getElementById('username').value.trim();
     const password = document.getElementById('password').value;
@@ -227,8 +467,8 @@ async function handleLogin(e) {
         currentUser = data.user;
         localStorage.setItem('authToken', authToken);
         showDashboard();
-    } catch {
-        loginError.textContent = 'Connection error. Please try again.';
+    } catch (err) {
+        loginError.textContent = 'Login failed. Please try again.';
         loginError.classList.remove('hidden');
     }
 }
@@ -237,154 +477,142 @@ function handleLogout() {
     localStorage.removeItem('authToken');
     authToken = null;
     currentUser = null;
+    
+    // Reset all filters and UI state
     resetFiltersOnLogout();
+    
     showLogin();
 }
 
 function showLogin() {
-    document.getElementById('loginScreen').classList.remove('hidden');
-    document.getElementById('dashboardScreen').classList.add('hidden');
-    document.getElementById('loginForm').reset();
+    loginScreen.classList.remove('hidden');
+    dashboardScreen.classList.add('hidden');
+    loginForm.reset();
 }
 
 function showDashboard() {
-    document.getElementById('loginScreen').classList.add('hidden');
-    document.getElementById('dashboardScreen').classList.remove('hidden');
-    document.getElementById('userName').textContent = currentUser.name;
+    loginScreen.classList.add('hidden');
+    dashboardScreen.classList.remove('hidden');
+    userName.textContent = currentUser.name;
+    window.currentUserGlobal = currentUser;
+    
+    // ⭐ FIX: Proper role badge display including manager
+    if (currentUser.role === 'admin') {
+        userRoleBadge.textContent = 'Admin';
+    } else if (currentUser.role === 'procurement') {
+        userRoleBadge.textContent = 'Procurement';
+    } else if (currentUser.role === 'manager') {
+        userRoleBadge.textContent = 'Manager';
+    } else {
+        userRoleBadge.textContent = `Requester · ${currentUser.building || ''}`;
+    }
 
-    const roleBadge = document.getElementById('userRole');
-    const roleLabels = { admin: 'Admin', procurement: 'Procurement', manager: 'Manager' };
-    roleBadge.textContent = roleLabels[currentUser.role] || `Requester — ${currentUser.building || ''}`;
-
-    // Hide all conditional tabs first
-    ['usersTabBtn', 'buildingsTabBtn', 'costCentersTabBtn', 'approvalsTabBtn', 'procurementTabBtn'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.hidden = true;
-    });
-
-    const navTabs = document.getElementById('navTabs');
-    const createOrderSection = document.getElementById('createOrderSection');
-    const orderActionsContainer = document.getElementById('orderActionsContainer');
-    const orderActionsBar = document.getElementById('orderActionsBar');
-    const btnGlobal = document.getElementById('btnCreateOrderGlobal');
+    // Hide admin-only tabs by default
+    if (usersTabButton) usersTabButton.hidden = true;
+    if (buildingsTabButton) buildingsTabButton.hidden = true;
+    if (costCentersTabButton) costCentersTabButton.hidden = true;
+    if (approvalsTabButton) approvalsTabButton.hidden = true;
+    if (procurementTabButton) procurementTabButton.hidden = true;
+    if (btnProcurementCreateOrder) btnProcurementCreateOrder.hidden = true;
 
     if (currentUser.role === 'requester') {
+        // REQUESTER: Show order creation form, hide navigation tabs
         createOrderSection.classList.remove('hidden');
-        document.getElementById('requesterBuildingBadge').textContent = `Building ${currentUser.building}`;
+        requesterBuildingBadge.textContent = `Building ${currentUser.building}`;
         navTabs.classList.add('hidden');
-        if (orderActionsContainer) orderActionsContainer.style.display = 'none';
-        if (orderActionsBar) orderActionsBar.style.display = 'none';
-    } else {
+        
+        // ⭐ FIX: Show view toggle for requesters but hide quote actions
+        const orderActionsContainer = document.getElementById('orderActionsContainer');
+        if (orderActionsContainer) {
+            orderActionsContainer.style.display = 'flex'; // Show container
+        }
+        
+        // Hide only the quote creation bar
+        if (orderActionsBar) {
+            orderActionsBar.style.display = 'none';
+        }
+    } else if (currentUser.role === 'manager') {
+        // ⭐ MANAGER: Show navigation with approvals tab, read-only orders view
         createOrderSection.classList.add('hidden');
         navTabs.classList.remove('hidden');
         populateStatusFilter();
-        if (orderActionsContainer) orderActionsContainer.style.display = 'flex';
-        if (btnGlobal) btnGlobal.hidden = false;
+        
+        // Show approvals tab for managers
+        if (approvalsTabButton) approvalsTabButton.hidden = false;
+        
+        // Show order actions container (view toggle)
+        const orderActionsContainer = document.getElementById('orderActionsContainer');
+        if (orderActionsContainer) {
+            orderActionsContainer.style.display = 'flex';
+        }
+        
+        // Hide quote creation for managers
+        if (orderActionsBar) {
+            orderActionsBar.style.display = 'none';
+        }
+        
+        // Initialize approvals if function exists
+        if (typeof loadApprovals === 'function') {
+            loadApprovals();
+        }
+    } else {
+        // ADMIN / PROCUREMENT: Full access
+        createOrderSection.classList.add('hidden');
+        navTabs.classList.remove('hidden');
+        populateStatusFilter();
+        
+        // Show order actions container for admin/procurement
+        const orderActionsContainer = document.getElementById('orderActionsContainer');
+        if (orderActionsContainer) {
+            orderActionsContainer.style.display = 'flex';
+        }
 
         if (currentUser.role === 'admin') {
-            document.getElementById('usersTabBtn').hidden = false;
-            document.getElementById('buildingsTabBtn').hidden = false;
-            document.getElementById('costCentersTabBtn').hidden = false;
-            document.getElementById('approvalsTabBtn').hidden = false;
-            document.getElementById('procurementTabBtn').hidden = false;
-        } else if (currentUser.role === 'procurement') {
-            document.getElementById('approvalsTabBtn').hidden = false;
-            document.getElementById('procurementTabBtn').hidden = false;
-        } else if (currentUser.role === 'manager') {
-            document.getElementById('approvalsTabBtn').hidden = false;
+            if (usersTabButton) usersTabButton.hidden = false;
+            if (buildingsTabButton) buildingsTabButton.hidden = false;
+            if (costCentersTabButton) costCentersTabButton.hidden = false;
         }
+        
+        // Show procurement tab for admin and procurement roles
+        if (procurementTabButton) procurementTabButton.hidden = false;
+        if (btnProcurementCreateOrder) btnProcurementCreateOrder.hidden = false;
     }
 
-    loadInitialData();
-}
+    // Show orders tab by default
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+    const ordersTabEl = document.getElementById('ordersTab');
+    if (ordersTabEl) ordersTabEl.classList.remove('hidden');
+    currentTab = 'ordersTab';
 
-// ============================================================
-//  DATA LOADING
-// ============================================================
-
-async function loadInitialData() {
-    await Promise.all([loadBuildings(), loadSuppliers(), loadCostCenters()]);
-    populateBuildingSelects();
-    populateSupplierFilter();
-    populateBuildingFilter();
-    await loadOrders();
-    if (['admin', 'procurement', 'manager'].includes(currentUser.role)) {
-        loadQuotes();
-        loadApprovals();
+    loadBuildings();
+    loadCostCenters();
+    // ⭐ FIX: Only load suppliers for admin and procurement roles
+    if (currentUser.role === 'admin' || currentUser.role === 'procurement') {
+        loadSuppliers().then(() => { populateSupplierFilter(); });
+    }
+    loadOrders();
+    if (currentUser.role !== 'requester') { loadQuotes(); }
+    if (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'procurement') {
         updateApprovalBadge();
     }
-    if (currentUser.role === 'admin') {
-        loadUsers();
-    }
+    if (currentUser.role === 'admin') { loadUsers(); }
 }
 
-async function loadOrders() {
-    try {
-        const data = await apiGet('/orders');
-        if (data.success) { ordersState = data.orders; applyFilters(); }
-    } catch (err) { console.error('loadOrders:', err); }
+// API helpers
+async function apiGet(path, params = {}) {
+    const url = new URL(`${API_BASE}${path}`, window.location.origin);
+    Object.entries(params).forEach(([k, v]) => {
+        if (v !== '' && v !== undefined && v !== null) url.searchParams.set(k, v);
+    });
+    const res = await fetch(url.toString(), { headers: { 'Authorization': `Bearer ${authToken}` } });
+    return res.json();
 }
 
-async function loadSuppliers() {
-    try {
-        const data = await apiGet('/suppliers');
-        if (data.success) { suppliersState = data.suppliers; renderSuppliersTable(); }
-    } catch (err) { console.error('loadSuppliers:', err); }
-}
-
-async function loadBuildings() {
-    try {
-        const data = await apiGet('/buildings');
-        if (data.success) { buildingsState = data.buildings; renderBuildingsTable(); }
-    } catch (err) { console.error('loadBuildings:', err); }
-}
-
-async function loadCostCenters() {
-    try {
-        const data = await apiGet('/cost-centers');
-        if (data.success) { costCentersState = data.cost_centers; renderCostCentersTable(); }
-    } catch (err) { console.error('loadCostCenters:', err); }
-}
-
-async function loadUsers() {
-    try {
-        const data = await apiGet('/users');
-        if (data.success) { usersState = data.users; renderUsersTable(); }
-    } catch (err) { console.error('loadUsers:', err); }
-}
-
-async function loadQuotes() {
-    try {
-        const data = await apiGet('/quotes');
-        if (data.success) { quotesState = data.quotes; renderQuotesTable(); }
-    } catch (err) { console.error('loadQuotes:', err); }
-}
-
-// ============================================================
-//  APPROVAL BADGE
-// ============================================================
-
-async function updateApprovalBadge() {
-    try {
-        const data = await apiGet('/approvals/pending-count');
-        const badge = document.getElementById('pendingApprovalBadge');
-        if (!badge) return;
-        if (data.success && data.count > 0) {
-            badge.textContent = data.count;
-            badge.classList.remove('hidden');
-        } else {
-            badge.classList.add('hidden');
-        }
-    } catch (_) {}
-}
-
-// ============================================================
-//  API HELPERS
-// ============================================================
-
-async function apiGet(path) {
+async function apiPut(path, body) {
     const res = await fetch(`${API_BASE}${path}`, {
-        headers: { Authorization: `Bearer ${authToken}` }
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
     });
     return res.json();
 }
@@ -392,16 +620,7 @@ async function apiGet(path) {
 async function apiPost(path, body) {
     const res = await fetch(`${API_BASE}${path}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
-        body: JSON.stringify(body)
-    });
-    return res.json();
-}
-
-async function apiPut(path, body) {
-    const res = await fetch(`${API_BASE}${path}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
+        headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
     });
     return res.json();
@@ -410,1311 +629,1419 @@ async function apiPut(path, body) {
 async function apiDelete(path) {
     const res = await fetch(`${API_BASE}${path}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${authToken}` }
+        headers: { 'Authorization': `Bearer ${authToken}` }
     });
     return res.json();
 }
 
-// ============================================================
-//  POPULATE SELECTS
-// ============================================================
+// ===================== COST CENTERS =====================
 
-function populateBuildingSelects() {
-    const active = buildingsState.filter(b => b.is_active);
-    const makeOptions = (placeholder, valFn, labelFn) =>
-        `<option value="">${placeholder}</option>` +
-        active.map(b => `<option value="${valFn(b)}">${labelFn(b)}</option>`).join('');
-
-    const set = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
-
-    set('building', makeOptions('Select Building', b => b.code, b => `${b.code} - ${b.name}`));
-    set('procBuilding', makeOptions('Select Building', b => b.code, b => `${b.code} - ${b.name}`));
-    set('userBuilding', makeOptions('No Building', b => b.code, b => `${b.code} - ${b.name}`));
-    set('ccBuilding', makeOptions('Select Building', b => b.id, b => `${b.code} - ${b.name}`));
-    set('ccFilterBuilding', makeOptions('All Buildings', b => b.id, b => `${b.code} - ${b.name}`));
-}
-
-function populateSupplierFilter() {
-    const active = suppliersState.filter(s => s.is_active);
-    const set = (id, placeholder) => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        el.innerHTML = `<option value="">${placeholder}</option>` +
-            active.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
-    };
-    set('filterSupplier', 'Supplier: All');
-    set('procSupplier', 'No Supplier');
-    set('quoteSupplier', 'Select Supplier');
-}
-
-function populateBuildingFilter() {
-    const el = document.getElementById('filterBuilding');
-    if (!el) return;
-    el.innerHTML = '<option value="">Building: All</option>' +
-        buildingsState.filter(b => b.is_active)
-            .map(b => `<option value="${b.code}">${b.code} - ${b.name}</option>`).join('');
-}
-
-function populateStatusFilter() {
-    const el = document.getElementById('filterStatus');
-    if (!el) return;
-    el.innerHTML = '<option value="">All Statuses</option>' +
-        ORDER_STATUSES.map(s => `<option value="${s}">${s}</option>`).join('');
-}
-
-// ============================================================
-//  DELIVERY / DATE HELPERS
-// ============================================================
-
-function getDeliveryStatus(order) {
-    if (order.status === 'Delivered') return 'delivered';
-    if (!order.expected_delivery_date) return 'none';
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    const exp = new Date(order.expected_delivery_date); exp.setHours(0, 0, 0, 0);
-    const diff = Math.ceil((exp - today) / 86400000);
-    if (diff < 0) return 'late';
-    if (diff <= 7) return 'due7';
-    if (diff <= 14) return 'due14';
-    return 'ontrack';
-}
-
-function getDeliveryBadgeHtml(status) {
-    const map = {
-        delivered: '<span class="delivery-badge delivery-ontrack">Delivered</span>',
-        late:      '<span class="delivery-badge delivery-late">Late</span>',
-        due7:      '<span class="delivery-badge delivery-due7">Due 7d</span>',
-        due14:     '<span class="delivery-badge delivery-due14">Due 14d</span>',
-        ontrack:   '<span class="delivery-badge delivery-ontrack">On Track</span>',
-        none:      '-'
-    };
-    return map[status] || '-';
-}
-
-function isOldDelivered(order) {
-    if (order.status !== 'Delivered') return false;
-    const ref = order.created_at ? new Date(order.created_at) : null;
-    if (!ref) return false;
-    return (Date.now() - ref) / 86400000 > 14;
-}
-
-function fmtPrice(val) {
-    const n = parseFloat(val);
-    return isNaN(n) || n === 0 ? '-' : n.toFixed(2);
-}
-
-function fmtDate(d) {
-    if (!d) return '-';
-    return new Date(d).toLocaleDateString();
-}
-
-function fmtDateTime(d) {
-    if (!d) return '-';
-    return new Date(d).toLocaleString();
-}
-
-// ============================================================
-//  FILTERING
-// ============================================================
-
-function applyFilters() {
-    filteredOrders = ordersState.filter(order => {
-        if (filterState.search) {
-            const term = filterState.search.toLowerCase();
-            const hay = [
-                String(order.id || ''),
-                order.item_description || '',
-                order.part_number || '',
-                order.category || '',
-                order.notes || '',
-                order.requester_name || '',
-                order.cost_center_code || '',
-                order.cost_center_name || '',
-                order.supplier_name || '',
-                order.building || '',
-                order.status || '',
-                order.quote_number || '',
-                (order.files || []).map(f => f.name || '').join(' ')
-            ].join(' ').toLowerCase();
-            if (!hay.includes(term)) return false;
-        }
-        if (filterState.status && order.status !== filterState.status) return false;
-        if (filterState.building && order.building !== filterState.building) return false;
-        if (filterState.priority && order.priority !== filterState.priority) return false;
-        if (filterState.supplier && order.supplier_id !== parseInt(filterState.supplier, 10)) return false;
-        if (filterState.delivery) {
-            if (getDeliveryStatus(order) !== filterState.delivery) return false;
-        }
-        if (filterState.quickFilter) {
-            const qf = filterState.quickFilter;
-            if (qf === 'late' || qf === 'due7' || qf === 'due14') {
-                if (getDeliveryStatus(order) !== qf) return false;
-            } else if (qf === 'new' && order.status !== 'New') return false;
-            else if (qf === 'ordered' && order.status !== 'Ordered') return false;
-            else if (qf === 'transit' && order.status !== 'In Transit') return false;
-        }
-        return true;
-    });
-
-    filteredOrders.sort((a, b) => {
-        const pa = PRIORITY_ORDER[a.priority] || 3;
-        const pb = PRIORITY_ORDER[b.priority] || 3;
-        return pa !== pb ? pa - pb : b.id - a.id;
-    });
-
-    renderOrdersTable();
-}
-
-function clearFilters() {
-    filterState = { search: '', status: '', building: '', priority: '', supplier: '', delivery: '', quickFilter: '' };
-    ['filterSearch', 'filterStatus', 'filterBuilding', 'filterPriority', 'filterSupplier', 'filterDelivery'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.value = '';
-    });
-    document.querySelectorAll('.quick-filter-chip').forEach(c => c.classList.remove('active'));
-    currentPage = 1;
-    applyFilters();
-}
-
-function resetFiltersOnLogout() {
-    clearFilters();
-    viewMode = 'flat';
-    document.getElementById('btnViewFlat').classList.add('active');
-    document.getElementById('btnViewGrouped').classList.remove('active');
-}
-
-// ============================================================
-//  TAB SWITCHING
-// ============================================================
-
-function switchTab(tabId) {
-    document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'));
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-
-    const target = document.getElementById(tabId);
-    if (target) target.classList.remove('hidden');
-    const btn = document.querySelector(`.tab[data-tab="${tabId}"]`);
-    if (btn) btn.classList.add('active');
-    currentTab = tabId;
-
-    // Trigger data refresh for the newly active tab
-    if (tabId === 'quotesTab') loadQuotes();
-    if (tabId === 'approvalsTab') loadApprovals();
-    if (tabId === 'suppliersTab') renderSuppliersTable();
-    if (tabId === 'buildingsTab') renderBuildingsTable();
-    if (tabId === 'costCentersTab') renderCostCentersTable();
-    if (tabId === 'usersTab') renderUsersTable();
-    if (tabId === 'procurementTab' && typeof initProcurementDashboard === 'function') {
-        initProcurementDashboard();
-    }
-}
-
-// ============================================================
-//  VIEW MODE
-// ============================================================
-
-function setViewMode(mode) {
-    viewMode = mode;
-    document.getElementById('btnViewFlat').classList.toggle('active', mode === 'flat');
-    document.getElementById('btnViewGrouped').classList.toggle('active', mode === 'grouped');
-    currentPage = 1;
-    renderOrdersTable();
-}
-
-// ============================================================
-//  ORDERS TABLE
-// ============================================================
-
-function renderOrdersTable() {
-    const tbody = document.getElementById('ordersTableBody');
-    if (!tbody) return;
-
-    const total = filteredOrders.length;
-    const totalPages = Math.max(1, Math.ceil(total / ORDERS_PER_PAGE));
-    if (currentPage > totalPages) currentPage = totalPages;
-
-    const start = (currentPage - 1) * ORDERS_PER_PAGE;
-    const pageOrders = filteredOrders.slice(start, start + ORDERS_PER_PAGE);
-
-    const isAdmin = currentUser && currentUser.role !== 'requester';
-
-    // Update thead based on role
-    const thead = document.getElementById('ordersTableHead');
-    if (thead) {
-        thead.innerHTML = isAdmin
-            ? `<tr><th style="width:30px;"></th><th>ID</th><th>Description</th><th>Building</th><th>Status</th><th>Priority</th><th>Supplier</th><th>Delivery</th><th>Exp. Delivery</th><th>Created</th></tr>`
-            : `<tr><th>ID</th><th>Description</th><th>Status</th><th>Priority</th><th>Delivery</th><th>Created</th></tr>`;
-    }
-
-    if (viewMode === 'grouped') {
-        renderGroupedView(pageOrders, tbody, isAdmin);
-    } else {
-        renderFlatView(pageOrders, tbody, isAdmin);
-    }
-
-    renderPagination(total, totalPages);
-    updateSelectedCount();
-}
-
-function renderFlatView(orders, tbody, isAdmin) {
-    const cols = isAdmin ? 10 : 6;
-    if (!orders.length) {
-        tbody.innerHTML = `<tr><td colspan="${cols}" class="text-center text-gray-400 py-8">No orders found</td></tr>`;
-        return;
-    }
-    tbody.innerHTML = orders.map(o => renderOrderRow(o, isAdmin)).join('');
-    attachOrderRowListeners();
-}
-
-function renderGroupedView(orders, tbody, isAdmin) {
-    const cols = isAdmin ? 10 : 6;
-    if (!orders.length) {
-        tbody.innerHTML = `<tr><td colspan="${cols}" class="text-center text-gray-400 py-8">No orders found</td></tr>`;
-        return;
-    }
-    const grouped = {};
-    orders.forEach(o => { const k = o.building || 'Unknown'; (grouped[k] = grouped[k] || []).push(o); });
-    let html = '';
-    Object.keys(grouped).sort().forEach(bldg => {
-        const cnt = grouped[bldg].length;
-        html += `<tr class="bg-gray-750"><td colspan="${cols}" class="px-4 py-2 font-semibold text-blue-300 text-sm">Building: ${bldg} (${cnt} order${cnt !== 1 ? 's' : ''})</td></tr>`;
-        html += grouped[bldg].map(o => renderOrderRow(o, isAdmin)).join('');
-    });
-    tbody.innerHTML = html;
-    attachOrderRowListeners();
-}
-
-function renderOrderRow(order, isAdmin) {
-    const ds = getDeliveryStatus(order);
-    const rowCls = `order-row cursor-pointer hover:bg-gray-700${isOldDelivered(order) ? ' opacity-50' : ''}`;
-    const chk = selectedOrderIds.has(order.id) ? 'checked' : '';
-
-    if (!isAdmin) {
-        return `<tr class="${rowCls}" data-id="${order.id}">
-            <td class="px-3 py-2 text-xs text-gray-400">#${order.id}</td>
-            <td class="px-3 py-2 text-sm">${escHtml(order.item_description || '')}</td>
-            <td class="px-3 py-2">${renderStatusBadge(order.status)}</td>
-            <td class="px-3 py-2">${renderPriorityBadge(order.priority)}</td>
-            <td class="px-3 py-2 text-sm">${getDeliveryBadgeHtml(ds)}</td>
-            <td class="px-3 py-2 text-xs text-gray-400">${fmtDate(order.created_at)}</td>
-        </tr>`;
-    }
-
-    return `<tr class="${rowCls}" data-id="${order.id}">
-        <td class="px-3 py-2" onclick="event.stopPropagation()">
-            <input type="checkbox" class="order-checkbox" data-id="${order.id}" ${chk}>
-        </td>
-        <td class="px-3 py-2 text-xs text-gray-400">#${order.id}</td>
-        <td class="px-3 py-2 text-sm max-w-xs truncate" title="${escHtml(order.item_description || '')}">${escHtml(order.item_description || '')}</td>
-        <td class="px-3 py-2 text-xs">${order.building || '-'}</td>
-        <td class="px-3 py-2">${renderStatusBadge(order.status)}</td>
-        <td class="px-3 py-2">${renderPriorityBadge(order.priority)}</td>
-        <td class="px-3 py-2 text-xs">${escHtml(order.supplier_name || '-')}</td>
-        <td class="px-3 py-2 text-sm">${getDeliveryBadgeHtml(ds)}</td>
-        <td class="px-3 py-2 text-xs text-gray-400">${order.expected_delivery_date || '-'}</td>
-        <td class="px-3 py-2 text-xs text-gray-400">${fmtDate(order.created_at)}</td>
-    </tr>`;
-}
-
-function attachOrderRowListeners() {
-    const table = document.getElementById('ordersTable');
-    if (!table) return;
-    table.querySelectorAll('.order-row').forEach(row => {
-        row.addEventListener('click', () => showOrderDetail(parseInt(row.dataset.id)));
-    });
-    table.querySelectorAll('.order-checkbox').forEach(cb => {
-        cb.addEventListener('change', () => {
-            const id = parseInt(cb.dataset.id);
-            if (cb.checked) selectedOrderIds.add(id);
-            else selectedOrderIds.delete(id);
-            updateSelectedCount();
-        });
-    });
-}
-
-function renderPagination(total, totalPages) {
-    const container = document.getElementById('paginationContainer');
-    if (!container) return;
-    if (totalPages <= 1) { container.innerHTML = ''; return; }
-
-    const btn = (p, label, disabled = false, active = false) =>
-        `<button onclick="gotoPage(${p})" ${disabled ? 'disabled' : ''} class="px-3 py-1 rounded text-sm ${active ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600'} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}">${label}</button>`;
-
-    let html = `<div class="flex items-center gap-2 mt-4 justify-center">`;
-    html += btn(currentPage - 1, 'Prev', currentPage === 1);
-
-    const maxBtns = 7;
-    let s = Math.max(1, currentPage - 3);
-    let e = Math.min(totalPages, s + maxBtns - 1);
-    if (e - s < maxBtns - 1) s = Math.max(1, e - maxBtns + 1);
-
-    if (s > 1) { html += btn(1, '1'); if (s > 2) html += '<span class="text-gray-400">…</span>'; }
-    for (let p = s; p <= e; p++) html += btn(p, p, false, p === currentPage);
-    if (e < totalPages) { if (e < totalPages - 1) html += '<span class="text-gray-400">…</span>'; html += btn(totalPages, totalPages); }
-
-    html += btn(currentPage + 1, 'Next', currentPage === totalPages);
-    html += `<span class="text-gray-400 text-xs ml-2">${total} orders</span></div>`;
-    container.innerHTML = html;
-}
-
-function gotoPage(page) {
-    const total = Math.max(1, Math.ceil(filteredOrders.length / ORDERS_PER_PAGE));
-    if (page < 1 || page > total) return;
-    currentPage = page;
-    renderOrdersTable();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-function updateSelectedCount() {
-    const sc = document.getElementById('selectedCount');
-    const bar = document.getElementById('orderActionsBar');
-    if (sc) sc.textContent = `${selectedOrderIds.size} selected`;
-    if (bar) bar.style.display = selectedOrderIds.size > 0 ? 'flex' : 'none';
-}
-
-function renderStatusBadge(status) {
-    const colors = {
-        New: 'bg-blue-500', Pending: 'bg-yellow-500', 'Quote Requested': 'bg-purple-500',
-        'Quote Received': 'bg-indigo-500', 'Quote Under Approval': 'bg-orange-400',
-        Approved: 'bg-green-600', Ordered: 'bg-teal-500',
-        'In Transit': 'bg-cyan-500', 'Partially Delivered': 'bg-lime-500',
-        Delivered: 'bg-green-500', Cancelled: 'bg-red-500', 'On Hold': 'bg-gray-500'
-    };
-    return `<span class="status-badge ${colors[status] || 'bg-gray-500'} text-white">${status || '-'}</span>`;
-}
-
-function renderPriorityBadge(priority) {
-    const colors = { Urgent: 'bg-red-600', High: 'bg-orange-500', Normal: 'bg-blue-500', Low: 'bg-gray-500' };
-    return `<span class="priority-badge ${colors[priority] || 'bg-gray-500'} text-white">${priority || '-'}</span>`;
-}
-
-function escHtml(str) {
-    return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-}
-
-// ============================================================
-//  ORDER DETAIL PANEL
-// ============================================================
-
-async function showOrderDetail(orderId) {
-    const order = ordersState.find(o => o.id === orderId);
-    if (!order) return;
-
-    const isAdmin = currentUser.role !== 'requester';
-    const isRequester = currentUser.role === 'requester';
-    const ds = getDeliveryStatus(order);
-
-    // Attachments
-    const attachments = (order.files || []).map(f => {
-        const filename = f.path && (f.path.startsWith('/') || f.path.startsWith('http'))
-            ? f.path
-            : `/uploads/${f.path || f.name}`;
-        return `<a href="${filename}" target="_blank" rel="noopener" class="text-blue-400 hover:underline text-sm flex items-center gap-1">
-            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
-            ${escHtml(f.name || f.path)}
-        </a>`;
-    }).join('');
-
-    // History
-    const historyHtml = (order.history || []).length
-        ? [...order.history].reverse().map(h =>
-            `<div class="text-xs text-gray-400 py-1 border-b border-gray-700">
-                <span class="text-gray-300">${escHtml(h.changed_by_name || 'System')}</span> changed
-                <span class="text-blue-300">${h.field_name}</span> from
-                <span class="text-red-300">${escHtml(h.old_value || 'none')}</span> to
-                <span class="text-green-300">${escHtml(h.new_value || 'none')}</span>
-                <span class="float-right">${fmtDateTime(h.changed_at)}</span>
-            </div>`).join('')
-        : '<p class="text-gray-500 text-xs">No history</p>';
-
-    // Admin management block
-    let adminBlock = '';
-    if (isAdmin) {
-        const statusOpts = ORDER_STATUSES.map(s =>
-            `<option value="${s}" ${order.status === s ? 'selected' : ''}>${s}</option>`).join('');
-        const supplierOpts = '<option value="">— No Supplier —</option>' +
-            suppliersState.filter(s => s.is_active).map(s =>
-                `<option value="${s.id}" ${order.supplier_id === s.id ? 'selected' : ''}>${escHtml(s.name)}</option>`).join('');
-
-        adminBlock = `
-        <div class="mt-4 p-4 rounded-lg border border-gray-600" style="background:rgba(255,255,255,0.03);">
-            <h4 class="text-sm font-semibold text-gray-300 mb-3">Order Management</h4>
-            <div class="grid grid-cols-2 gap-3">
-                <div>
-                    <label class="text-xs text-gray-400">Status</label>
-                    <select id="detailStatus" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm mt-1">${statusOpts}</select>
-                </div>
-                <div>
-                    <label class="text-xs text-gray-400">Priority</label>
-                    <select id="detailPriority" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm mt-1">
-                        ${['Normal','High','Urgent','Low'].map(p =>
-                            `<option value="${p}" ${order.priority === p ? 'selected' : ''}>${p}</option>`).join('')}
-                    </select>
-                </div>
-                <div>
-                    <label class="text-xs text-gray-400">Supplier</label>
-                    <select id="detailSupplier" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm mt-1">${supplierOpts}</select>
-                </div>
-                <div>
-                    <label class="text-xs text-gray-400">Quote Number</label>
-                    <input id="detailQuoteNumber" type="text" value="${escHtml(order.quote_number || '')}" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm mt-1" placeholder="Quote #">
-                </div>
-                <div>
-                    <label class="text-xs text-gray-400">Unit Price</label>
-                    <input id="detailUnitPrice" type="number" step="0.01" min="0" value="${order.unit_price || ''}" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm mt-1">
-                </div>
-                <div>
-                    <label class="text-xs text-gray-400">Expected Delivery</label>
-                    <input id="detailDeliveryDate" type="date" value="${order.expected_delivery_date || ''}" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm mt-1 date-picker">
-                </div>
-                <div class="col-span-2">
-                    <label class="text-xs text-gray-400">Internal Notes</label>
-                    <textarea id="detailNotes" rows="2" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm mt-1" placeholder="Internal notes...">${escHtml(order.internal_notes || '')}</textarea>
-                </div>
-            </div>
-            <div class="flex gap-2 mt-3 flex-wrap">
-                <button onclick="saveOrderChanges(${order.id})" class="btn btn-primary btn-sm">Save Changes</button>
-                ${currentUser.role === 'admin' ? `<button onclick="deleteOrder(${order.id})" class="btn btn-sm" style="background:#ef4444;color:#fff;">Delete</button>` : ''}
-                ${typeof openAssignmentPanel === 'function' ? `<button onclick="openAssignmentPanel(${order.id})" class="btn btn-secondary btn-sm">Assign</button>` : ''}
-                ${typeof openApprovalSubmission === 'function' && ['New','Pending'].includes(order.status) ? `<button onclick="openApprovalSubmission(${order.id})" class="btn btn-sm" style="background:#7c3aed;color:#fff;">Request Approval</button>` : ''}
-                <button onclick="loadAiSuggestions(${order.id})" class="btn btn-secondary btn-sm">🤖 AI Supplier</button>
-            </div>
-            <div id="aiSuggestionsBox${order.id}" style="display:none;margin-top:1rem;"></div>
-        </div>`;
-    }
-
-    // Requester cancel
-    let requesterBlock = '';
-    if (isRequester && ['New', 'Pending'].includes(order.status)) {
-        requesterBlock = `<div class="mt-4"><button onclick="cancelOrder(${order.id})" class="btn btn-sm" style="background:#ef4444;color:#fff;">Cancel Order</button></div>`;
-    }
-
-    document.getElementById('orderDetailBody').innerHTML = `
-    <div class="space-y-4">
-        <div class="grid grid-cols-2 gap-4">
-            <div><span class="text-gray-400 text-xs">Order ID</span><p class="text-sm font-mono">#${order.id}</p></div>
-            <div><span class="text-gray-400 text-xs">Status</span><p>${renderStatusBadge(order.status)}</p></div>
-            <div><span class="text-gray-400 text-xs">Building</span><p class="text-sm">${order.building || '-'}</p></div>
-            <div><span class="text-gray-400 text-xs">Priority</span><p>${renderPriorityBadge(order.priority)}</p></div>
-            <div><span class="text-gray-400 text-xs">Cost Center</span><p class="text-sm">${order.cost_center_code ? `${order.cost_center_code} — ${order.cost_center_name || ''}` : '-'}</p></div>
-            <div><span class="text-gray-400 text-xs">Requester</span><p class="text-sm">${escHtml(order.requester_name || '-')}</p></div>
-            <div class="col-span-2"><span class="text-gray-400 text-xs">Item Description</span><p class="text-sm">${escHtml(order.item_description || '-')}</p></div>
-            <div><span class="text-gray-400 text-xs">Part Number</span><p class="text-sm font-mono">${escHtml(order.part_number || '-')}</p></div>
-            <div><span class="text-gray-400 text-xs">Category</span><p class="text-sm">${escHtml(order.category || '-')}</p></div>
-            <div><span class="text-gray-400 text-xs">Quantity</span><p class="text-sm">${order.quantity || '-'} ${order.unit || ''}</p></div>
-            <div><span class="text-gray-400 text-xs">Supplier</span><p class="text-sm">${escHtml(order.supplier_name || '-')}</p></div>
-            <div><span class="text-gray-400 text-xs">Unit Price</span><p class="text-sm">${fmtPrice(order.unit_price)}</p></div>
-            <div><span class="text-gray-400 text-xs">Quote Number</span><p class="text-sm font-mono">${escHtml(order.quote_number || '-')}</p></div>
-            <div><span class="text-gray-400 text-xs">Delivery Status</span><p>${getDeliveryBadgeHtml(ds)}</p></div>
-            <div><span class="text-gray-400 text-xs">Expected Delivery</span><p class="text-sm">${order.expected_delivery_date || '-'}</p></div>
-            <div><span class="text-gray-400 text-xs">Notes</span><p class="text-sm">${escHtml(order.notes || '-')}</p></div>
-            <div><span class="text-gray-400 text-xs">Created</span><p class="text-sm">${fmtDateTime(order.created_at)}</p></div>
-        </div>
-        ${attachments ? `<div><span class="text-gray-400 text-xs block mb-1">Attachments</span><div class="flex flex-col gap-1">${attachments}</div></div>` : ''}
-        ${adminBlock}
-        ${requesterBlock}
-        <div>
-            <span class="text-gray-400 text-xs block mb-1">History</span>
-            <div class="max-h-48 overflow-y-auto">${historyHtml}</div>
-        </div>
-    </div>`;
-
-    document.getElementById('orderDetailPanel').classList.remove('hidden');
-
-    // Load documents section if available
-    const docsSection = document.getElementById('documentsSection');
-    if (docsSection) {
-        docsSection.style.display = 'block';
-        if (typeof loadDocumentsForOrder === 'function') loadDocumentsForOrder(order.id);
-        else if (typeof renderDocumentsSection === 'function') renderDocumentsSection(order.id);
-    }
-}
-
-// ============================================================
-//  AI SUPPLIER SUGGESTIONS
-// ============================================================
-
-async function loadAiSuggestions(orderId) {
-    const box = document.getElementById(`aiSuggestionsBox${orderId}`);
-    if (!box) return;
-    box.style.display = 'block';
-    box.innerHTML = '<p class="text-xs text-gray-400">Loading suggestions…</p>';
+async function loadCostCenters() {
     try {
-        const data = await apiGet(`/suppliers/suggestions/${orderId}`);
-        if (!data.success || !data.suggestions || !data.suggestions.length) {
-            box.innerHTML = '<p class="text-xs text-gray-500">No suggestions available.</p>';
-            return;
-        }
-        box.innerHTML = `<h5 class="text-xs font-semibold text-gray-300 mb-2">AI Supplier Suggestions</h5>` +
-            data.suggestions.map(s => `
-            <div class="text-xs border border-gray-700 rounded p-2 mb-1">
-                <div class="font-semibold text-gray-200">${escHtml(s.name)}</div>
-                <div class="text-gray-400">Score: ${s.score || '-'} · ${escHtml(s.reason || '')}</div>
-            </div>`).join('');
-    } catch {
-        box.innerHTML = '<p class="text-xs text-red-400">Failed to load suggestions.</p>';
-    }
-}
-
-// ============================================================
-//  ORDER SAVE / DELETE / CANCEL
-// ============================================================
-
-async function saveOrderChanges(orderId) {
-    const g = id => document.getElementById(id);
-    const body = {
-        status: g('detailStatus').value,
-        priority: g('detailPriority').value,
-        supplier_id: g('detailSupplier').value ? parseInt(g('detailSupplier').value) : null,
-        quote_number: g('detailQuoteNumber').value.trim(),
-        unit_price: g('detailUnitPrice').value ? parseFloat(g('detailUnitPrice').value) : null,
-        expected_delivery_date: g('detailDeliveryDate').value || null,
-        internal_notes: g('detailNotes').value.trim()
-    };
-    try {
-        const res = await apiPut(`/orders/${orderId}`, body);
+        const res = await apiGet('/cost-centers');
         if (res.success) {
-            showToast('Order updated');
-            await loadOrders();
-            showOrderDetail(orderId);
-            updateApprovalBadge();
-        } else {
-            showToast(res.message || 'Update failed', true);
+            costCentersState = res.costCenters;
+            if (currentUser && currentUser.role === 'requester') {
+                renderCostCenterRadios(currentUser.building);
+            }
+            if (currentUser && currentUser.role === 'admin') {
+                renderCostCentersTable();
+                populateCCBuildingSelects();
+            }
         }
-    } catch { showToast('Update failed', true); }
-}
-
-async function deleteOrder(orderId) {
-    if (!confirm('Delete this order?')) return;
-    try {
-        const res = await apiDelete(`/orders/${orderId}`);
-        if (res.success) {
-            showToast('Order deleted');
-            document.getElementById('orderDetailPanel').classList.add('hidden');
-            await loadOrders();
-        } else {
-            showToast(res.message || 'Delete failed', true);
-        }
-    } catch { showToast('Delete failed', true); }
-}
-
-async function cancelOrder(orderId) {
-    if (!confirm('Cancel this order?')) return;
-    try {
-        const res = await apiPut(`/orders/${orderId}`, { status: 'Cancelled' });
-        if (res.success) {
-            showToast('Order cancelled');
-            document.getElementById('orderDetailPanel').classList.add('hidden');
-            await loadOrders();
-        } else {
-            showToast(res.message || 'Cancel failed', true);
-        }
-    } catch { showToast('Cancel failed', true); }
-}
-
-// ============================================================
-//  REQUESTER CREATE ORDER
-// ============================================================
-
-async function handleCreateOrder(e) {
-    e.preventDefault();
-    const form = document.getElementById('createOrderForm');
-    const formData = new FormData(form);
-    if (!formData.get('cost_center_id')) { showToast('Please select a cost center', true); return; }
-    try {
-        const res = await fetch(`${API_BASE}/orders`, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${authToken}` },
-            body: formData
-        });
-        const data = await res.json();
-        if (data.success) {
-            showToast('Order submitted');
-            form.reset();
-            document.getElementById('costCenterRadios').innerHTML = '<span class="text-muted">Select a building first</span>';
-            await loadOrders();
-        } else {
-            showToast(data.message || 'Failed to create order', true);
-        }
-    } catch { showToast('Failed to create order', true); }
+    } catch (err) { console.error('loadCostCenters error:', err); }
 }
 
 function renderCostCenterRadios(buildingCode) {
-    const container = document.getElementById('costCenterRadios');
-    if (!container) return;
-    const bldg = buildingsState.find(b => b.code === buildingCode);
-    if (!bldg) { container.innerHTML = '<span class="text-muted">Select a building first</span>'; return; }
-    const ccs = costCentersState.filter(cc => cc.building_id === bldg.id && cc.is_active);
-    if (!ccs.length) { container.innerHTML = '<span class="text-muted">No cost centers for this building</span>'; return; }
-    container.innerHTML = ccs.map(cc =>
-        `<label class="flex items-center gap-2 cursor-pointer">
-            <input type="radio" name="cost_center_id" value="${cc.id}" class="accent-blue-500">
-            <span>${cc.code} — ${cc.name}</span>
-        </label>`).join('');
-}
+    if (!costCenterRadios) return;
 
-// ============================================================
-//  PROCUREMENT / ADMIN CREATE ORDER MODAL
-// ============================================================
-
-function openProcCreateOrderModal() {
-    populateBuildingSelects();
-    populateSupplierFilter();
-    document.getElementById('procCreateOrderForm').reset();
-    document.getElementById('procCostCenterRadios').innerHTML = '<span class="text-muted">Select a building first</span>';
-    openModal('procCreateOrderModal');
-}
-
-function renderProcCostCenterRadios(buildingCode) {
-    const container = document.getElementById('procCostCenterRadios');
-    if (!container) return;
-    const bldg = buildingsState.find(b => b.code === buildingCode);
-    if (!bldg) { container.innerHTML = '<span class="text-muted">Select a building first</span>'; return; }
-    const ccs = costCentersState.filter(cc => cc.building_id === bldg.id && cc.is_active);
-    if (!ccs.length) { container.innerHTML = '<span class="text-muted">No cost centers for this building</span>'; return; }
-    container.innerHTML = ccs.map(cc =>
-        `<label class="flex items-center gap-2 cursor-pointer">
-            <input type="radio" name="proc_cost_center_id" value="${cc.id}" class="accent-blue-500">
-            <span>${cc.code} — ${cc.name}</span>
-        </label>`).join('');
-}
-
-async function handleProcCreateOrderSubmit(e) {
-    e.preventDefault();
-    const form = document.getElementById('procCreateOrderForm');
-    const formData = new FormData(form);
-    const ccId = formData.get('proc_cost_center_id');
-    if (!ccId) { showToast('Please select a cost center', true); return; }
-    formData.set('cost_center_id', ccId);
-    formData.delete('proc_cost_center_id');
-    try {
-        const res = await fetch(`${API_BASE}/orders`, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${authToken}` },
-            body: formData
-        });
-        const data = await res.json();
-        if (data.success) {
-            showToast('Order created');
-            closeModal('procCreateOrderModal');
-            form.reset();
-            await loadOrders();
-        } else {
-            showToast(data.message || 'Failed to create order', true);
-        }
-    } catch { showToast('Failed to create order', true); }
-}
-
-// ============================================================
-//  QUOTES
-// ============================================================
-
-function renderQuotesTable() {
-    const tbody = document.getElementById('quotesTableBody');
-    if (!tbody) return;
-    if (!quotesState.length) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-gray-400 py-8">No quotes found</td></tr>';
+    if (!buildingCode) {
+        costCenterRadios.innerHTML = '<span class="text-muted">Select a building first</span>';
         return;
     }
-    tbody.innerHTML = quotesState.map(q => `
-        <tr class="hover:bg-gray-700 cursor-pointer" onclick="showQuoteDetail(${q.id})">
-            <td class="px-3 py-2 text-sm font-mono">${escHtml(q.quote_number || '-')}</td>
-            <td class="px-3 py-2 text-xs">${escHtml(q.supplier_name || '-')}</td>
-            <td class="px-3 py-2 text-xs">${renderStatusBadge(q.status)}</td>
-            <td class="px-3 py-2 text-xs">${q.order_count || 0} orders</td>
-            <td class="px-3 py-2 text-xs">${q.total_amount ? fmtPrice(q.total_amount) : '-'}</td>
-            <td class="px-3 py-2 text-xs">${escHtml(q.created_by_name || '-')}</td>
-            <td class="px-3 py-2 text-xs text-gray-400">${fmtDate(q.created_at)}</td>
-        </tr>`).join('');
-}
 
-async function showQuoteDetail(quoteId) {
-    try {
-        const data = await apiGet(`/quotes/${quoteId}`);
-        if (!data.success) { showToast('Failed to load quote', true); return; }
-        const q = data.quote;
-
-        const ordersHtml = (q.orders || []).map(o =>
-            `<tr class="hover:bg-gray-700">
-                <td class="px-2 py-1 text-xs">#${o.id}</td>
-                <td class="px-2 py-1 text-xs">${escHtml(o.item_description || '')}</td>
-                <td class="px-2 py-1 text-xs">${o.building || ''}</td>
-                <td class="px-2 py-1 text-xs">${renderStatusBadge(o.status)}</td>
-                <td class="px-2 py-1 text-xs">${fmtPrice(o.unit_price)}</td>
-            </tr>`).join('');
-
-        const statusOpts = ['Draft','Sent','Received','Accepted','Rejected','Cancelled'].map(s =>
-            `<option value="${s}" ${q.status === s ? 'selected' : ''}>${s}</option>`).join('');
-
-        document.getElementById('quoteDetailBody').innerHTML = `
-        <div class="space-y-4">
-            <div class="grid grid-cols-2 gap-3">
-                <div><span class="text-gray-400 text-xs">Quote #</span><p class="font-mono text-sm">${escHtml(q.quote_number || '-')}</p></div>
-                <div><span class="text-gray-400 text-xs">Supplier</span><p class="text-sm">${escHtml(q.supplier_name || '-')}</p></div>
-                <div><span class="text-gray-400 text-xs">Status</span><p>${renderStatusBadge(q.status)}</p></div>
-                <div><span class="text-gray-400 text-xs">Total</span><p class="text-sm">${fmtPrice(q.total_amount)}</p></div>
-                <div><span class="text-gray-400 text-xs">Created By</span><p class="text-sm">${escHtml(q.created_by_name || '-')}</p></div>
-                <div><span class="text-gray-400 text-xs">Created</span><p class="text-sm">${fmtDate(q.created_at)}</p></div>
-            </div>
-            ${q.notes ? `<div><span class="text-gray-400 text-xs">Notes</span><p class="text-sm">${escHtml(q.notes)}</p></div>` : ''}
-
-            <div>
-                <span class="text-gray-400 text-xs block mb-2">Orders in this Quote (${(q.orders || []).length})</span>
-                <div class="table-wrapper" style="max-height:200px;overflow-y:auto;">
-                    <table><thead><tr><th>ID</th><th>Description</th><th>Building</th><th>Status</th><th>Price</th></tr></thead>
-                    <tbody>${ordersHtml || '<tr><td colspan="5" class="text-center text-gray-400 py-2">No orders</td></tr>'}</tbody></table>
-                </div>
-            </div>
-
-            <div class="p-4 rounded-lg border border-gray-600" style="background:rgba(255,255,255,0.03);">
-                <h4 class="text-sm font-semibold text-gray-300 mb-3">Update Quote</h4>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="text-xs text-gray-400">Status</label>
-                        <select id="quoteDetailStatus" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm mt-1">${statusOpts}</select>
-                    </div>
-                    <div>
-                        <label class="text-xs text-gray-400">Total Amount</label>
-                        <input id="quoteDetailAmount" type="number" step="0.01" min="0" value="${q.total_amount || ''}" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm mt-1">
-                    </div>
-                    <div class="col-span-2">
-                        <label class="text-xs text-gray-400">Notes</label>
-                        <textarea id="quoteDetailNotes" rows="2" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm mt-1">${escHtml(q.notes || '')}</textarea>
-                    </div>
-                </div>
-                <div class="flex gap-2 mt-3">
-                    <button onclick="saveQuoteChanges(${q.id})" class="btn btn-primary btn-sm">Save</button>
-                    ${typeof openQuoteSendPanel === 'function' ? `<button onclick="openQuoteSendPanel(${q.id})" class="btn btn-secondary btn-sm">📧 Send to Supplier</button>` : ''}
-                    ${currentUser.role === 'admin' ? `<button onclick="deleteQuote(${q.id})" class="btn btn-sm" style="background:#ef4444;color:#fff;">Delete</button>` : ''}
-                </div>
-            </div>
-        </div>`;
-
-        document.getElementById('quoteDetailPanel').classList.remove('hidden');
-    } catch (err) {
-        console.error('showQuoteDetail:', err);
-        showToast('Failed to load quote', true);
-    }
-}
-
-async function saveQuoteChanges(quoteId) {
-    const body = {
-        status: document.getElementById('quoteDetailStatus').value,
-        total_amount: document.getElementById('quoteDetailAmount').value
-            ? parseFloat(document.getElementById('quoteDetailAmount').value) : null,
-        notes: document.getElementById('quoteDetailNotes').value.trim()
-    };
-    try {
-        const res = await apiPut(`/quotes/${quoteId}`, body);
-        if (res.success) {
-            showToast('Quote updated');
-            await loadQuotes();
-            showQuoteDetail(quoteId);
-        } else {
-            showToast(res.message || 'Update failed', true);
-        }
-    } catch { showToast('Update failed', true); }
-}
-
-async function deleteQuote(quoteId) {
-    if (!confirm('Delete this quote?')) return;
-    try {
-        const res = await apiDelete(`/quotes/${quoteId}`);
-        if (res.success) {
-            showToast('Quote deleted');
-            document.getElementById('quoteDetailPanel').classList.add('hidden');
-            await loadQuotes();
-        } else {
-            showToast(res.message || 'Delete failed', true);
-        }
-    } catch { showToast('Delete failed', true); }
-}
-
-// ============================================================
-//  CREATE QUOTE MODAL
-// ============================================================
-
-function openCreateQuoteDialog() {
-    if (selectedOrderIds.size === 0) { showToast('Select at least one order first', true); return; }
-    populateSupplierFilter();
-    const listEl = document.getElementById('quoteOrdersList');
-    if (listEl) {
-        const ids = Array.from(selectedOrderIds);
-        listEl.innerHTML = `<strong>${ids.length} order${ids.length > 1 ? 's' : ''} selected:</strong> ${ids.map(id => `#${id}`).join(', ')}`;
-    }
-    openModal('createQuoteModal');
-}
-
-async function handleCreateQuoteSubmit(e) {
-    e.preventDefault();
-    const supplierId = document.getElementById('quoteSupplier').value;
-    const notes = document.getElementById('quoteNotes').value.trim();
-    if (!supplierId) { showToast('Select a supplier', true); return; }
-    const order_ids = Array.from(selectedOrderIds);
-    try {
-        const res = await apiPost('/quotes', { supplier_id: parseInt(supplierId), order_ids, notes });
-        if (res.success) {
-            showToast('Quote created');
-            closeModal('createQuoteModal');
-            selectedOrderIds.clear();
-            updateSelectedCount();
-            await loadQuotes();
-            await loadOrders();
-            switchTab('quotesTab');
-        } else {
-            showToast(res.message || 'Failed', true);
-        }
-    } catch { showToast('Failed to create quote', true); }
-}
-
-// ============================================================
-//  APPROVALS
-// ============================================================
-
-let approvalsData = [];
-
-async function loadApprovals() {
-    try {
-        const data = await apiGet('/approvals?status=pending');
-        if (data.success) {
-            approvalsData = data.approvals || [];
-            renderApprovalsTable();
-            updateApprovalBadge();
-        }
-    } catch (err) { console.error('loadApprovals:', err); }
-}
-
-function renderApprovalsTable() {
-    const tbody = document.getElementById('approvalsTableBody');
-    if (!tbody) return;
-
-    const search = (document.getElementById('approvalSearch')?.value || '').toLowerCase();
-    const statusF = document.getElementById('approvalStatusFilter')?.value || '';
-    const priorityF = document.getElementById('approvalPriorityFilter')?.value || '';
-
-    let filtered = approvalsData.filter(a => {
-        if (search) {
-            const hay = [String(a.order_id || a.id || ''), a.item_description || '', a.building || '', a.requester_name || ''].join(' ').toLowerCase();
-            if (!hay.includes(search)) return false;
-        }
-        if (statusF && a.status !== statusF) return false;
-        if (priorityF && a.priority !== priorityF) return false;
-        return true;
-    });
+    const filtered = costCentersState.filter(cc => cc.building_code === buildingCode && cc.active);
 
     if (!filtered.length) {
-        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-gray-400 py-8">No approvals found</td></tr>';
+        costCenterRadios.innerHTML = '<span class="text-muted">No cost centers defined for this building</span>';
         return;
     }
 
-    tbody.innerHTML = filtered.map(a => `
-        <tr class="hover:bg-gray-700">
-            <td class="px-3 py-2 text-xs">#${a.order_id || a.id}</td>
-            <td class="px-3 py-2 text-sm max-w-xs truncate">${escHtml(a.item_description || '-')}</td>
-            <td class="px-3 py-2 text-xs">${a.building || '-'}</td>
-            <td class="px-3 py-2 text-xs">${escHtml(a.supplier_name || '-')}</td>
-            <td class="px-3 py-2 text-xs">${a.estimated_cost ? fmtPrice(a.estimated_cost) : '-'}</td>
-            <td class="px-3 py-2">${renderPriorityBadge(a.priority)}</td>
-            <td class="px-3 py-2 text-xs capitalize">${a.status || '-'}</td>
-            <td class="px-3 py-2 text-xs">${escHtml(a.requester_name || '-')}</td>
-            <td class="px-3 py-2 text-xs text-gray-400">${fmtDate(a.created_at)}</td>
-            <td class="px-3 py-2">
-                <button onclick="showApprovalDetail(${a.id})" class="btn btn-sm" style="background:#3b82f6;color:#fff;">Review</button>
-            </td>
-        </tr>`).join('');
+    costCenterRadios.innerHTML = filtered.map(cc =>
+        `<label class="radio-label">
+            <input type="radio" name="costCenter" value="${cc.id}" required>
+            <span class="radio-text"><strong>${escapeHtml(cc.code)}</strong> — ${escapeHtml(cc.name)}</span>
+        </label>`
+    ).join('');
 }
 
-function clearApprovalFilters() {
-    const ids = ['approvalSearch', 'approvalStatusFilter', 'approvalPriorityFilter'];
-    ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
-    renderApprovalsTable();
-}
-
-async function showApprovalDetail(approvalId) {
-    const a = approvalsData.find(x => x.id === approvalId);
-    if (!a) return;
-
-    document.getElementById('approvalDetailBody').innerHTML = `
-    <div class="space-y-4">
-        <div class="grid grid-cols-2 gap-3">
-            <div><span class="text-gray-400 text-xs">Order</span><p class="text-sm font-mono">#${a.order_id || a.id}</p></div>
-            <div><span class="text-gray-400 text-xs">Status</span><p class="text-sm capitalize">${a.status}</p></div>
-            <div class="col-span-2"><span class="text-gray-400 text-xs">Item</span><p class="text-sm">${escHtml(a.item_description || '-')}</p></div>
-            <div><span class="text-gray-400 text-xs">Building</span><p class="text-sm">${a.building || '-'}</p></div>
-            <div><span class="text-gray-400 text-xs">Priority</span><p>${renderPriorityBadge(a.priority)}</p></div>
-            <div><span class="text-gray-400 text-xs">Supplier</span><p class="text-sm">${escHtml(a.supplier_name || '-')}</p></div>
-            <div><span class="text-gray-400 text-xs">Est. Cost</span><p class="text-sm">${a.estimated_cost ? fmtPrice(a.estimated_cost) : '-'}</p></div>
-            <div><span class="text-gray-400 text-xs">Requested By</span><p class="text-sm">${escHtml(a.requester_name || '-')}</p></div>
-            <div><span class="text-gray-400 text-xs">Requested</span><p class="text-sm">${fmtDateTime(a.created_at)}</p></div>
-        </div>
-        ${a.notes ? `<div><span class="text-gray-400 text-xs">Notes</span><p class="text-sm">${escHtml(a.notes)}</p></div>` : ''}
-        <div class="form-group">
-            <label class="text-xs text-gray-400">Comments</label>
-            <textarea id="approvalComment" rows="3" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm mt-1" placeholder="Optional comments…"></textarea>
-        </div>
-        <div class="flex gap-2">
-            <button onclick="doApprove(${a.id})" class="btn btn-sm" style="background:#16a34a;color:#fff;">✓ Approve</button>
-            <button onclick="doReject(${a.id})" class="btn btn-sm" style="background:#dc2626;color:#fff;">✗ Reject</button>
-        </div>
-    </div>`;
-
-    document.getElementById('approvalDetailPanel').classList.remove('hidden');
-}
-
-async function doApprove(approvalId) {
-    const comment = document.getElementById('approvalComment')?.value.trim();
-    try {
-        const res = await apiPut(`/approvals/${approvalId}/approve`, { comments: comment || '' });
-        if (res.success) {
-            showToast('Approved');
-            document.getElementById('approvalDetailPanel').classList.add('hidden');
-            await loadApprovals();
-            await loadOrders();
-        } else {
-            showToast(res.message || 'Failed', true);
-        }
-    } catch { showToast('Failed', true); }
-}
-
-async function doReject(approvalId) {
-    const comment = document.getElementById('approvalComment')?.value.trim();
-    try {
-        const res = await apiPut(`/approvals/${approvalId}/reject`, { comments: comment || 'Rejected' });
-        if (res.success) {
-            showToast('Rejected');
-            document.getElementById('approvalDetailPanel').classList.add('hidden');
-            await loadApprovals();
-            await loadOrders();
-        } else {
-            showToast(res.message || 'Failed', true);
-        }
-    } catch { showToast('Failed', true); }
-}
-
-// ============================================================
-//  SUPPLIERS
-// ============================================================
-
-function renderSuppliersTable() {
-    const tbody = document.getElementById('suppliersTableBody');
-    if (!tbody) return;
-    if (!suppliersState.length) {
-        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-4">No suppliers</td></tr>';
-        return;
+function populateCCBuildingSelects() {
+    if (ccBuildingSelect) {
+        ccBuildingSelect.innerHTML = '<option value="">Select Building</option>' +
+            buildingsState.filter(b => b.active).map(b => `<option value="${b.code}">${escapeHtml(b.code)} - ${escapeHtml(b.name)}</option>`).join('');
     }
-    tbody.innerHTML = suppliersState.map(s => `
-        <tr class="hover:bg-gray-700">
-            <td class="px-3 py-2 text-sm">${escHtml(s.name)}</td>
-            <td class="px-3 py-2 text-xs">${escHtml(s.contact_name || '-')}</td>
-            <td class="px-3 py-2 text-xs">${s.email ? `<a href="mailto:${s.email}" class="text-blue-400">${s.email}</a>` : '-'}</td>
-            <td class="px-3 py-2 text-xs">${s.phone || '-'}</td>
-            <td class="px-3 py-2 text-xs">${s.is_active ? '<span class="text-green-400">Active</span>' : '<span class="text-gray-500">Inactive</span>'}</td>
-            <td class="px-3 py-2">
-                <button onclick="openSupplierForm(${s.id})" class="text-blue-400 hover:text-blue-300 text-xs">Edit</button>
-            </td>
-        </tr>`).join('');
-}
-
-function openSupplierForm(supplierId) {
-    const card = document.getElementById('supplierFormCard');
-    const title = document.getElementById('supplierFormTitle');
-    const s = supplierId ? suppliersState.find(x => x.id === supplierId) : null;
-    title.textContent = s ? 'Edit Supplier' : 'New Supplier';
-    document.getElementById('supplierId').value = s ? s.id : '';
-    document.getElementById('supplierName').value = s ? s.name : '';
-    document.getElementById('supplierContact').value = s ? (s.contact_name || '') : '';
-    document.getElementById('supplierEmail').value = s ? (s.email || '') : '';
-    document.getElementById('supplierPhone').value = s ? (s.phone || '') : '';
-    document.getElementById('supplierWebsite').value = s ? (s.website || '') : '';
-    document.getElementById('supplierAddress').value = s ? (s.address || '') : '';
-    document.getElementById('supplierNotes').value = s ? (s.notes || '') : '';
-    document.getElementById('supplierActive').value = s ? (s.is_active ? '1' : '0') : '1';
-    card.hidden = false;
-    card.scrollIntoView({ behavior: 'smooth' });
-}
-
-async function handleSaveSupplier(e) {
-    e.preventDefault();
-    const id = document.getElementById('supplierId').value;
-    const body = {
-        name: document.getElementById('supplierName').value.trim(),
-        contact_name: document.getElementById('supplierContact').value.trim(),
-        email: document.getElementById('supplierEmail').value.trim(),
-        phone: document.getElementById('supplierPhone').value.trim(),
-        website: document.getElementById('supplierWebsite').value.trim(),
-        address: document.getElementById('supplierAddress').value.trim(),
-        notes: document.getElementById('supplierNotes').value.trim(),
-        is_active: document.getElementById('supplierActive').value === '1'
-    };
-    try {
-        const res = id ? await apiPut(`/suppliers/${id}`, body) : await apiPost('/suppliers', body);
-        if (res.success) {
-            showToast(id ? 'Supplier updated' : 'Supplier created');
-            document.getElementById('supplierFormCard').hidden = true;
-            await loadSuppliers();
-            populateSupplierFilter();
-        } else {
-            showToast(res.message || 'Save failed', true);
-        }
-    } catch { showToast('Save failed', true); }
-}
-
-// ============================================================
-//  BUILDINGS
-// ============================================================
-
-function renderBuildingsTable() {
-    const tbody = document.getElementById('buildingsTableBody');
-    if (!tbody) return;
-    if (!buildingsState.length) {
-        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-gray-400 py-4">No buildings</td></tr>';
-        return;
+    if (ccFilterBuilding) {
+        ccFilterBuilding.innerHTML = '<option value="">All Buildings</option>' +
+            buildingsState.filter(b => b.active).map(b => `<option value="${b.code}">${escapeHtml(b.code)} - ${escapeHtml(b.name)}</option>`).join('');
     }
-    tbody.innerHTML = buildingsState.map(b => `
-        <tr class="hover:bg-gray-700">
-            <td class="px-3 py-2 text-sm font-mono">${b.code}</td>
-            <td class="px-3 py-2 text-sm">${escHtml(b.name)}</td>
-            <td class="px-3 py-2 text-xs">${b.is_active ? '<span class="text-green-400">Active</span>' : '<span class="text-gray-500">Inactive</span>'}</td>
-            <td class="px-3 py-2">
-                <button onclick="openBuildingForm(${b.id})" class="text-blue-400 hover:text-blue-300 text-xs">Edit</button>
-            </td>
-        </tr>`).join('');
 }
-
-function openBuildingForm(buildingId) {
-    const card = document.getElementById('buildingFormCard');
-    const b = buildingId ? buildingsState.find(x => x.id === buildingId) : null;
-    document.getElementById('buildingFormTitle').textContent = b ? 'Edit Building' : 'New Building';
-    document.getElementById('buildingId').value = b ? b.id : '';
-    document.getElementById('buildingCode').value = b ? b.code : '';
-    document.getElementById('buildingName').value = b ? b.name : '';
-    document.getElementById('buildingDescription').value = b ? (b.description || '') : '';
-    document.getElementById('buildingActive').value = b ? String(b.is_active) : 'true';
-    card.hidden = false;
-    card.scrollIntoView({ behavior: 'smooth' });
-}
-
-async function handleSaveBuilding(e) {
-    e.preventDefault();
-    const id = document.getElementById('buildingId').value;
-    const body = {
-        code: document.getElementById('buildingCode').value.trim().toUpperCase(),
-        name: document.getElementById('buildingName').value.trim(),
-        description: document.getElementById('buildingDescription').value.trim(),
-        is_active: document.getElementById('buildingActive').value === 'true'
-    };
-    try {
-        const res = id ? await apiPut(`/buildings/${id}`, body) : await apiPost('/buildings', body);
-        if (res.success) {
-            showToast(id ? 'Building updated' : 'Building created');
-            document.getElementById('buildingFormCard').hidden = true;
-            await loadBuildings();
-            populateBuildingSelects();
-            populateBuildingFilter();
-        } else {
-            showToast(res.message || 'Save failed', true);
-        }
-    } catch { showToast('Save failed', true); }
-}
-
-// ============================================================
-//  COST CENTERS
-// ============================================================
 
 function renderCostCentersTable() {
-    const tbody = document.getElementById('costCentersTableBody');
-    if (!tbody) return;
-    const filterVal = parseInt(document.getElementById('ccFilterBuilding')?.value) || null;
-    const rows = filterVal
-        ? costCentersState.filter(cc => cc.building_id === filterVal)
-        : costCentersState;
-    if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-gray-400 py-4">No cost centers</td></tr>';
+    if (!costCentersTable) return;
+
+    const filterVal = ccFilterBuilding ? ccFilterBuilding.value : '';
+    const filtered = filterVal ? costCentersState.filter(cc => cc.building_code === filterVal) : costCentersState;
+
+    if (!filtered.length) {
+        costCentersTable.innerHTML = '<p class="text-muted">No cost centers found.</p>';
         return;
     }
-    tbody.innerHTML = rows.map(cc => {
-        const bldg = buildingsState.find(b => b.id === cc.building_id);
-        return `<tr class="hover:bg-gray-700">
-            <td class="px-3 py-2 text-sm font-mono">${cc.code}</td>
-            <td class="px-3 py-2 text-sm">${escHtml(cc.name)}</td>
-            <td class="px-3 py-2 text-xs">${bldg ? bldg.code : '-'}</td>
-            <td class="px-3 py-2 text-xs">${cc.is_active ? '<span class="text-green-400">Active</span>' : '<span class="text-gray-500">Inactive</span>'}</td>
-            <td class="px-3 py-2">
-                <button onclick="openCostCenterForm(${cc.id})" class="text-blue-400 hover:text-blue-300 text-xs">Edit</button>
-            </td>
+
+    let html = '<div class="table-wrapper"><table><thead><tr>';
+    html += '<th>Building</th><th>Code</th><th>Name</th><th>Active</th><th></th>';
+    html += '</tr></thead><tbody>';
+
+    for (const cc of filtered) {
+        html += `<tr data-id="${cc.id}">
+            <td>${escapeHtml(cc.building_code)}</td>
+            <td>${escapeHtml(cc.code)}</td>
+            <td>${escapeHtml(cc.name)}</td>
+            <td>${cc.active ? 'Yes' : 'No'}</td>
+            <td><button class="btn btn-secondary btn-sm btn-edit-cc" data-id="${cc.id}">Edit</button></td>
         </tr>`;
-    }).join('');
+    }
+
+    html += '</tbody></table></div>';
+    costCentersTable.innerHTML = html;
+
+    document.querySelectorAll('.btn-edit-cc').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const id = parseInt(btn.dataset.id, 10);
+            const cc = costCentersState.find(x => x.id === id);
+            if (cc) openCostCenterForm(cc);
+        });
+    });
 }
 
-function openCostCenterForm(costCenterId) {
-    const card = document.getElementById('costCenterFormCard');
-    const delBtn = document.getElementById('btnDeleteCostCenter');
-    const cc = costCenterId ? costCentersState.find(x => x.id === costCenterId) : null;
-    document.getElementById('costCenterFormTitle').textContent = cc ? 'Edit Cost Center' : 'New Cost Center';
-    document.getElementById('costCenterId').value = cc ? cc.id : '';
-    document.getElementById('ccBuilding').value = cc ? cc.building_id : '';
-    document.getElementById('ccCode').value = cc ? cc.code : '';
-    document.getElementById('ccName').value = cc ? cc.name : '';
-    document.getElementById('ccDescription').value = cc ? (cc.description || '') : '';
-    document.getElementById('ccActive').value = cc ? String(cc.is_active) : 'true';
-    if (delBtn) delBtn.hidden = !cc;
-    card.hidden = false;
-    card.scrollIntoView({ behavior: 'smooth' });
+function openCostCenterForm(cc) {
+    if (!costCenterFormCard) return;
+
+    if (cc) {
+        costCenterFormTitle.textContent = 'Edit Cost Center';
+        costCenterIdInput.value = cc.id;
+        ccBuildingSelect.value = cc.building_code || '';
+        ccCodeInput.value = cc.code || '';
+        ccNameInput.value = cc.name || '';
+        ccDescriptionInput.value = cc.description || '';
+        ccActiveSelect.value = cc.active ? '1' : '0';
+        if (btnDeleteCostCenter) btnDeleteCostCenter.hidden = false;
+    } else {
+        costCenterFormTitle.textContent = 'Create Cost Center';
+        costCenterForm.reset();
+        costCenterIdInput.value = '';
+        ccActiveSelect.value = '1';
+        if (btnDeleteCostCenter) btnDeleteCostCenter.hidden = true;
+    }
+    costCenterFormCard.hidden = false;
 }
 
 async function handleSaveCostCenter(e) {
     e.preventDefault();
-    const id = document.getElementById('costCenterId').value;
-    const body = {
-        building_id: parseInt(document.getElementById('ccBuilding').value),
-        code: document.getElementById('ccCode').value.trim().toUpperCase(),
-        name: document.getElementById('ccName').value.trim(),
-        description: document.getElementById('ccDescription').value.trim(),
-        is_active: document.getElementById('ccActive').value === 'true'
+
+    const payload = {
+        building_code: ccBuildingSelect.value,
+        code: ccCodeInput.value.trim(),
+        name: ccNameInput.value.trim(),
+        description: ccDescriptionInput.value.trim(),
+        active: ccActiveSelect.value === '1'
     };
-    try {
-        const res = id ? await apiPut(`/cost-centers/${id}`, body) : await apiPost('/cost-centers', body);
-        if (res.success) {
-            showToast(id ? 'Cost center updated' : 'Cost center created');
-            document.getElementById('costCenterFormCard').hidden = true;
-            await loadCostCenters();
-            populateBuildingSelects();
-        } else {
-            showToast(res.message || 'Save failed', true);
-        }
-    } catch { showToast('Save failed', true); }
+
+    if (!payload.building_code || !payload.code || !payload.name) {
+        alert('Building, code, and name are required');
+        return;
+    }
+
+    const id = costCenterIdInput.value;
+    let res;
+    if (id) {
+        res = await apiPut(`/cost-centers/${id}`, payload);
+    } else {
+        res = await apiPost('/cost-centers', payload);
+    }
+
+    if (res.success) {
+        alert('Cost center saved');
+        costCenterFormCard.hidden = true;
+        loadCostCenters();
+    } else {
+        alert('Failed to save cost center: ' + (res.message || 'Unknown error'));
+    }
 }
 
 async function handleDeleteCostCenter() {
-    const id = document.getElementById('costCenterId').value;
-    if (!id || !confirm('Delete this cost center?')) return;
-    try {
-        const res = await apiDelete(`/cost-centers/${id}`);
-        if (res.success) {
-            showToast('Cost center deleted');
-            document.getElementById('costCenterFormCard').hidden = true;
-            await loadCostCenters();
-        } else {
-            showToast(res.message || 'Delete failed', true);
-        }
-    } catch { showToast('Delete failed', true); }
+    const id = costCenterIdInput.value;
+    if (!id) return;
+
+    if (!confirm('Are you sure you want to delete this cost center?')) return;
+
+    const res = await apiDelete(`/cost-centers/${id}`);
+    if (res.success) {
+        alert('Cost center deleted');
+        costCenterFormCard.hidden = true;
+        loadCostCenters();
+    } else {
+        alert('Failed to delete: ' + (res.message || 'Unknown error'));
+    }
 }
 
-// ============================================================
-//  USERS
-// ============================================================
+// ===================== ORDERS =====================
 
-function renderUsersTable() {
-    const tbody = document.getElementById('usersTableBody');
-    if (!tbody) return;
-    if (!usersState.length) {
-        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-4">No users</td></tr>';
+async function handleCreateOrder(e) {
+    e.preventDefault();
+
+    const selectedCC = document.querySelector('input[name="costCenter"]:checked');
+    if (!selectedCC) {
+        alert('Please select a Cost Center');
         return;
     }
-    tbody.innerHTML = usersState.map(u => `
-        <tr class="hover:bg-gray-700">
-            <td class="px-3 py-2 text-sm">${escHtml(u.username)}</td>
-            <td class="px-3 py-2 text-sm">${escHtml(u.name)}</td>
-            <td class="px-3 py-2 text-xs">${u.email || '-'}</td>
-            <td class="px-3 py-2 text-xs capitalize">${u.role}</td>
-            <td class="px-3 py-2 text-xs">${u.building || '-'}</td>
-            <td class="px-3 py-2">
-                <button onclick="openUserForm(${u.id})" class="text-blue-400 hover:text-blue-300 text-xs">Edit</button>
-            </td>
-        </tr>`).join('');
+
+    const formData = new FormData();
+    formData.append('building', buildingSelect.value);
+    formData.append('costCenterId', selectedCC.value);
+    formData.append('itemDescription', document.getElementById('itemDescription').value.trim());
+    formData.append('partNumber', document.getElementById('partNumber').value.trim());
+    formData.append('category', document.getElementById('category').value.trim());
+    formData.append('quantity', document.getElementById('quantity').value);
+    formData.append('dateNeeded', document.getElementById('dateNeeded').value);
+    formData.append('priority', document.getElementById('priority').value);
+    formData.append('notes', document.getElementById('notes').value.trim());
+    formData.append('requester', currentUser.name);
+    formData.append('requesterEmail', currentUser.email);
+
+    const files = document.getElementById('attachments').files;
+    for (let i = 0; i < files.length; i++) {
+        formData.append('files', files[i]);
+    }
+
+    // Show progress overlay
+    if (window.UploadProgress) {
+        window.UploadProgress.show();
+    }
+
+    // Use XMLHttpRequest for upload progress tracking
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+
+        // Track upload progress
+        xhr.upload.addEventListener('progress', (e) => {
+            if (e.lengthComputable && window.UploadProgress) {
+                const percentComplete = (e.loaded / e.total) * 100;
+                window.UploadProgress.update(percentComplete);
+            }
+        });
+
+        // Handle completion
+        xhr.addEventListener('load', () => {
+            if (window.UploadProgress) {
+                window.UploadProgress.hide();
+            }
+
+            try {
+                const data = JSON.parse(xhr.responseText);
+                if (!data.success) {
+                    alert('Failed to create order: ' + (data.message || 'Unknown error'));
+                    reject(new Error(data.message));
+                    return;
+                }
+                alert('Order created successfully!');
+                createOrderForm.reset();
+                if (currentUser.role === 'requester') {
+                    buildingSelect.value = currentUser.building;
+                    renderCostCenterRadios(currentUser.building);
+                }
+                loadOrders();
+                resolve(data);
+            } catch (err) {
+                alert('Failed to process server response.');
+                reject(err);
+            }
+        });
+
+        // Handle errors
+        xhr.addEventListener('error', () => {
+            if (window.UploadProgress) {
+                window.UploadProgress.hide();
+            }
+            alert('Failed to create order. Network error.');
+            reject(new Error('Network error'));
+        });
+
+        xhr.addEventListener('abort', () => {
+            if (window.UploadProgress) {
+                window.UploadProgress.hide();
+            }
+            alert('Upload cancelled.');
+            reject(new Error('Upload cancelled'));
+        });
+
+        // Open connection and send
+        xhr.open('POST', `${API_BASE}/orders`);
+        xhr.setRequestHeader('Authorization', `Bearer ${authToken}`);
+        xhr.send(formData);
+    });
 }
 
-function openUserForm(userId) {
-    const card = document.getElementById('userFormCard');
-    const pwGroup = document.getElementById('userPasswordGroup');
-    const u = userId ? usersState.find(x => x.id === userId) : null;
-    document.getElementById('userFormTitle').textContent = u ? 'Edit User' : 'New User';
-    document.getElementById('userId').value = u ? u.id : '';
-    const unameInput = document.getElementById('userUsername');
-    unameInput.value = u ? u.username : '';
-    unameInput.readOnly = !!u;
-    document.getElementById('userNameInput').value = u ? u.name : '';
-    document.getElementById('userEmail').value = u ? (u.email || '') : '';
-    document.getElementById('userRoleSelect').value = u ? u.role : 'requester';
-    document.getElementById('userBuilding').value = u ? (u.building || '') : '';
-    document.getElementById('userActive').value = u ? String(u.is_active) : 'true';
-    document.getElementById('userPassword').value = '';
-    if (pwGroup) pwGroup.classList.toggle('hidden', !!u);
-    card.hidden = false;
-    card.scrollIntoView({ behavior: 'smooth' });
+
+async function loadOrders() {
+    try {
+        const res = await apiGet('/orders');
+        if (res.success) {
+            ordersState = res.orders;
+            filteredOrders = ordersState;
+            selectedOrderIds.clear();
+            updateSelectionUi();
+            currentPage = 1; // Reset to page 1
+            applyFilters();
+        }
+    } catch (err) {
+        console.error('loadOrders error:', err);
+        ordersTable.innerHTML = '<p>Failed to load orders.</p>';
+    }
+}
+
+// ⭐ NEW: Render pagination controls
+function renderPaginationControls(totalOrders, containerId = 'ordersTable') {
+    const totalPages = Math.ceil(totalOrders / ORDERS_PER_PAGE);
+    
+    if (totalPages <= 1) return ''; // No pagination needed
+    
+    let html = '<div class="pagination-controls">';
+    html += `<div class="pagination-info">Page ${currentPage} of ${totalPages} (${totalOrders} orders)</div>`;
+    html += '<div class="pagination-buttons">';
+    
+    // First & Previous
+    html += `<button class="btn-pagination" data-page="1" ${currentPage === 1 ? 'disabled' : ''}>⏮ First</button>`;
+    html += `<button class="btn-pagination" data-page="${currentPage - 1}" ${currentPage === 1 ? 'disabled' : ''}>◀ Previous</button>`;
+    
+    // Page numbers (show current, ±2 pages)
+    const startPage = Math.max(1, currentPage - 2);
+    const endPage = Math.min(totalPages, currentPage + 2);
+    
+    if (startPage > 1) {
+        html += '<span class="pagination-ellipsis">...</span>';
+    }
+    
+    for (let i = startPage; i <= endPage; i++) {
+        html += `<button class="btn-pagination ${i === currentPage ? 'active' : ''}" data-page="${i}">${i}</button>`;
+    }
+    
+    if (endPage < totalPages) {
+        html += '<span class="pagination-ellipsis">...</span>';
+    }
+    
+    // Next & Last
+    html += `<button class="btn-pagination" data-page="${currentPage + 1}" ${currentPage === totalPages ? 'disabled' : ''}>Next ▶</button>`;
+    html += `<button class="btn-pagination" data-page="${totalPages}" ${currentPage === totalPages ? 'disabled' : ''}>Last ⏭</button>`;
+    
+    html += '</div></div>';
+    
+    return html;
+}
+
+// ⭐ NEW: Attach pagination event listeners
+function attachPaginationListeners() {
+    document.querySelectorAll('.btn-pagination').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const page = parseInt(btn.dataset.page, 10);
+            if (!isNaN(page) && page > 0) {
+                currentPage = page;
+                renderOrdersTable();
+                // Scroll to top of orders table
+                ordersTable.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        });
+    });
+}
+
+function renderOrdersTable() {
+    // ⭐ NEW: Separate delivered orders >7 days old
+    const activeOrders = filteredOrders.filter(o => !isOldDelivered(o));
+    const oldDelivered = filteredOrders.filter(o => isOldDelivered(o));
+    
+    if (!activeOrders.length && !oldDelivered.length) {
+        ordersTable.innerHTML = '<p class="text-muted">No orders found.</p>';
+        return;
+    }
+
+    if (viewMode === 'grouped') {
+        renderGroupedOrders(activeOrders, oldDelivered);
+    } else {
+        renderFlatOrders(activeOrders, oldDelivered);
+    }
+}
+
+function renderFlatOrders(activeOrders, oldDelivered) {
+    const isAdminView = currentUser.role !== 'requester';
+    const canSelectOrders = currentUser.role === 'admin' || currentUser.role === 'procurement';
+    
+    let html = '';
+    
+    // ⭐ ACTIVE ORDERS (with pagination)
+    if (activeOrders.length > 0) {
+        const startIdx = (currentPage - 1) * ORDERS_PER_PAGE;
+        const endIdx = startIdx + ORDERS_PER_PAGE;
+        const paginatedOrders = activeOrders.slice(startIdx, endIdx);
+        
+        html += '<div class="table-wrapper"><table><thead><tr>';
+        if (canSelectOrders) html += '<th class="sticky"><input type="checkbox" id="selectAllOrders"></th>';
+        
+        html += '<th>ID</th>';
+        html += '<th></th>'; // View button column
+        html += '<th>Item</th>';
+        html += '<th>Cost Center</th>';
+        html += '<th>Qty</th>';
+        html += '<th>Status</th>';
+        html += '<th>Priority</th>';
+        html += '<th>Files</th>';
+        
+        if (isAdminView) {
+            html += '<th>Requester</th>';
+            html += '<th>Delivery</th>';
+            html += '<th>Needed</th>';
+            html += '<th>Supplier</th>';
+            html += '<th>Building</th>';
+            html += '<th>Unit</th>';
+            html += '<th>Total</th>';
+        } else {
+            html += '<th>Delivery</th>';
+            html += '<th>Needed</th>';
+        }
+        
+        html += '</tr></thead><tbody>';
+
+        for (const order of paginatedOrders) {
+            html += renderOrderRow(order, canSelectOrders, isAdminView);
+        }
+        
+        html += '</tbody></table></div>';
+        
+        // Pagination controls
+        html += renderPaginationControls(activeOrders.length);
+    }
+    
+    // ⭐ OLD DELIVERED SECTION (collapsed, not paginated)
+    if (oldDelivered.length > 0) {
+        html += '<div class="old-delivered-section" style="margin-top: 1.5rem;">';
+        html += `<div class="old-delivered-header" onclick="this.parentElement.classList.toggle('expanded')">`;
+        html += `<span class="old-delivered-title">📦 Delivered Orders (>7 days ago)</span>`;
+        html += `<span class="old-delivered-count">${oldDelivered.length} orders</span>`;
+        html += `<span class="old-delivered-chevron">▼</span>`;
+        html += '</div>';
+        html += '<div class="old-delivered-body">';
+        
+        html += '<div class="table-wrapper"><table><thead><tr>';
+        if (canSelectOrders) html += '<th class="sticky"><input type="checkbox" id="selectAllOldOrders"></th>';
+        
+        html += '<th>ID</th>';
+        html += '<th></th>';
+        html += '<th>Item</th>';
+        html += '<th>Cost Center</th>';
+        html += '<th>Qty</th>';
+        html += '<th>Status</th>';
+        html += '<th>Priority</th>';
+        html += '<th>Files</th>';
+        
+        if (isAdminView) {
+            html += '<th>Requester</th>';
+            html += '<th>Delivered</th>'; // ⭐ NEW: Delivered date column
+            html += '<th>Supplier</th>';
+            html += '<th>Building</th>';
+            html += '<th>Unit</th>';
+            html += '<th>Total</th>';
+        } else {
+            html += '<th>Delivered</th>'; // ⭐ NEW: Delivered date column
+        }
+        
+        html += '</tr></thead><tbody>';
+
+        for (const order of oldDelivered) {
+            html += renderOrderRow(order, canSelectOrders, isAdminView);
+        }
+        
+        html += '</tbody></table></div>';
+        html += '</div></div>';
+    }
+
+    ordersTable.innerHTML = html;
+    attachOrderEventListeners(canSelectOrders);
+    attachPaginationListeners();
+}
+
+function renderGroupedOrders(activeOrders, oldDelivered) {
+    const isAdminView = currentUser.role !== 'requester';
+    const canSelectOrders = currentUser.role === 'admin' || currentUser.role === 'procurement';
+    const grouped = {};
+
+    // Group active orders by status
+    for (const order of activeOrders) {
+        if (!grouped[order.status]) grouped[order.status] = [];
+        grouped[order.status].push(order);
+    }
+
+    let html = '';
+
+    // Render active orders grouped by status
+    for (const status of ORDER_STATUSES) {
+        if (!grouped[status] || grouped[status].length === 0) continue;
+
+        const statusClass = 'status-' + status.toLowerCase().replace(/ /g, '-');
+        html += `<div class="status-group">
+            <div class="status-group-header" data-status="${status}">
+                <div class="status-group-title">
+                    <span class="status-badge ${statusClass}">${status}</span>
+                    <span class="status-group-count">${grouped[status].length}</span>
+                </div>
+                <span class="status-group-chevron">▼</span>
+            </div>
+            <div class="status-group-body" data-status="${status}">`;
+
+        html += '<div class="table-wrapper"><table><thead><tr>';
+        if (canSelectOrders) html += '<th class="sticky"><input type="checkbox" class="select-all-group" data-status="${status}"></th>';
+        
+        html += '<th>ID</th>';
+        html += '<th></th>';
+        html += '<th>Item</th>';
+        html += '<th>Cost Center</th>';
+        html += '<th>Qty</th>';
+        html += '<th>Priority</th>';
+        html += '<th>Files</th>';
+        
+        if (isAdminView) {
+            html += '<th>Requester</th>';
+            html += '<th>Delivery</th>';
+            html += '<th>Needed</th>';
+            html += '<th>Supplier</th>';
+            html += '<th>Building</th>';
+            html += '<th>Unit</th>';
+            html += '<th>Total</th>';
+        } else {
+            html += '<th>Delivery</th>';
+            html += '<th>Needed</th>';
+        }
+        
+        html += '</tr></thead><tbody>';
+
+        for (const order of grouped[status]) {
+            html += renderOrderRow(order, canSelectOrders, isAdminView);
+        }
+
+        html += '</tbody></table></div></div></div>';
+    }
+    
+    // ⭐ OLD DELIVERED SECTION (same as flat view)
+    if (oldDelivered.length > 0) {
+        html += '<div class="old-delivered-section" style="margin-top: 1.5rem;">';
+        html += `<div class="old-delivered-header" onclick="this.parentElement.classList.toggle('expanded')">`;
+        html += `<span class="old-delivered-title">📦 Delivered Orders (>7 days ago)</span>`;
+        html += `<span class="old-delivered-count">${oldDelivered.length} orders</span>`;
+        html += `<span class="old-delivered-chevron">▼</span>`;
+        html += '</div>';
+        html += '<div class="old-delivered-body">';
+        
+        html += '<div class="table-wrapper"><table><thead><tr>';
+        if (canSelectOrders) html += '<th class="sticky"><input type="checkbox" id="selectAllOldOrders"></th>';
+        
+        html += '<th>ID</th>';
+        html += '<th></th>';
+        html += '<th>Item</th>';
+        html += '<th>Cost Center</th>';
+        html += '<th>Qty</th>';
+        html += '<th>Status</th>';
+        html += '<th>Priority</th>';
+        html += '<th>Files</th>';
+        
+        if (isAdminView) {
+            html += '<th>Requester</th>';
+            html += '<th>Delivered</th>'; // ⭐ NEW: Delivered date column
+            html += '<th>Supplier</th>';
+            html += '<th>Building</th>';
+            html += '<th>Unit</th>';
+            html += '<th>Total</th>';
+        } else {
+            html += '<th>Delivered</th>'; // ⭐ NEW: Delivered date column
+        }
+        
+        html += '</tr></thead><tbody>';
+
+        for (const order of oldDelivered) {
+            html += renderOrderRow(order, canSelectOrders, isAdminView);
+        }
+        
+        html += '</tbody></table></div>';
+        html += '</div></div>';
+    }
+
+    ordersTable.innerHTML = html;
+
+    // Attach collapse/expand handlers
+    document.querySelectorAll('.status-group-header').forEach(header => {
+        header.addEventListener('click', () => {
+            const status = header.dataset.status;
+            const body = document.querySelector(`.status-group-body[data-status="${status}"]`);
+            if (body) {
+                body.classList.toggle('collapsed');
+                header.classList.toggle('collapsed');
+            }
+        });
+    });
+
+    attachOrderEventListeners(canSelectOrders);
+}
+
+// ⭐ NEW: Shared order row rendering function
+function renderOrderRow(order, canSelectOrders, isAdminView) {
+    const statusClass = 'status-' + order.status.toLowerCase().replace(/ /g, '-');
+    const priorityClass = 'priority-' + (order.priority || 'Normal').toLowerCase();
+    const hasFiles = order.files && order.files.length > 0;
+    const deliveryStatus = getDeliveryStatus(order);
+    const deliveredDate = getDeliveredDate(order);
+
+    let html = '<tr data-id="' + order.id + '">';
+    
+    if (canSelectOrders) {
+        html += `<td class="sticky"><input type="checkbox" class="row-select" data-id="${order.id}"></td>`;
+    }
+    
+    html += `<td>#${order.id}</td>`;
+    html += `<td><button class="btn btn-secondary btn-sm btn-view-order" data-id="${order.id}">View</button></td>`;
+    html += `<td title="${escapeHtml(order.item_description)}">${escapeHtml(order.item_description.substring(0, 40))}${order.item_description.length > 40 ? '…' : ''}</td>`;
+    html += `<td>${order.cost_center_code || '-'}</td>`;
+    html += `<td>${order.quantity}</td>`;
+    
+    // Show status badge only if not in a group (flat view or old delivered)
+    if (isOldDelivered(order) || viewMode === 'flat') {
+        html += `<td><span class="status-badge ${statusClass}">${order.status}</span></td>`;
+    }
+    
+    html += `<td><span class="priority-pill ${priorityClass}">${order.priority || 'Normal'}</span></td>`;
+    html += `<td>${hasFiles ? '📎 ' + order.files.length : '-'}</td>`;
+
+    if (isAdminView) {
+        html += `<td>${order.requester_name}</td>`;
+        
+        // ⭐ FIX: For old delivered, show delivered date instead of delivery status
+        if (isOldDelivered(order)) {
+            html += `<td>${deliveredDate ? formatDate(deliveredDate) : '<span class="status-badge status-delivered">Delivered</span>'}</td>`;
+        } else {
+            html += `<td>${getDeliveryBadgeHtml(deliveryStatus)}</td>`;
+        }
+        
+        // For active orders, show "Needed" date; for old delivered, skip it
+        if (!isOldDelivered(order)) {
+            html += `<td>${formatDate(order.date_needed)}</td>`;
+        }
+        
+        html += `<td>${order.supplier_name || '-'}</td>`;
+        html += `<td>${order.building}</td>`;
+        html += `<td class="text-right">${fmtPrice(order.unit_price)}</td>`;
+        html += `<td class="text-right">${fmtPrice(order.total_price)}</td>`;
+    } else {
+        // ⭐ FIX: For requesters, show delivered date for old delivered
+        if (isOldDelivered(order)) {
+            html += `<td>${deliveredDate ? formatDate(deliveredDate) : '<span class="status-badge status-delivered">Delivered</span>'}</td>`;
+        } else {
+            html += `<td>${getDeliveryBadgeHtml(deliveryStatus)}</td>`;
+            html += `<td>${formatDate(order.date_needed)}</td>`;
+        }
+    }
+
+    html += '</tr>';
+    return html;
+}
+
+function attachOrderEventListeners(canSelectOrders) {
+    if (canSelectOrders) {
+        const selectAll = document.getElementById('selectAllOrders');
+        if (selectAll) {
+            selectAll.addEventListener('change', e => {
+                const checked = e.target.checked;
+                selectedOrderIds.clear();
+                if (checked) { filteredOrders.forEach(o => selectedOrderIds.add(o.id)); }
+                document.querySelectorAll('.row-select').forEach(cb => { cb.checked = checked; });
+                updateSelectionUi();
+            });
+        }
+
+        document.querySelectorAll('.row-select').forEach(cb => {
+            cb.addEventListener('change', e => {
+                const id = parseInt(e.target.dataset.id, 10);
+                if (e.target.checked) selectedOrderIds.add(id);
+                else selectedOrderIds.delete(id);
+                updateSelectionUi();
+            });
+        });
+    }
+
+    document.querySelectorAll('.btn-view-order').forEach(btn => {
+        btn.addEventListener('click', () => openOrderDetail(parseInt(btn.dataset.id, 10)));
+    });
+}
+
+function updateSelectionUi() {
+    const count = selectedOrderIds.size;
+    if (count > 0) { orderActionsBar.hidden = false; selectedCount.textContent = `${count} selected`; }
+    else { orderActionsBar.hidden = true; }
+}
+
+async function openOrderDetail(orderId) {
+    try {
+        const res = await apiGet(`/orders/${orderId}`);
+        if (!res.success) return;
+        renderOrderDetail(res.order);
+        orderDetailPanel.classList.remove('hidden');
+        
+        // ⭐ LOAD DOCUMENTS FOR THIS ORDER (Phase 2 Integration)
+        if (typeof loadOrderDocuments === 'function') {
+            loadOrderDocuments(orderId);
+        }
+    } catch { 
+        alert('Failed to load order details'); 
+    }
+}
+
+function renderOrderDetail(o) {
+    const statusClass = 'status-' + o.status.toLowerCase().replace(/ /g, '-');
+    const priorityClass = 'priority-' + (o.priority || 'Normal').toLowerCase();
+    const deliveryStatus = getDeliveryStatus(o);
+    const deliveredDate = getDeliveredDate(o);
+    
+    // ⭐ SECURITY: Check if current user can see sensitive data
+    const canSeeSensitiveData = currentUser.role !== 'requester';
+
+    let html = '';
+    html += `<div class="detail-grid">
+        <div><div class="detail-label">Order ID</div><div class="detail-value">#${o.id}</div></div>
+        <div><div class="detail-label">Building</div><div class="detail-value">${o.building}</div></div>
+        <div><div class="detail-label">Cost Center</div><div class="detail-value">${o.cost_center_code ? `${o.cost_center_code} — ${o.cost_center_name}` : '-'}</div></div>
+        <div><div class="detail-label">Status</div><div class="detail-value"><span class="status-badge ${statusClass}">${o.status}</span></div></div>
+        <div><div class="detail-label">Priority</div><div class="detail-value"><span class="priority-pill ${priorityClass}">${o.priority || 'Normal'}</span></div></div>
+        <div><div class="detail-label">Date Needed</div><div class="detail-value">${formatDate(o.date_needed)}</div></div>
+        <div><div class="detail-label">Expected Delivery</div><div class="detail-value">${o.expected_delivery_date ? formatDate(o.expected_delivery_date) : '-'}</div></div>`;
+    
+    // ⭐ NEW: Show delivered date if available
+    if (deliveredDate) {
+        html += `<div><div class="detail-label">Delivered Date</div><div class="detail-value">${formatDate(deliveredDate)}</div></div>`;
+    } else {
+        html += `<div><div class="detail-label">Delivery Status</div><div class="detail-value">${getDeliveryBadgeHtml(deliveryStatus)}</div></div>`;
+    }
+    
+    html += `<div><div class="detail-label">Requester</div><div class="detail-value">${o.requester_name}</div></div>`;
+    
+    // ⭐ HIDE SUPPLIER AND PRICES FROM REQUESTERS
+    if (canSeeSensitiveData) {
+        html += `
+        <div><div class="detail-label">Supplier</div><div class="detail-value">${o.supplier_name || '-'}</div></div>
+        <div><div class="detail-label">Unit Price</div><div class="detail-value">${fmtPrice(o.unit_price)}</div></div>
+        <div><div class="detail-label">Total Price</div><div class="detail-value">${fmtPrice(o.total_price)}</div></div>`;
+    }
+    
+    html += `</div>`;
+
+    html += `<div class="detail-section-title">Item Description</div>
+        <div class="text-muted mt-1">${escapeHtml(o.item_description)}</div>`;
+
+    if (o.part_number || o.category) {
+        html += '<div class="detail-grid mt-1">';
+        if (o.part_number) html += `<div><div class="detail-label">Part Number</div><div class="detail-value">${escapeHtml(o.part_number)}</div></div>`;
+        if (o.category) html += `<div><div class="detail-label">Category</div><div class="detail-value">${escapeHtml(o.category)}</div></div>`;
+        html += '</div>';
+    }
+
+    if (o.notes) {
+        html += `<div class="detail-section-title mt-1">Notes</div><div class="text-muted mt-1">${escapeHtml(o.notes)}</div>`;
+    }
+
+    // ⭐ KEEP ATTACHMENTS VISIBLE TO REQUESTERS (these are files they uploaded!)
+    html += '<div class="detail-section-title mt-2">Attachments</div>';
+    if (o.files && o.files.length) {
+        html += '<ul class="file-list">';
+        for (const f of o.files) {
+            const url = f.file_path.replace('./', '/');
+            html += `<li><a class="file-link" href="${url}" target="_blank" rel="noopener">${escapeHtml(f.file_name)}</a><span class="text-muted">${formatFileSize(f.file_size)}</span></li>`;
+        }
+        html += '</ul>';
+    } else {
+        html += '<div class="text-muted mt-1">No attachments.</div>';
+    }
+
+    if (currentUser.role !== 'requester' && currentUser.role !== 'manager' && o.history && o.history.length) {
+        html += '<div class="detail-section-title mt-2">History</div>';
+        html += '<div class="text-muted" style="max-height: 120px; overflow-y: auto; font-size: 0.78rem;">';
+        for (const h of o.history) {
+            html += `<div>[${formatDateTime(h.changed_at)}] <strong>${escapeHtml(h.changed_by)}</strong> changed <strong>${escapeHtml(h.field_name)}</strong> from "${escapeHtml(h.old_value || '')}" to "${escapeHtml(h.new_value || '')}"</div>`;
+        }
+        html += '</div>';
+    }
+
+    // ⭐ NEW: Phase 1 - Smart Supplier Suggestions (BEFORE Update Order section)
+    if (currentUser.role === 'admin' || currentUser.role === 'procurement') {
+        html += '<hr class="mt-2" style="border-color: rgba(31,41,55,0.9); margin-bottom: 0.6rem;">';
+        html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">';
+        html += '<div>';
+        html += '<div class="detail-section-title" style="margin:0;">💡 Suggested Suppliers</div>';
+        html += '<div style="font-size:0.75rem;color:#94a3b8;margin-top:0.2rem;">AI-powered recommendations based on item description and history</div>';
+        html += '</div>';
+        
+        // Option to open full supplier selector
+        if (typeof openSupplierSelector === 'function') {
+            html += '<button class="btn btn-secondary btn-sm" onclick="openSupplierSelector(' + o.id + ', ' + (o.supplier_id || 'null') + ')" style="white-space:nowrap;">🏢 Browse All</button>';
+        }
+        
+        html += '</div>';
+        
+        // ⭐ FIX: Container is now OUTSIDE the flex wrapper, on its own line
+        html += '<div id="supplierSuggestionsContainer"></div>';
+    }
+
+    // Only admin/procurement can edit orders
+    if (currentUser.role === 'admin' || currentUser.role === 'procurement') {
+        html += '<hr class="mt-2" style="border-color: rgba(31,41,55,0.9); margin-bottom: 0.6rem;">';
+        html += '<div class="detail-section-title">Update Order</div>';
+        html += `<div class="form-group mt-1"><label>Status</label><select id="detailStatus" class="form-control form-control-sm">${ORDER_STATUSES.map(s => `<option value="${s}" ${s === o.status ? 'selected' : ''}>${s}</option>`).join('')}</select></div>`;
+        
+        // ⭐ REPLACE SUPPLIER DROPDOWN WITH BUTTON
+        html += `<div class="form-group">
+            <label>Supplier</label>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <input type="text" id="detailSupplierDisplay" class="form-control form-control-sm" value="${o.supplier_name || 'No supplier selected'}" readonly style="flex: 1; background: #0f172a; cursor: pointer;" />
+                <button id="btnSelectSupplier" class="btn btn-primary btn-sm" style="white-space: nowrap;">🏢 Select</button>
+            </div>
+        </div>`;
+        
+        html += `<div class="detail-grid"><div><div class="form-group"><label>Expected Delivery</label><input type="date" id="detailExpected" class="form-control form-control-sm date-picker" value="${o.expected_delivery_date ? o.expected_delivery_date.substring(0,10) : ''}"></div></div><div><div class="form-group"><label>Unit Price</label><input type="number" step="0.01" id="detailUnitPrice" class="form-control form-control-sm" value="${parseFloat(o.unit_price) || ''}"></div></div></div>`;
+        html += `<div class="form-group"><label>Total Price</label><input type="number" step="0.01" id="detailTotalPrice" class="form-control form-control-sm" value="${parseFloat(o.total_price) || ''}"></div>`;
+        html += `<div class="form-actions"><button id="btnSaveOrder" class="btn btn-primary btn-sm">Save</button></div>`;
+    }
+
+    orderDetailBody.innerHTML = html;
+
+    // ⭐ NEW: Load supplier suggestions (Phase 1)
+    if ((currentUser.role === 'admin' || currentUser.role === 'procurement') && 
+        typeof loadSupplierSuggestions === 'function') {
+        loadSupplierSuggestions(o.id, o.supplier_id);
+    }
+
+    // ⭐ ATTACH SUPPLIER SELECTOR BUTTON
+    const btnSelectSupplier = document.getElementById('btnSelectSupplier');
+    if (btnSelectSupplier && typeof openSupplierSelector === 'function') {
+        btnSelectSupplier.addEventListener('click', () => {
+            openSupplierSelector(o.id, o.supplier_id);
+        });
+    }
+
+    const btnSave = document.getElementById('btnSaveOrder');
+    if (btnSave) {
+        btnSave.addEventListener('click', async () => {
+            const payload = {
+                status: document.getElementById('detailStatus').value,
+                supplier_id: o.supplier_id || null, // Keep current supplier_id (updated by modal)
+                expected_delivery_date: document.getElementById('detailExpected').value || null,
+                unit_price: parseFloat(document.getElementById('detailUnitPrice').value || 0) || null,
+                total_price: parseFloat(document.getElementById('detailTotalPrice').value || 0) || null
+            };
+            const res = await apiPut(`/orders/${o.id}`, payload);
+            if (res.success) { alert('Order updated'); loadOrders(); openOrderDetail(o.id); }
+            else { alert('Failed to update order: ' + (res.message || 'Unknown error')); }
+        });
+    }
+}
+
+// ===================== QUOTES =====================
+
+async function loadQuotes() {
+    try {
+        const res = await apiGet('/quotes');
+        if (res.success) { quotesState = res.quotes; renderQuotesTable(); }
+    } catch { if (quotesTable) quotesTable.innerHTML = '<p>Failed to load quotes.</p>'; }
+}
+
+function renderQuotesTable() {
+    if (!quotesTable) return;
+    if (!quotesState.length) { quotesTable.innerHTML = '<p class="text-muted">No quotes yet.</p>'; return; }
+    let html = '<div class="table-wrapper"><table><thead><tr><th>Quote #</th><th>Supplier</th><th>Status</th><th>Items</th><th>Total</th><th>Valid Until</th><th>Created</th><th></th></tr></thead><tbody>';
+    for (const q of quotesState) {
+        html += `<tr data-id="${q.id}"><td>${q.quote_number}</td><td>${q.supplier_name || '-'}</td><td>${q.status}</td><td>${q.item_count || 0}</td><td class="text-right">${fmtPrice(q.total_amount)}</td><td>${q.valid_until ? formatDate(q.valid_until) : '-'}</td><td>${formatDateTime(q.created_at)}</td><td><button class="btn btn-secondary btn-sm btn-view-quote" data-id="${q.id}">View</button></td></tr>`;
+    }
+    html += '</tbody></table></div>';
+    quotesTable.innerHTML = html;
+    document.querySelectorAll('.btn-view-quote').forEach(btn => {
+        btn.addEventListener('click', () => openQuoteDetail(parseInt(btn.dataset.id, 10)));
+    });
+}
+
+async function openQuoteDetail(id) {
+    try {
+        const res = await apiGet(`/quotes/${id}`);
+        if (!res.success) return;
+        renderQuoteDetail(res.quote);
+        quoteDetailPanel.classList.remove('hidden');
+    } catch { alert('Failed to load quote details'); }
+}
+
+function renderQuoteDetail(q) {
+    let html = `<div class="detail-grid"><div><div class="detail-label">Quote #</div><div class="detail-value">${q.quote_number}</div></div><div><div class="detail-label">Status</div><div class="detail-value">${q.status}</div></div><div><div class="detail-label">Supplier</div><div class="detail-value">${q.supplier_name || '-'}</div></div><div><div class="detail-label">Valid Until</div><div class="detail-value">${q.valid_until ? formatDate(q.valid_until) : '-'}</div></div><div><div class="detail-label">Total Amount</div><div class="detail-value">${fmtPrice(q.total_amount)}</div></div><div><div class="detail-label">Currency</div><div class="detail-value">${q.currency}</div></div></div>`;
+    if (q.notes) html += `<div class="detail-section-title mt-1">Notes</div><div class="text-muted mt-1">${escapeHtml(q.notes)}</div>`;
+    if (q.items && q.items.length) {
+        html += '<div class="detail-section-title mt-2">Items</div><div class="table-wrapper"><table><thead><tr><th>Order</th><th>Building</th><th>Description</th><th>Qty</th><th>Unit</th><th>Total</th></tr></thead><tbody>';
+        for (const it of q.items) html += `<tr><td>#${it.order_id}</td><td>${it.building}</td><td>${escapeHtml(it.item_description.substring(0,40))}${it.item_description.length>40?'…':''}</td><td>${it.quantity}</td><td class="text-right">${fmtPrice(it.unit_price)}</td><td class="text-right">${fmtPrice(it.total_price)}</td></tr>`;
+        html += '</tbody></table></div>';
+    }
+    
+    // ⭐ ADD SUBMIT FOR APPROVAL BUTTON (for admin/procurement only)
+    if ((currentUser.role === 'admin' || currentUser.role === 'procurement') && 
+        (q.status === 'Draft' || q.status === 'Received')) {
+        html += `
+            <hr class="mt-2" style="border-color: rgba(31,41,55,0.9); margin-bottom: 0.6rem;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">
+                <div>
+                    <div class="detail-section-title" style="margin:0;">Approval Workflow</div>
+                    <div style="font-size:0.75rem;color:#94a3b8;margin-top:0.2rem;">Submit this quote to a manager for approval</div>
+                </div>
+                <button id="btnSubmitForApproval" class="btn btn-primary btn-sm" style="white-space:nowrap;" data-quote-id="${q.id}">
+                    📋 Submit for Approval
+                </button>
+            </div>
+        `;
+    }
+    
+    html += '<div class="detail-section-title mt-2">Update Quote</div>';
+    html += `<div class="form-group mt-1"><label>Status</label><select id="quoteStatus" class="form-control form-control-sm">${['Draft','Sent to Supplier','Received','Under Approval','Approved','Rejected'].map(s => `<option value="${s}" ${s===q.status?'selected':''}>${s}</option>`).join('')}</select></div>`;
+    html += `<div class="form-group mt-1"><label>Notes</label><textarea id="quoteNotes" class="form-control form-control-sm" rows="2">${q.notes || ''}</textarea></div>`;
+    html += '<div class="form-actions"><button id="btnSaveQuote" class="btn btn-primary btn-sm">Save</button></div>';
+    quoteDetailBody.innerHTML = html;
+    
+    // Attach submit for approval button handler
+    const btnSubmitApproval = document.getElementById('btnSubmitForApproval');
+    if (btnSubmitApproval && typeof openSubmitForApprovalDialog === 'function') {
+        btnSubmitApproval.addEventListener('click', () => {
+            const quoteId = parseInt(btnSubmitApproval.dataset.quoteId, 10);
+            openSubmitForApprovalDialog(quoteId);
+        });
+    }
+    
+    document.getElementById('btnSaveQuote').addEventListener('click', async () => {
+        const payload = { status: document.getElementById('quoteStatus').value, notes: document.getElementById('quoteNotes').value };
+        const res = await apiPut(`/quotes/${q.id}`, payload);
+        if (res.success) { alert('Quote updated'); loadQuotes(); } else { alert('Failed to update quote'); }
+    });
+}
+
+function openCreateQuoteDialog() {
+    if (!selectedOrderIds.size) return;
+    const orders = ordersState.filter(o => selectedOrderIds.has(o.id));
+    const supplierOptions = suppliersState.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
+    const html = `Create quote for <strong>${orders.length}</strong> orders.\nSupplier: <select id="dlgSupplier">${supplierOptions}</select>\nValid until (YYYY-MM-DD): <input id="dlgValid" type="text" placeholder="optional">`;
+    promptHtml(html).then(supplierId => {
+        if (!supplierId) return;
+        const body = {
+            supplier_id: parseInt(document.getElementById('dlgSupplier').value, 10),
+            order_ids: orders.map(o => o.id),
+            valid_until: document.getElementById('dlgValid')?.value || null
+        };
+        apiPost('/quotes', body).then(res => {
+            if (res.success) { alert(`Quote ${res.quoteNumber} created`); selectedOrderIds.clear(); updateSelectionUi(); loadOrders(); loadQuotes(); }
+            else { alert('Failed to create quote: ' + (res.message || 'Unknown error')); }
+        });
+    });
+}
+
+function promptHtml(messageHtml) {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.85);display:flex;align-items:center;justify-content:center;z-index:50;';
+    const box = document.createElement('div');
+    box.style.cssText = 'background:#020617;padding:1rem 1.25rem;border-radius:12px;border:1px solid rgba(148,163,184,0.5);min-width:320px;color:white;';
+    box.innerHTML = `<div style="font-size:0.9rem;margin-bottom:0.7rem;">${messageHtml}</div>`;
+    const actions = document.createElement('div');
+    actions.style.cssText = 'display:flex;justify-content:flex-end;gap:0.4rem;';
+    const btnCancel = document.createElement('button'); btnCancel.textContent = 'Cancel'; btnCancel.className = 'btn btn-secondary btn-sm';
+    const btnOk = document.createElement('button'); btnOk.textContent = 'Create'; btnOk.className = 'btn btn-primary btn-sm';
+    actions.appendChild(btnCancel); actions.appendChild(btnOk); box.appendChild(actions); overlay.appendChild(box); document.body.appendChild(overlay);
+    return new Promise(resolve => {
+        btnCancel.onclick = () => { document.body.removeChild(overlay); resolve(null); };
+        btnOk.onclick = () => { const v = document.getElementById('dlgSupplier')?.value; document.body.removeChild(overlay); resolve(v); };
+    });
+}
+
+// ===================== BUILDINGS =====================
+
+async function loadBuildings() {
+    try {
+        const res = await apiGet('/buildings');
+        if (res.success) {
+            buildingsState = res.buildings;
+            populateBuildingSelects();
+            if (currentUser && currentUser.role === 'admin') { renderBuildingsTable(); }
+        }
+    } catch (err) {
+        console.error('loadBuildings error:', err);
+        if (buildingsTable) buildingsTable.innerHTML = '<p>Failed to load buildings.</p>';
+    }
+}
+
+function populateBuildingSelects() {
+    if (buildingSelect) {
+        buildingSelect.innerHTML = '<option value="">Select Building</option>' +
+            buildingsState.filter(b => b.active).map(b => `<option value="${b.code}">${escapeHtml(b.code)} - ${escapeHtml(b.name)}</option>`).join('');
+        if (currentUser && currentUser.role === 'requester') {
+            buildingSelect.value = currentUser.building;
+            buildingSelect.disabled = true;
+        }
+    }
+    if (userBuildingSelect) {
+        userBuildingSelect.innerHTML = '<option value="">None</option>' +
+            buildingsState.filter(b => b.active).map(b => `<option value="${b.code}">${escapeHtml(b.code)} - ${escapeHtml(b.name)}</option>`).join('');
+    }
+    if (filterBuilding) {
+        const currentVal = filterBuilding.value;
+        filterBuilding.innerHTML = '<option value="">Building: All</option>' +
+            buildingsState.filter(b => b.active).map(b => `<option value="${b.code}">${escapeHtml(b.code)} - ${escapeHtml(b.name)}</option>`).join('');
+        if (currentVal) filterBuilding.value = currentVal;
+    }
+}
+
+function renderBuildingsTable() {
+    if (!buildingsTable) return;
+    if (!buildingsState.length) { buildingsTable.innerHTML = '<p class="text-muted">No buildings yet.</p>'; return; }
+    let html = '<div class="table-wrapper"><table><thead><tr><th>Code</th><th>Name</th><th>Active</th><th></th></tr></thead><tbody>';
+    for (const b of buildingsState) {
+        html += `<tr data-id="${b.id}"><td>${escapeHtml(b.code)}</td><td>${escapeHtml(b.name)}</td><td>${b.active ? 'Yes' : 'No'}</td><td><button class="btn btn-secondary btn-sm btn-edit-building" data-id="${b.id}">Edit</button></td></tr>`;
+    }
+    html += '</tbody></table></div>';
+    buildingsTable.innerHTML = html;
+    document.querySelectorAll('.btn-edit-building').forEach(btn => {
+        btn.addEventListener('click', () => { const b = buildingsState.find(x => x.id === parseInt(btn.dataset.id, 10)); if (b) openBuildingForm(b); });
+    });
+}
+
+function openBuildingForm(building) {
+    if (!buildingFormCard) return;
+    if (building) {
+        buildingFormTitle.textContent = 'Edit Building';
+        buildingIdInput.value = building.id; buildingCodeInput.value = building.code || ''; buildingNameInput.value = building.name || ''; buildingDescriptionInput.value = building.description || ''; buildingActiveSelect.value = building.active ? '1' : '0';
+    } else {
+        buildingFormTitle.textContent = 'Create Building'; buildingForm.reset(); buildingIdInput.value = ''; buildingActiveSelect.value = '1';
+    }
+    buildingFormCard.hidden = false;
+}
+
+async function handleSaveBuilding(e) {
+    e.preventDefault();
+    const payload = { code: buildingCodeInput.value.trim(), name: buildingNameInput.value.trim(), description: buildingDescriptionInput.value.trim(), active: buildingActiveSelect.value === '1' };
+    if (!payload.code || !payload.name) { alert('Code and name are required'); return; }
+    const id = buildingIdInput.value;
+    const res = id ? await apiPut(`/buildings/${id}`, payload) : await apiPost('/buildings', payload);
+    if (res.success) { alert('Building saved'); buildingFormCard.hidden = true; loadBuildings(); loadCostCenters(); } else { alert('Failed to save building: ' + (res.message || 'Unknown error')); }
+}
+
+// ===================== USERS =====================
+
+async function loadUsers() {
+    try {
+        const res = await apiGet('/users');
+        if (res.success) { usersState = res.users; renderUsersTable(); }
+    } catch (err) { console.error('loadUsers error:', err); usersTable.innerHTML = '<p>Failed to load users.</p>'; }
+}
+
+function renderUsersTable() {
+    if (!usersState.length) { usersTable.innerHTML = '<p class="text-muted">No users yet.</p>'; return; }
+    let html = '<div class="table-wrapper"><table><thead><tr><th>Username</th><th>Name</th><th>Email</th><th>Role</th><th>Building</th><th>Active</th><th></th></tr></thead><tbody>';
+    for (const u of usersState) {
+        html += `<tr data-id="${u.id}"><td>${escapeHtml(u.username)}</td><td>${escapeHtml(u.name || '')}</td><td>${escapeHtml(u.email || '')}</td><td>${u.role}</td><td>${u.building || ''}</td><td>${u.active ? 'Yes' : 'No'}</td><td><button class="btn btn-secondary btn-sm btn-edit-user" data-id="${u.id}">Edit</button> <button class="btn btn-secondary btn-sm btn-reset-pass" data-id="${u.id}">Reset Password</button></td></tr>`;
+    }
+    html += '</tbody></table></div>';
+    usersTable.innerHTML = html;
+    document.querySelectorAll('.btn-edit-user').forEach(btn => { btn.addEventListener('click', () => { const u = usersState.find(x => x.id === parseInt(btn.dataset.id, 10)); if (u) openUserForm(u); }); });
+    document.querySelectorAll('.btn-reset-pass').forEach(btn => { btn.addEventListener('click', () => resetUserPassword(parseInt(btn.dataset.id, 10))); });
+}
+
+function openUserForm(user) {
+    if (user) {
+        userFormTitle.textContent = 'Edit User'; userIdInput.value = user.id; userUsernameInput.value = user.username || ''; userNameInput.value = user.name || ''; userEmailInput.value = user.email || ''; userRoleSelect.value = user.role || 'requester'; userBuildingSelect.value = user.building || ''; userActiveSelect.value = user.active ? '1' : '0'; userPasswordInput.value = ''; userPasswordGroup.style.display = 'none';
+    } else {
+        userFormTitle.textContent = 'Create User'; userForm.reset(); userIdInput.value = ''; userActiveSelect.value = '1'; userPasswordGroup.style.display = '';
+    }
+    userFormCard.hidden = false;
 }
 
 async function handleSaveUser(e) {
     e.preventDefault();
-    const id = document.getElementById('userId').value;
-    const pwd = document.getElementById('userPassword').value;
-    const body = {
-        username: document.getElementById('userUsername').value.trim(),
-        name: document.getElementById('userNameInput').value.trim(),
-        email: document.getElementById('userEmail').value.trim(),
-        role: document.getElementById('userRoleSelect').value,
-        building: document.getElementById('userBuilding').value || null,
-        is_active: document.getElementById('userActive').value === 'true'
-    };
-    if (pwd) body.password = pwd;
-    try {
-        const res = id ? await apiPut(`/users/${id}`, body) : await apiPost('/users', body);
-        if (res.success) {
-            showToast(id ? 'User updated' : 'User created');
-            document.getElementById('userFormCard').hidden = true;
-            await loadUsers();
-        } else {
-            showToast(res.message || 'Save failed', true);
-        }
-    } catch { showToast('Save failed', true); }
+    const payload = { username: userUsernameInput.value.trim(), name: userNameInput.value.trim(), email: userEmailInput.value.trim(), role: userRoleSelect.value, building: userBuildingSelect.value || null, active: userActiveSelect.value === '1', password: userPasswordGroup.style.display !== 'none' ? userPasswordInput.value.trim() : undefined };
+    if (!payload.username || !payload.name || !payload.email || !payload.role) { alert('Username, name, email and role are required'); return; }
+    const id = userIdInput.value;
+    let res;
+    if (id) { delete payload.password; res = await apiPut(`/users/${id}`, payload); }
+    else { res = await apiPost('/users', payload); }
+    if (res.success) { if (!id && res.password) { alert(`User created. Initial password: ${res.password}`); } else { alert('User saved'); } userFormCard.hidden = true; loadUsers(); }
+    else { alert('Failed to save user: ' + (res.message || 'Unknown error')); }
 }
 
-// ============================================================
-//  TOAST NOTIFICATIONS
-// ============================================================
+async function resetUserPassword(id) {
+    const pwd = prompt('Enter new password (min 6 characters):');
+    if (!pwd || pwd.trim().length < 6) { alert('Password too short. Nothing changed.'); return; }
+    const confirmPwd = prompt('Confirm new password:');
+    if (confirmPwd !== pwd) { alert('Passwords do not match. Nothing changed.'); return; }
+    try {
+        const res = await apiPost(`/users/${id}/reset-password`, { password: pwd });
+        if (res.success) { alert('Password reset successfully.'); } else { alert('Password reset failed: ' + (res.message || 'Unknown error')); }
+    } catch { alert('Password reset failed'); }
+}
 
-function showToast(message, isError = false) {
+// ===================== SUPPLIERS =====================
+
+async function loadSuppliers() {
+    try {
+        const res = await apiGet('/suppliers');
+        if (res.success) { suppliersState = res.suppliers; renderSuppliersTable(); }
+    } catch { suppliersTable.innerHTML = '<p>Failed to load suppliers.</p>'; }
+}
+
+function renderSuppliersTable() {
+    if (!suppliersState.length) { suppliersTable.innerHTML = '<p class="text-muted">No suppliers yet.</p>'; return; }
+    let html = '<div class="table-wrapper"><table><thead><tr><th>Name</th><th>Contact</th><th>Email</th><th>Phone</th><th>Active</th><th></th></tr></thead><tbody>';
+    for (const s of suppliersState) {
+        html += `<tr data-id="${s.id}"><td>${escapeHtml(s.name)}</td><td>${escapeHtml(s.contact_person || '')}</td><td>${escapeHtml(s.email || '')}</td><td>${escapeHtml(s.phone || '')}</td><td>${s.active ? 'Yes' : 'No'}</td><td><button class="btn btn-secondary btn-sm btn-edit-supplier" data-id="${s.id}">Edit</button></td></tr>`;
+    }
+    html += '</tbody></table></div>';
+    suppliersTable.innerHTML = html;
+    document.querySelectorAll('.btn-edit-supplier').forEach(btn => { btn.addEventListener('click', () => { const s = suppliersState.find(x => x.id === parseInt(btn.dataset.id, 10)); if (s) openSupplierForm(s); }); });
+}
+
+function openSupplierForm(supplier) {
+    if (supplier) {
+        supplierFormTitle.textContent = 'Edit Supplier'; supplierIdInput.value = supplier.id; supplierNameInput.value = supplier.name || ''; supplierContactInput.value = supplier.contact_person || ''; supplierEmailInput.value = supplier.email || ''; supplierPhoneInput.value = supplier.phone || ''; supplierWebsiteInput.value = supplier.website || ''; supplierAddressInput.value = supplier.address || ''; supplierNotesInput.value = supplier.notes || ''; supplierActiveInput.value = supplier.active ? '1' : '0';
+    } else {
+        supplierFormTitle.textContent = 'Create Supplier'; supplierForm.reset(); supplierIdInput.value = ''; supplierActiveInput.value = '1';
+    }
+    supplierFormCard.hidden = false;
+}
+
+async function handleSaveSupplier(e) {
+    e.preventDefault();
+    const payload = { name: supplierNameInput.value.trim(), contact_person: supplierContactInput.value.trim(), email: supplierEmailInput.value.trim(), phone: supplierPhoneInput.value.trim(), website: supplierWebsiteInput.value.trim(), address: supplierAddressInput.value.trim(), notes: supplierNotesInput.value.trim(), active: parseInt(supplierActiveInput.value, 10) };
+    if (!payload.name) { alert('Name is required'); return; }
+    const id = supplierIdInput.value;
+    const res = id ? await apiPut(`/suppliers/${id}`, payload) : await apiPost('/suppliers', payload);
+    if (res.success) { alert('Supplier saved'); supplierFormCard.hidden = true; loadSuppliers(); populateSupplierFilter(); } else { alert('Failed to save supplier'); }
+}
+
+function populateStatusFilter() {
+    filterStatus.innerHTML = '<option value="">Status: All</option>' + ORDER_STATUSES.map(s => `<option value="${s}">${s}</option>`).join('');
+}
+function populateSupplierFilter() {
+    filterSupplier.innerHTML = '<option value="">Supplier: All</option>' + suppliersState.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
+}
+
+function switchTab(tabId) {
+    if (currentTab === tabId) return;
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabId));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+    document.getElementById(tabId).classList.remove('hidden');
+    currentTab = tabId;
+
+    // Show brand training UI for admins in Suppliers tab
+    if (tabId === 'suppliersTab' && currentUser && currentUser.role === 'admin') {
+        const brandTrainingCard = document.getElementById('brandTrainingCard');
+        if (brandTrainingCard) {
+            brandTrainingCard.hidden = false;
+            if (typeof loadBrandTrainingUI === 'function') {
+                loadBrandTrainingUI();
+            }
+        }
+    }
+    
+    // ⭐ NEW: Load approvals when switching to approvals tab
+    if (tabId === 'approvalsTab') {
+        loadApprovals();
+    }
+
+    // ⭐ NEW: Initialize procurement dashboard when switching to procurement tab
+    if (tabId === 'procurementTab') {
+        if (typeof initProcurementDashboard === 'function') {
+            initProcurementDashboard();
+        }
+    }
+}
+
+function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c] || c)); }
+function formatDate(dateStr) { if (!dateStr) return '-'; const d = new Date(dateStr); if (isNaN(d)) return dateStr; return d.toLocaleDateString(); }
+function formatDateTime(dateStr) { if (!dateStr) return '-'; const d = new Date(dateStr); if (isNaN(d)) return dateStr; return d.toLocaleString(); }
+function formatFileSize(bytes) { if (!bytes) return ''; const kb = bytes / 1024; if (kb < 1024) return kb.toFixed(1) + ' KB'; return (kb / 1024).toFixed(1) + ' MB'; }
+
+// ===================== TOAST NOTIFICATIONS =====================
+
+function showToast(message, type = 'info', duration = 4000) {
     const container = document.getElementById('toastContainer');
     if (!container) return;
     const toast = document.createElement('div');
-    toast.className = `toast ${isError ? 'toast-error' : 'toast-success'}`;
+    toast.className = `toast toast-${type}`;
     toast.textContent = message;
     container.appendChild(toast);
+    // Trigger show animation
+    setTimeout(() => toast.classList.add('toast-visible'), 10);
+    // Remove after duration
     setTimeout(() => {
-        toast.style.opacity = '0';
-        toast.style.transition = 'opacity 0.3s';
-        setTimeout(() => toast.remove(), 300);
-    }, 3500);
+        toast.classList.remove('toast-visible');
+        setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 400);
+    }, duration);
 }
 
-// ============================================================
-//  EXPOSE GLOBALS (for module JS files)
-// ============================================================
+// ===================== APPROVALS =====================
 
-// These are used by approvals.js, documents.js, order-assignment.js, etc.
+async function loadApprovals() {
+    try {
+        const statusFilter = document.getElementById('approvalStatusFilter');
+        const status = statusFilter ? statusFilter.value : 'pending';
+        const res = await apiGet('/approvals', status ? { status } : {});
+        if (res.success) {
+            approvalsState = res.approvals || [];
+            renderApprovalsTable();
+        } else {
+            const tbl = document.getElementById('approvalsTable');
+            if (tbl) tbl.innerHTML = '<p class="text-muted">Failed to load approvals.</p>';
+        }
+    } catch (err) {
+        console.error('loadApprovals error:', err);
+        const tbl = document.getElementById('approvalsTable');
+        if (tbl) tbl.innerHTML = '<p class="text-muted">Error loading approvals.</p>';
+    }
+}
+
+function renderApprovalsTable() {
+    const approvalsTable = document.getElementById('approvalsTable');
+    if (!approvalsTable) return;
+
+    // Apply search / priority filter from UI
+    const searchEl = document.getElementById('approvalSearch');
+    const priorityEl = document.getElementById('approvalPriorityFilter');
+    const search = searchEl ? searchEl.value.toLowerCase().trim() : '';
+    const priority = priorityEl ? priorityEl.value : '';
+
+    let filtered = approvalsState.filter(a => {
+        if (priority && a.priority !== priority) return false;
+        if (search) {
+            const haystack = [
+                a.order_id, a.item_description, a.building, a.supplier_name,
+                a.requester_name, a.status
+            ].join(' ').toLowerCase();
+            if (!haystack.includes(search)) return false;
+        }
+        return true;
+    });
+
+    if (!filtered.length) {
+        approvalsTable.innerHTML = '<p class="text-muted">No approval requests found.</p>';
+        return;
+    }
+
+    let html = '<div class="table-wrapper"><table><thead><tr>';
+    html += '<th>Order ID</th><th>Item</th><th>Building</th><th>Supplier</th>';
+    html += '<th>Est. Cost</th><th>Priority</th><th>Status</th><th>Requested By</th><th>Date</th><th></th>';
+    html += '</tr></thead><tbody>';
+
+    for (const a of filtered) {
+        const statusClass = 'status-' + (a.status || 'pending').toLowerCase().replace(/ /g, '-');
+        const priorityClass = 'priority-' + (a.priority || 'Normal').toLowerCase();
+        html += `<tr>
+            <td>#${a.order_id}</td>
+            <td title="${escapeHtml(a.item_description || '')}">${escapeHtml((a.item_description || '').substring(0, 35))}${(a.item_description || '').length > 35 ? '…' : ''}</td>
+            <td>${escapeHtml(a.building || '-')}</td>
+            <td>${escapeHtml(a.supplier_name || '-')}</td>
+            <td class="text-right">${fmtPrice(a.estimated_cost)}</td>
+            <td><span class="priority-pill ${priorityClass}">${a.priority || 'Normal'}</span></td>
+            <td><span class="status-badge ${statusClass}">${a.status || 'pending'}</span></td>
+            <td>${escapeHtml(a.requester_name || '-')}</td>
+            <td>${formatDate(a.requested_at)}</td>
+            <td><button class="btn btn-primary btn-sm btn-review-approval" data-id="${a.id}">Review</button></td>
+        </tr>`;
+    }
+
+    html += '</tbody></table></div>';
+    approvalsTable.innerHTML = html;
+
+    // Attach review button listeners — delegate to approvals.js if available
+    document.querySelectorAll('.btn-review-approval').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const id = parseInt(btn.dataset.id, 10);
+            const approval = approvalsState.find(a => a.id === id);
+            if (approval && typeof openApprovalDetail === 'function') {
+                openApprovalDetail(approval);
+            }
+        });
+    });
+}
+
+async function updateApprovalBadge() {
+    try {
+        const res = await apiGet('/approvals/pending-count');
+        const badge = document.getElementById('pendingApprovalBadge');
+        if (!badge) return;
+        const count = res.count || 0;
+        if (count > 0) {
+            badge.textContent = count > 99 ? '99+' : count;
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
+    } catch (err) {
+        console.error('updateApprovalBadge error:', err);
+    }
+}
+
+// ===================== PROCUREMENT CREATE ORDER MODAL =====================
+
+(function setupProcurementModal() {
+    const modal = document.getElementById('procCreateOrderModal');
+    if (!modal) return;
+
+    const btnClose = document.getElementById('btnCloseProcModal');
+    const btnCancel = document.getElementById('btnCancelProcModal');
+    const form = document.getElementById('procCreateOrderForm');
+    const procBuildingSelect = document.getElementById('procBuilding');
+    const procCostCenterRadios = document.getElementById('procCostCenterRadios');
+
+    function openProcModal() {
+        // Populate building select
+        if (procBuildingSelect) {
+            procBuildingSelect.innerHTML = '<option value="">Select Building</option>' +
+                buildingsState.filter(b => b.active).map(b =>
+                    `<option value="${b.code}">${escapeHtml(b.code)} - ${escapeHtml(b.name)}</option>`
+                ).join('');
+        }
+        if (form) form.reset();
+        if (procCostCenterRadios) procCostCenterRadios.innerHTML = '<span class="text-muted">Select a building first</span>';
+        modal.classList.remove('hidden');
+    }
+
+    function closeProcModal() {
+        modal.classList.add('hidden');
+    }
+
+    // Open via procurement tab button
+    const btnProcCreate = document.getElementById('btnProcurementCreateOrder');
+    if (btnProcCreate) {
+        btnProcCreate.addEventListener('click', openProcModal);
+    }
+
+    if (btnClose) btnClose.addEventListener('click', closeProcModal);
+    if (btnCancel) btnCancel.addEventListener('click', closeProcModal);
+
+    // Close on overlay click
+    modal.addEventListener('click', e => { if (e.target === modal) closeProcModal(); });
+
+    // Building change → update cost center radios
+    if (procBuildingSelect && procCostCenterRadios) {
+        procBuildingSelect.addEventListener('change', () => {
+            const buildingCode = procBuildingSelect.value;
+            if (!buildingCode) {
+                procCostCenterRadios.innerHTML = '<span class="text-muted">Select a building first</span>';
+                return;
+            }
+            const filtered = costCentersState.filter(cc => cc.building_code === buildingCode && cc.active);
+            if (!filtered.length) {
+                procCostCenterRadios.innerHTML = '<span class="text-muted">No cost centers for this building</span>';
+                return;
+            }
+            procCostCenterRadios.innerHTML = filtered.map(cc =>
+                `<label class="radio-label">
+                    <input type="radio" name="procCostCenter" value="${cc.id}" required>
+                    <span class="radio-text"><strong>${escapeHtml(cc.code)}</strong> — ${escapeHtml(cc.name)}</span>
+                </label>`
+            ).join('');
+        });
+    }
+
+    // Form submit
+    if (form) {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const selectedCC = document.querySelector('input[name="procCostCenter"]:checked');
+            if (!selectedCC) { alert('Please select a cost center'); return; }
+            const payload = {
+                building: procBuildingSelect.value,
+                cost_center_id: parseInt(selectedCC.value, 10),
+                item_description: document.getElementById('procItemDescription').value.trim(),
+                part_number: document.getElementById('procPartNumber').value.trim(),
+                category: document.getElementById('procCategory').value.trim(),
+                quantity: parseInt(document.getElementById('procQuantity').value, 10),
+                date_needed: document.getElementById('procDateNeeded').value || null,
+                priority: document.getElementById('procPriority').value,
+                notes: document.getElementById('procNotes').value.trim(),
+                requester: currentUser.name,
+                requesterEmail: currentUser.email
+            };
+            const formData = new FormData();
+            Object.entries(payload).forEach(([k, v]) => { if (v !== null && v !== undefined && v !== '') formData.append(k, v); });
+            try {
+                const res = await fetch(`${API_BASE}/orders`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${authToken}` },
+                    body: formData
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('Order created successfully', 'success');
+                    closeProcModal();
+                    loadOrders();
+                    if (typeof initProcurementDashboard === 'function') initProcurementDashboard();
+                } else {
+                    showToast('Failed to create order: ' + (data.message || 'Unknown error'), 'error');
+                }
+            } catch (err) {
+                showToast('Network error creating order', 'error');
+            }
+        });
+    }
+
+    // Expose openProcModal globally for procurement-workspace.js
+    window.openProcurementCreateOrderModal = openProcModal;
+})();
+
+// ===================== APPROVAL FILTER LISTENERS =====================
+
+(function setupApprovalFilters() {
+    const searchEl = document.getElementById('approvalSearch');
+    const statusEl = document.getElementById('approvalStatusFilter');
+    const priorityEl = document.getElementById('approvalPriorityFilter');
+    const clearBtn = document.getElementById('btnClearApprovalFilters');
+
+    if (searchEl) searchEl.addEventListener('input', () => {
+        if (approvalsState.length) renderApprovalsTable();
+    });
+    if (statusEl) statusEl.addEventListener('change', () => loadApprovals());
+    if (priorityEl) priorityEl.addEventListener('change', () => {
+        if (approvalsState.length) renderApprovalsTable();
+    });
+    if (clearBtn) clearBtn.addEventListener('click', () => {
+        if (searchEl) searchEl.value = '';
+        if (statusEl) statusEl.value = 'pending';
+        if (priorityEl) priorityEl.value = '';
+        loadApprovals();
+    });
+})();
+
+// ===================== GLOBAL EXPORTS (for module JS files) =====================
+
 window.showToast = showToast;
-window.apiGet = apiGet;
-window.apiPost = apiPost;
-window.apiPut = apiPut;
-window.apiDelete = apiDelete;
-window.currentUser = currentUser; // live reference not needed — modules read window.currentUser
-window.getAuthToken = () => authToken;
-window.ordersState = ordersState;
-window.suppliersState = suppliersState;
-window.buildingsState = buildingsState;
-window.costCentersState = costCentersState;
-window.switchTab = switchTab;
-window.loadOrders = loadOrders;
 window.loadApprovals = loadApprovals;
-window.renderStatusBadge = renderStatusBadge;
-window.renderPriorityBadge = renderPriorityBadge;
-window.escHtml = escHtml;
-window.fmtDate = fmtDate;
-window.fmtDateTime = fmtDateTime;
+window.updateApprovalBadge = updateApprovalBadge;
+window.apiGet = apiGet;
+window.apiPut = apiPut;
+window.apiPost = apiPost;
+window.apiDelete = apiDelete;
+window.escapeHtml = escapeHtml;
+window.formatDate = formatDate;
+window.formatDateTime = formatDateTime;
+window.formatFileSize = formatFileSize;
 window.fmtPrice = fmtPrice;
+window.currentUserGlobal = null; // Will be set by showDashboard
 
-// Keep openEnhancedCreateQuoteModal alias for procurement-workspace.js
-window.openEnhancedCreateQuoteModal = openCreateQuoteDialog;

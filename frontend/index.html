@@ -3,13 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PartPulse Order Management v2.5.1</title>
+    <title>PartPulse Order Management v2.6.0</title>
     <link rel="stylesheet" href="styles.css">
     <!-- File Upload Enhancement Styles -->
     <link rel="stylesheet" href="css/order-form-enhanced.css">
     <link rel="stylesheet" href="documents.css">
     <link rel="stylesheet" href="approvals.css">
     <link rel="stylesheet" href="brand-training.css">
+    <!-- ⭐ Smart Quote Send Panel -->
+    <link rel="stylesheet" href="quote-send.css">
     <!-- ⭐ NEW: Intelligent Autocomplete -->
     <link rel="stylesheet" href="css/intelligent-autocomplete.css">
     <script src="upload-progress.js"></script>
@@ -47,7 +49,7 @@
         <header>
             <div class="container header-row">
                 <div>
-                    <h1>PartPulse Orders v2.5.1</h1>
+                    <h1>PartPulse Orders v2.6.0</h1>
                     <div id="userRole" class="badge-role"></div>
                 </div>
                 <div class="user-info">
@@ -517,6 +519,9 @@
     </div>
 </div>
 
+<!-- ⭐ Smart Quote Send Panel -->
+<div id="quoteSendPanel" class="quote-send-panel hidden"></div>
+
 <!-- ⭐ ENHANCEMENT #2: Procurement Create Order Modal (ENHANCED) -->
 <div id="procCreateOrderModal" class="modal-overlay hidden">
     <div class="modal-card" style="max-width: 580px;">
@@ -649,6 +654,8 @@
 <script src="supplier-suggestions.js"></script>
 <!-- ⭐ Brand Training UI -->
 <script src="brand-training.js"></script>
+<!-- ⭐ Smart Quote Send Panel -->
+<script src="quote-send.js"></script>
 <!-- ⭐ NEW: Intelligent Autocomplete (Phase 5) -->
 <script src="js/intelligent-autocomplete.js"></script>
 

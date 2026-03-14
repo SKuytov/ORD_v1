@@ -1,1 +1,478 @@
-Ly8gYmFja2VuZC9jb250cm9sbGVycy9vcmRlckNvbnRyb2xsZXIuanMKY29uc3QgZGIgPSByZXF1aXJlKCcuLi9jb25maWcvZGF0YWJhc2UnKTsKY29uc3QgZW1haWxTZXJ2aWNlID0gcmVxdWlyZSgnLi4vdXRpbHMvZW1haWxTZXJ2aWNlJyk7CgpleHBvcnRzLmNyZWF0ZU9yZGVyID0gYXN5bmMgKHJlcSwgcmVzKSA9PiB7CiAgICBjb25zdCBjb25uZWN0aW9uID0gYXdhaXQgZGIuZ2V0Q29ubmVjdGlvbigpOwoKICAgIHRyeSB7CiAgICAgICAgYXdhaXQgY29ubmVjdGlvbi5iZWdpblRyYW5zYWN0aW9uKCk7CgogICAgICAgIGNvbnN0IHsKICAgICAgICAgICAgYnVpbGRpbmcsIGl0ZW1EZXNjcmlwdGlvbiwgcGFydE51bWJlciwgY2F0ZWdvcnksCiAgICAgICAgICAgIHF1YW50aXR5LCBkYXRlTmVlZGVkLCBwcmlvcml0eSwgbm90ZXMsCiAgICAgICAgICAgIHJlcXVlc3RlciwgcmVxdWVzdGVyRW1haWwsIGNvc3RDZW50ZXJJZAogICAgICAgIH0gPSByZXEuYm9keTsKCiAgICAgICAgY29uc3QgW3Jlc3VsdF0gPSBhd2FpdCBjb25uZWN0aW9uLnF1ZXJ5KAogICAgICAgICAgICBgSU5TRVJUIElOVE8gb3JkZXJzICgKICAgICAgICAgICAgICAgIGJ1aWxkaW5nLCBjb3N0X2NlbnRlcl9pZCwgaXRlbV9kZXNjcmlwdGlvbiwgcGFydF9udW1iZXIsIGNhdGVnb3J5LAogICAgICAgICAgICAgICAgcXVhbnRpdHksIGRhdGVfbmVlZGVkLCBwcmlvcml0eSwgbm90ZXMsCiAgICAgICAgICAgICAgICByZXF1ZXN0ZXJfaWQsIHJlcXVlc3Rlcl9uYW1lLCByZXF1ZXN0ZXJfZW1haWwsIHN0YXR1cwogICAgICAgICAgICApIFZBTFVFUyAoPywgPywgPywgPywgPywgPywgPywgPywgPywgPywgPywgPywgJ05ldycpYCwKICAgICAgICAgICAgW2J1aWxkaW5nLCBjb3N0Q2VudGVySWQgfHwgbnVsbCwgaXRlbURlc2NyaXB0aW9uLCBwYXJ0TnVtYmVyIHx8IG51bGwsIGNhdGVnb3J5IHx8IG51bGwsCiAgICAgICAgICAgICBxdWFudGl0eSwgZGF0ZU5lZWRlZCwgcHJpb3JpdHkgfHwgJ05vcm1hbCcsIG5vdGVzLAogICAgICAgICAgICAgcmVxLnVzZXIuaWQsIHJlcXVlc3RlciwgcmVxdWVzdGVyRW1haWxdCiAgICAgICAgKTsKCiAgICAgICAgY29uc3Qgb3JkZXJJZCA9IHJlc3VsdC5pbnNlcnRJZDsKCiAgICAgICAgLy8gSGFuZGxlIGZpbGUgdXBsb2FkcwogICAgICAgIGlmIChyZXEuZmlsZXMgJiYgcmVxLmZpbGVzLmxlbmd0aCA+IDApIHsKICAgICAgICAgICAgY29uc3QgZmlsZUluc2VydHMgPSByZXEuZmlsZXMubWFwKGZpbGUgPT4gWwogICAgICAgICAgICAgICAgb3JkZXJJZCwgZmlsZS5vcmlnaW5hbG5hbWUsIGZpbGUuZmlsZW5hbWUsIGZpbGUubWltZXR5cGUsIGZpbGUuc2l6ZQogICAgICAgICAgICBdKTsKCiAgICAgICAgICAgIGF3YWl0IGNvbm5lY3Rpb24ucXVlcnkoCiAgICAgICAgICAgICAgICBgSU5TRVJUIElOVE8gb3JkZXJfZmlsZXMKICAgICAgICAgICAgICAgIChvcmRlcl9pZCwgZmlsZV9uYW1lLCBmaWxlX3BhdGgsIGZpbGVfdHlwZSwgZmlsZV9zaXplKQogICAgICAgICAgICAgICAgVkFMVUVTID9gLAogICAgICAgICAgICAgICAgW2ZpbGVJbnNlcnRzXQogICAgICAgICAgICApOwogICAgICAgIH0KCiAgICAgICAgLy8gR2V0IGNvc3QgY2VudGVyIGNvZGUgZm9yIGVtYWlsCiAgICAgICAgbGV0IGNvc3RDZW50ZXJDb2RlID0gbnVsbDsKICAgICAgICBpZiAoY29zdENlbnRlcklkKSB7CiAgICAgICAgICAgIGNvbnN0IFtjY10gPSBhd2FpdCBjb25uZWN0aW9uLnF1ZXJ5KAogICAgICAgICAgICAgICAgJ1NFTEVDVCBjb2RlIEZST00gY29zdF9jZW50ZXJzIFdIRVJFIGlkID0gPycsCiAgICAgICAgICAgICAgICBbY29zdENlbnRlcklkXQogICAgICAgICAgICApOwogICAgICAgICAgICBpZiAoY2MubGVuZ3RoID4gMCkgY29zdENlbnRlckNvZGUgPSBjY1swXS5jb2RlOwogICAgICAgIH0KCiAgICAgICAgYXdhaXQgY29ubmVjdGlvbi5jb21taXQoKTsKCiAgICAgICAgLy8gU2VuZCBlbWFpbCBub3RpZmljYXRpb24gdG8gYWRtaW4vcHJvY3VyZW1lbnQgKG5vbi1ibG9ja2luZykKICAgICAgICBlbWFpbFNlcnZpY2Uuc2VuZE5ld09yZGVyTm90aWZpY2F0aW9uKHsKICAgICAgICAgICAgb3JkZXJJZCwKICAgICAgICAgICAgYnVpbGRpbmcsCiAgICAgICAgICAgIGl0ZW1EZXNjcmlwdGlvbiwKICAgICAgICAgICAgcXVhbnRpdHksCiAgICAgICAgICAgIHJlcXVlc3RlciwKICAgICAgICAgICAgZGF0ZU5lZWRlZCwKICAgICAgICAgICAgcHJpb3JpdHk6IHByaW9yaXR5IHx8ICdOb3JtYWwnLAogICAgICAgICAgICBjb3N0Q2VudGVyQ29kZQogICAgICAgIH0pLmNhdGNoKGVyciA9PiBjb25zb2xlLmVycm9yKCdOZXcgb3JkZXIgZW1haWwgZmFpbGVkOicsIGVyci5tZXNzYWdlKSk7CgogICAgICAgIHJlcy5zdGF0dXMoMjAxKS5qc29uKHsKICAgICAgICAgICAgc3VjY2VzczogdHJ1ZSwKICAgICAgICAgICAgbWVzc2FnZTogJ09yZGVyIGNyZWF0ZWQgc3VjY2Vzc2Z1bGx5JywKICAgICAgICAgICAgb3JkZXJJZAogICAgICAgIH0pOwogICAgfSBjYXRjaCAoZXJyb3IpIHsKICAgICAgICBhd2FpdCBjb25uZWN0aW9uLnJvbGxiYWNrKCk7CiAgICAgICAgY29uc29sZS5lcnJvcignQ3JlYXRlIG9yZGVyIGVycm9yOicsIGVycm9yKTsKICAgICAgICByZXMuc3RhdHVzKDUwMCkuanNvbih7IHN1Y2Nlc3M6IGZhbHNlLCBtZXNzYWdlOiAnRmFpbGVkIHRvIGNyZWF0ZSBvcmRlcicgfSk7CiAgICB9IGZpbmFsbHkgewogICAgICAgIGNvbm5lY3Rpb24ucmVsZWFzZSgpOwogICAgfQp9OwoKZXhwb3J0cy5nZXRPcmRlcnMgPSBhc3luYyAocmVxLCByZXMpID0+IHsKICAgIHRyeSB7CiAgICAgICAgY29uc3QgeyBzdGF0dXMsIGJ1aWxkaW5nLCBwcmlvcml0eSwgc3VwcGxpZXJfaWQsIHNlYXJjaCwgYXNzaWduZWRfZmlsdGVyIH0gPSByZXEucXVlcnk7CgogICAgICAgIGxldCBxdWVyeSA9IGAKICAgICAgICAgICAgU0VMRUNUIG8uKiwKICAgICAgICAgICAgICAgICAgIHMubmFtZSBhcyBzdXBwbGllcl9uYW1lLAogICAgICAgICAgICAgICAgICAgcS5xdW90ZV9udW1iZXIsCiAgICAgICAgICAgICAgICAgICBjYy5jb2RlIGFzIGNvc3RfY2VudGVyX2NvZGUsCiAgICAgICAgICAgICAgICAgICBjYy5uYW1lIGFzIGNvc3RfY2VudGVyX25hbWUsCiAgICAgICAgICAgICAgICAgICB1X2Fzc2lnbmVkLm5hbWUgYXMgYXNzaWduZWRfdG9fbmFtZSwKICAgICAgICAgICAgICAgICAgIHVfYXNzaWduZWQudXNlcm5hbWUgYXMgYXNzaWduZWRfdG9fdXNlcm5hbWUsCiAgICAgICAgICAgICAgICAgICBUSU1FU1RBTVBESUZGKE1JTlVURSwgby5sYXN0X2FjdGl2aXR5X2F0LCBOT1coKSkgYXMgbWludXRlc19zaW5jZV9hY3Rpdml0eSwKICAgICAgICAgICAgICAgICAgIEdST1VQX0NPTkNBVCgKICAgICAgICAgICAgICAgICAgICAgICBESVNUSU5DVCBKU09OX09CSkVDVCgKICAgICAgICAgICAgICAgICAgICAgICAgICAgJ2lkJywgZi5pZCwKICAgICAgICAgICAgICAgICAgICAgICAgICAgJ25hbWUnLCBmLmZpbGVfbmFtZSwKICAgICAgICAgICAgICAgICAgICAgICAgICAgJ3BhdGgnLCBDT05DQVQoJy91cGxvYWRzLycsIGYuZmlsZV9wYXRoKSwKICAgICAgICAgICAgICAgICAgICAgICAgICAgJ3R5cGUnLCBmLmZpbGVfdHlwZSwKICAgICAgICAgICAgICAgICAgICAgICAgICAgJ3NpemUnLCBmLmZpbGVfc2l6ZQogICAgICAgICAgICAgICAgICAgICAgICkKICAgICAgICAgICAgICAgICAgICkgYXMgZmlsZXMKICAgICAgICAgICAgRlJPTSBvcmRlcnMgbwogICAgICAgICAgICBMRUZUIEpPSU4gb3JkZXJfZmlsZXMgZiBPTiBvLmlkID0gZi5vcmRlcl9pZAogICAgICAgICAgICBMRUZUIEpPSU4gc3VwcGxpZXJzIHMgT04gby5zdXBwbGllcl9pZCA9IHMuaWQKICAgICAgICAgICAgTEVGVCBKT0lOIHF1b3RlcyBxIE9OIG8ucXVvdGVfcmVmID0gcS5pZAogICAgICAgICAgICBMRUZUIEpPSU4gY29zdF9jZW50ZXJzIGNjIE9OIG8uY29zdF9jZW50ZXJfaWQgPSBjYy5pZAogICAgICAgICAgICBMRUZUIEpPSU4gdXNlcnMgdV9hc3NpZ25lZCBPTiBvLmFzc2lnbmVkX3RvX3VzZXJfaWQgPSB1X2Fzc2lnbmVkLmlkCiAgICAgICAgYDsKCiAgICAgICAgY29uc3QgY29uZGl0aW9ucyA9IFtdOwogICAgICAgIGNvbnN0IHBhcmFtcyA9IFtdOwoKICAgICAgICAvLyBSb2xlLWJhc2VkIGZpbHRlcmluZwogICAgICAgIGlmIChyZXEudXNlci5yb2xlID09PSAncmVxdWVzdGVyJykgewogICAgICAgICAgICBjb25kaXRpb25zLnB1c2goJ28uYnVpbGRpbmcgPSA/Jyk7CiAgICAgICAgICAgIHBhcmFtcy5wdXNoKHJlcS51c2VyLmJ1aWxkaW5nKTsKICAgICAgICB9CgogICAgICAgIC8vIEZpbHRlcnMKICAgICAgICBpZiAoc3RhdHVzKSB7IGNvbmRpdGlvbnMucHVzaCgnby5zdGF0dXMgPSA/Jyk7IHBhcmFtcy5wdXNoKHN0YXR1cyk7IH0KICAgICAgICBpZiAoYnVpbGRpbmcpIHsgY29uZGl0aW9ucy5wdXNoKCdvLmJ1aWxkaW5nID0gPycpOyBwYXJhbXMucHVzaChidWlsZGluZyk7IH0KICAgICAgICBpZiAocHJpb3JpdHkpIHsgY29uZGl0aW9ucy5wdXNoKCdvLnByaW9yaXR5ID0gPycpOyBwYXJhbXMucHVzaChwcmlvcml0eSk7IH0KICAgICAgICBpZiAoc3VwcGxpZXJfaWQpIHsgY29uZGl0aW9ucy5wdXNoKCdvLnN1cHBsaWVyX2lkID0gPycpOyBwYXJhbXMucHVzaChzdXBwbGllcl9pZCk7IH0KICAgICAgICAKICAgICAgICAvLyDirZAgTkVXOiBBc3NpZ25tZW50IGZpbHRlciBmb3IgcHJvY3VyZW1lbnQKICAgICAgICBpZiAoYXNzaWduZWRfZmlsdGVyID09PSAnbWluZScgJiYgWydhZG1pbicsICdwcm9jdXJlbWVudCddLmluY2x1ZGVzKHJlcS51c2VyLnJvbGUpKSB7CiAgICAgICAgICAgIGNvbmRpdGlvbnMucHVzaCgnby5hc3NpZ25lZF90b191c2VyX2lkID0gPycpOwogICAgICAgICAgICBwYXJhbXMucHVzaChyZXEudXNlci5pZCk7CiAgICAgICAgfSBlbHNlIGlmIChhc3NpZ25lZF9maWx0ZXIgPT09ICd1bmFzc2lnbmVkJykgewogICAgICAgICAgICBjb25kaXRpb25zLnB1c2goJ28uYXNzaWduZWRfdG9fdXNlcl9pZCBJUyBOVUxMJyk7CiAgICAgICAgfQogICAgICAgIAogICAgICAgIGlmIChzZWFyY2gpIHsKICAgICAgICAgICAgY29uc3QgcyA9IGAlJHtzZWFyY2gudHJpbSgpfSVgOwogICAgICAgICAgICBjb25zdCBpZE1hdGNoID0gcGFyc2VJbnQoc2VhcmNoLnRyaW0oKSwgMTApOwogICAgICAgICAgICBjb25zdCBpZENsYXVzZSA9ICFpc05hTihpZE1hdGNoKSA/ICcgT1Igby5pZCA9ID8nIDogJyc7CiAgICAgICAgICAgIGNvbnN0IGlkUGFyYW0gPSAhaXNOYU4oaWRNYXRjaCkgPyBbaWRNYXRjaF0gOiBbXTsKCiAgICAgICAgICAgIGNvbmRpdGlvbnMucHVzaChgKAogICAgICAgICAgICAgICAgby5pdGVtX2Rlc2NyaXB0aW9uIExJS0UgPwogICAgICAgICAgICAgICAgT1Igby5wYXJ0X251bWJlciBMSUtFID8KICAgICAgICAgICAgICAgIE9SIG8ucmVxdWVzdGVyX25hbWUgTElLRSA/CiAgICAgICAgICAgICAgICBPUiBvLm5vdGVzIExJS0UgPwogICAgICAgICAgICAgICAgT1Igby5jYXRlZ29yeSBMSUtFID8KICAgICAgICAgICAgICAgIE9SIG8uc3RhdHVzIExJS0UgPwogICAgICAgICAgICAgICAgT1Igby5idWlsZGluZyBMSUtFID8KICAgICAgICAgICAgICAgIE9SIHMubmFtZSBMSUtFID8KICAgICAgICAgICAgICAgIE9SIGNjLmNvZGUgTElLRSA/CiAgICAgICAgICAgICAgICBPUiBjYy5uYW1lIExJS0UgPwogICAgICAgICAgICAgICAgT1IgQ0FTVChvLmlkIEFTIENIQVIpIExJS0UgPwogICAgICAgICAgICAgICAgT1IgRVhJU1RTIChTRUxFQ1QgMSBGUk9NIG9yZGVyX2ZpbGVzIGYyIFdIRVJFIGYyLm9yZGVyX2lkID0gby5pZCBBTkQgZjIuZmlsZV9uYW1lIExJS0UgPykKICAgICAgICAgICAgICAgICR7aWRDbGF1c2V9CiAgICAgICAgICAgIClgKTsKICAgICAgICAgICAgcGFyYW1zLnB1c2gocywgcywgcywgcywgcywgcywgcywgcywgcywgcywgcywgcywgLi4uaWRQYXJhbSk7CiAgICAgICAgfQoKICAgICAgICBpZiAoY29uZGl0aW9ucy5sZW5ndGggPiAwKSB7CiAgICAgICAgICAgIHF1ZXJ5ICs9ICcgV0hFUkUgJyArIGNvbmRpdGlvbnMuam9pbignIEFORCAnKTsKICAgICAgICB9CgogICAgICAgIHF1ZXJ5ICs9ICcgR1JPVVAgQlkgby5pZCBPUkRFUiBCWSBvLnN1Ym1pc3Npb25fZGF0ZSBERVNDJzsKCiAgICAgICAgY29uc3QgW29yZGVyc10gPSBhd2FpdCBkYi5xdWVyeShxdWVyeSwgcGFyYW1zKTsKCiAgICAgICAgLy8gUGFyc2UgZmlsZXMgSlNPTgogICAgICAgIG9yZGVycy5mb3JFYWNoKG9yZGVyID0+IHsKICAgICAgICAgICAgaWYgKG9yZGVyLmZpbGVzICYmIG9yZGVyLmZpbGVzICE9PSAnbnVsbCcpIHsKICAgICAgICAgICAgICAgIHRyeSB7CiAgICAgICAgICAgICAgICAgICAgb3JkZXIuZmlsZXMgPSBKU09OLnBhcnNlKGBbJHtvcmRlci5maWxlc31dYCk7CiAgICAgICAgICAgICAgICAgICAgb3JkZXIuZmlsZXMgPSBvcmRlci5maWxlcy5maWx0ZXIoZiA9PiBmLmlkICE9PSBudWxsKTsKICAgICAgICAgICAgICAgIH0gY2F0Y2ggeyBvcmRlci5maWxlcyA9IFtdOyB9CiAgICAgICAgICAgIH0gZWxzZSB7CiAgICAgICAgICAgICAgICBvcmRlci5maWxlcyA9IFtdOwogICAgICAgICAgICB9CiAgICAgICAgfSk7CgogICAgICAgIHJlcy5qc29uKHsgc3VjY2VzczogdHJ1ZSwgb3JkZXJzIH0pOwogICAgfSBjYXRjaCAoZXJyb3IpIHsKICAgICAgICBjb25zb2xlLmVycm9yKCdHZXQgb3JkZXJzIGVycm9yOicsIGVycm9yKTsKICAgICAgICByZXMuc3RhdHVzKDUwMCkuanNvbih7IHN1Y2Nlc3M6IGZhbHNlLCBtZXNzYWdlOiAnRmFpbGVkIHRvIHJldHJpZXZlIG9yZGVycycgfSk7CiAgICB9Cn07CgpleHBvcnRzLmdldE9yZGVyQnlJZCA9IGFzeW5jIChyZXEsIHJlcykgPT4gewogICAgdHJ5IHsKICAgICAgICBjb25zdCB7IGlkIH0gPSByZXEucGFyYW1zOwoKICAgICAgICBjb25zdCBbb3JkZXJzXSA9IGF3YWl0IGRiLnF1ZXJ5KGAKICAgICAgICAgICAgU0VMRUNUIG8uKiwKICAgICAgICAgICAgICAgICAgIHMubmFtZSBhcyBzdXBwbGllcl9uYW1lLCBzLmVtYWlsIGFzIHN1cHBsaWVyX2VtYWlsLAogICAgICAgICAgICAgICAgICAgcy5jb250YWN0X3BlcnNvbiBhcyBzdXBwbGllcl9jb250YWN0LAogICAgICAgICAgICAgICAgICAgcS5xdW90ZV9udW1iZXIsIHEuc3RhdHVzIGFzIHF1b3RlX3N0YXR1cywKICAgICAgICAgICAgICAgICAgIGNjLmNvZGUgYXMgY29zdF9jZW50ZXJfY29kZSwgY2MubmFtZSBhcyBjb3N0X2NlbnRlcl9uYW1lLAogICAgICAgICAgICAgICAgICAgdV9hc3NpZ25lZC5pZCBhcyBhc3NpZ25lZF90b19pZCwKICAgICAgICAgICAgICAgICAgIHVfYXNzaWduZWQubmFtZSBhcyBhc3NpZ25lZF90b19uYW1lLAogICAgICAgICAgICAgICAgICAgdV9hc3NpZ25lZC51c2VybmFtZSBhcyBhc3NpZ25lZF90b191c2VybmFtZSwKICAgICAgICAgICAgICAgICAgIHVfYXNzaWduZWQuZW1haWwgYXMgYXNzaWduZWRfdG9fZW1haWwsCiAgICAgICAgICAgICAgICAgICBUSU1FU1RBTVBESUZGKE1JTlVURSwgby5sYXN0X2FjdGl2aXR5X2F0LCBOT1coKSkgYXMgbWludXRlc19zaW5jZV9hY3Rpdml0eQogICAgICAgICAgICBGUk9NIG9yZGVycyBvCiAgICAgICAgICAgIExFRlQgSk9JTiBzdXBwbGllcnMgcyBPTiBvLnN1cHBsaWVyX2lkID0gcy5pZAogICAgICAgICAgICBMRUZUIEpPSU4gcXVvdGVzIHEgT04gby5xdW90ZV9yZWYgPSBxLmlkCiAgICAgICAgICAgIExFRlQgSk9JTiBjb3N0X2NlbnRlcnMgY2MgT04gby5jb3N0X2NlbnRlcl9pZCA9IGNjLmlkCiAgICAgICAgICAgIExFRlQgSk9JTiB1c2VycyB1X2Fzc2lnbmVkIE9OIG8uYXNzaWduZWRfdG9fdXNlcl9pZCA9IHVfYXNzaWduZWQuaWQKICAgICAgICAgICAgV0hFUkUgby5pZCA9ID8KICAgICAgICBgLCBbaWRdKTsKCiAgICAgICAgaWYgKG9yZGVycy5sZW5ndGggPT09IDApIHsKICAgICAgICAgICAgcmV0dXJuIHJlcy5zdGF0dXMoNDA0KS5qc29uKHsgc3VjY2VzczogZmFsc2UsIG1lc3NhZ2U6ICdPcmRlciBub3QgZm91bmQnIH0pOwogICAgICAgIH0KCiAgICAgICAgY29uc3Qgb3JkZXIgPSBvcmRlcnNbMF07CgogICAgICAgIC8vIEdldCBmaWxlcwogICAgICAgIGNvbnN0IFtmaWxlc10gPSBhd2FpdCBkYi5xdWVyeSgKICAgICAgICAgICAgJ1NFTEVDVCBpZCwgZmlsZV9uYW1lLCBmaWxlX3BhdGgsIGZpbGVfdHlwZSwgZmlsZV9zaXplLCB1cGxvYWRlZF9hdCBGUk9NIG9yZGVyX2ZpbGVzIFdIRVJFIG9yZGVyX2lkID0gPycsCiAgICAgICAgICAgIFtpZF0KICAgICAgICApOwogICAgICAgIG9yZGVyLmZpbGVzID0gZmlsZXM7CgogICAgICAgIC8vIEdldCBoaXN0b3J5CiAgICAgICAgY29uc3QgW2hpc3RvcnldID0gYXdhaXQgZGIucXVlcnkoCiAgICAgICAgICAgICdTRUxFQ1QgKiBGUk9NIG9yZGVyX2hpc3RvcnkgV0hFUkUgb3JkZXJfaWQgPSA/IE9SREVSIEJZIGNoYW5nZWRfYXQgREVTQycsCiAgICAgICAgICAgIFtpZF0KICAgICAgICApOwogICAgICAgIG9yZGVyLmhpc3RvcnkgPSBoaXN0b3J5OwogICAgICAgIAogICAgICAgIC8vIOKtkCBORVc6IEdldCBhc3NpZ25tZW50IGhpc3RvcnkKICAgICAgICBjb25zdCBbYXNzaWdubWVudEhpc3RvcnldID0gYXdhaXQgZGIucXVlcnkoCiAgICAgICAgICAgIGBTRUxFQ1QgYWguKiwgCiAgICAgICAgICAgICAgICAgICAgdV9mcm9tLm5hbWUgYXMgZnJvbV91c2VyX25hbWUsCiAgICAgICAgICAgICAgICAgICAgdV90by5uYW1lIGFzIHRvX3VzZXJfbmFtZSwKICAgICAgICAgICAgICAgICAgICB1X2J5Lm5hbWUgYXMgYnlfdXNlcl9uYW1lCiAgICAgICAgICAgICBGUk9NIG9yZGVyX2Fzc2lnbm1lbnRfaGlzdG9yeSBhaAogICAgICAgICAgICAgTEVGVCBKT0lOIHVzZXJzIHVfZnJvbSBPTiBhaC5hc3NpZ25lZF9mcm9tX3VzZXJfaWQgPSB1X2Zyb20uaWQKICAgICAgICAgICAgIExFRlQgSk9JTiB1c2VycyB1X3RvIE9OIGFoLmFzc2lnbmVkX3RvX3VzZXJfaWQgPSB1X3RvLmlkCiAgICAgICAgICAgICBMRUZUIEpPSU4gdXNlcnMgdV9ieSBPTiBhaC5hc3NpZ25lZF9ieV91c2VyX2lkID0gdV9ieS5pZAogICAgICAgICAgICAgV0hFUkUgYWgub3JkZXJfaWQgPSA/CiAgICAgICAgICAgICBPUkRFUiBCWSBhaC5jcmVhdGVkX2F0IERFU0MKICAgICAgICAgICAgIExJTUlUIDVgLAogICAgICAgICAgICBbaWRdCiAgICAgICAgKTsKICAgICAgICBvcmRlci5hc3NpZ25tZW50SGlzdG9yeSA9IGFzc2lnbm1lbnRIaXN0b3J5OwoKICAgICAgICByZXMuanNvbih7IHN1Y2Nlc3M6IHRydWUsIG9yZGVyIH0pOwogICAgfSBjYXRjaCAoZXJyb3IpIHsKICAgICAgICBjb25zb2xlLmVycm9yKCdHZXQgb3JkZXIgZXJyb3I6JywgZXJyb3IpOwogICAgICAgIHJlcy5zdGF0dXMoNTAwKS5qc29uKHsgc3VjY2VzczogZmFsc2UsIG1lc3NhZ2U6ICdGYWlsZWQgdG8gcmV0cmlldmUgb3JkZXInIH0pOwogICAgfQp9OwoKZXhwb3J0cy51cGRhdGVPcmRlciA9IGFzeW5jIChyZXEsIHJlcykgPT4gewogICAgY29uc3QgY29ubmVjdGlvbiA9IGF3YWl0IGRiLmdldENvbm5lY3Rpb24oKTsKCiAgICB0cnkgewogICAgICAgIGF3YWl0IGNvbm5lY3Rpb24uYmVnaW5UcmFuc2FjdGlvbigpOwoKICAgICAgICBjb25zdCB7IGlkIH0gPSByZXEucGFyYW1zOwogICAgICAgIGNvbnN0IHVwZGF0ZXMgPSByZXEuYm9keTsKCiAgICAgICAgY29uc3QgW2N1cnJlbnRPcmRlcl0gPSBhd2FpdCBjb25uZWN0aW9uLnF1ZXJ5KAogICAgICAgICAgICAnU0VMRUNUICogRlJPTSBvcmRlcnMgV0hFUkUgaWQgPSA/JywgW2lkXQogICAgICAgICk7CgogICAgICAgIGlmIChjdXJyZW50T3JkZXIubGVuZ3RoID09PSAwKSB7CiAgICAgICAgICAgIGF3YWl0IGNvbm5lY3Rpb24ucm9sbGJhY2soKTsKICAgICAgICAgICAgcmV0dXJuIHJlcy5zdGF0dXMoNDA0KS5qc29uKHsgc3VjY2VzczogZmFsc2UsIG1lc3NhZ2U6ICdPcmRlciBub3QgZm91bmQnIH0pOwogICAgICAgIH0KCiAgICAgICAgY29uc3Qgb3JkZXJEYXRhID0gY3VycmVudE9yZGVyWzBdOwogICAgICAgIAogICAgICAgIC8vIOKtkCBORVc6IENoZWNrIGFzc2lnbm1lbnQgcGVybWlzc2lvbnMKICAgICAgICBpZiAob3JkZXJEYXRhLmFzc2lnbmVkX3RvX3VzZXJfaWQgJiYgcmVxLnVzZXIucm9sZSAhPT0gJ2FkbWluJykgewogICAgICAgICAgICAvLyBJZiBvcmRlciBpcyBhc3NpZ25lZCwgb25seSB0aGUgYXNzaWduZWQgdXNlciBjYW4gZWRpdCBpdAogICAgICAgICAgICBpZiAob3JkZXJEYXRhLmFzc2lnbmVkX3RvX3VzZXJfaWQgIT09IHJlcS51c2VyLmlkKSB7CiAgICAgICAgICAgICAgICBhd2FpdCBjb25uZWN0aW9uLnJvbGxiYWNrKCk7CiAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgIC8vIEdldCBhc3NpZ25lZCB1c2VyIG5hbWUKICAgICAgICAgICAgICAgIGNvbnN0IFthc3NpZ25lZFVzZXJdID0gYXdhaXQgY29ubmVjdGlvbi5xdWVyeSgKICAgICAgICAgICAgICAgICAgICAnU0VMRUNUIG5hbWUgRlJPTSB1c2VycyBXSEVSRSBpZCA9ID8nLAogICAgICAgICAgICAgICAgICAgIFtvcmRlckRhdGEuYXNzaWduZWRfdG9fdXNlcl9pZF0KICAgICAgICAgICAgICAgICk7CiAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgIHJldHVybiByZXMuc3RhdHVzKDQwMykuanNvbih7IAogICAgICAgICAgICAgICAgICAgIHN1Y2Nlc3M6IGZhbHNlLCAKICAgICAgICAgICAgICAgICAgICBtZXNzYWdlOiBgVGhpcyBvcmRlciBpcyBjdXJyZW50bHkgYmVpbmcgcHJvY2Vzc2VkIGJ5ICR7YXNzaWduZWRVc2VyWzBdPy5uYW1lIHx8ICdhbm90aGVyIHVzZXInfS4gT25seSB0aGV5IG9yIGFuIGFkbWluIGNhbiBlZGl0IGl0LmAsCiAgICAgICAgICAgICAgICAgICAgYXNzaWduZWRfdG86IGFzc2lnbmVkVXNlclswXT8ubmFtZQogICAgICAgICAgICAgICAgfSk7CiAgICAgICAgICAgIH0KICAgICAgICB9CiAgICAgICAgCiAgICAgICAgLy8g4q2QIE5FVzogQXV0by1jbGFpbSBvcmRlciBvbiBmaXJzdCBlZGl0IGlmIG5vdCBhc3NpZ25lZAogICAgICAgIGlmICghb3JkZXJEYXRhLmFzc2lnbmVkX3RvX3VzZXJfaWQgJiYgWydhZG1pbicsICdwcm9jdXJlbWVudCddLmluY2x1ZGVzKHJlcS51c2VyLnJvbGUpKSB7CiAgICAgICAgICAgIGNvbnN0IG5vdyA9IG5ldyBEYXRlKCk7CiAgICAgICAgICAgIGF3YWl0IGNvbm5lY3Rpb24ucXVlcnkoCiAgICAgICAgICAgICAgICBgVVBEQVRFIG9yZGVycyAKICAgICAgICAgICAgICAgICBTRVQgYXNzaWduZWRfdG9fdXNlcl9pZCA9ID8sIGFzc2lnbmVkX2F0ID0gPywgbGFzdF9hY3Rpdml0eV9hdCA9ID8KICAgICAgICAgICAgICAgICBXSEVSRSBpZCA9ID9gLAogICAgICAgICAgICAgICAgW3JlcS51c2VyLmlkLCBub3csIG5vdywgaWRdCiAgICAgICAgICAgICk7CiAgICAgICAgICAgIAogICAgICAgICAgICAvLyBMb2cgdGhlIGF1dG8tY2xhaW0KICAgICAgICAgICAgYXdhaXQgY29ubmVjdGlvbi5xdWVyeSgKICAgICAgICAgICAgICAgIGBJTlNFUlQgSU5UTyBvcmRlcl9hc3NpZ25tZW50X2hpc3RvcnkgCiAgICAgICAgICAgICAgICAgKG9yZGVyX2lkLCBhc3NpZ25lZF90b191c2VyX2lkLCBhc3NpZ25lZF9ieV91c2VyX2lkLCBhc3NpZ25tZW50X3R5cGUsIHJlYXNvbikKICAgICAgICAgICAgICAgICBWQUxVRVMgKD8sID8sID8sICdjbGFpbScsICdBdXRvLWNsYWltZWQgb24gZmlyc3QgZWRpdCcpYCwKICAgICAgICAgICAgICAgIFtpZCwgcmVxLnVzZXIuaWQsIHJlcS51c2VyLmlkXQogICAgICAgICAgICApOwogICAgICAgIH0KCiAgICAgICAgLy8gQWxsb3dlZCB1cGRhdGFibGUgZmllbGRzCiAgICAgICAgY29uc3QgYWxsb3dlZEZpZWxkcyA9IFsKICAgICAgICAgICAgJ3N0YXR1cycsICdzdXBwbGllcicsICdzdXBwbGllcl9pZCcsICdxdW90ZV9pZCcsICdwcmljZScsCiAgICAgICAgICAgICd1bml0X3ByaWNlJywgJ3RvdGFsX3ByaWNlJywgJ2Fzc2lnbmVkX3RvJywgJ3ByaW9yaXR5JywKICAgICAgICAgICAgJ2V4cGVjdGVkX2RlbGl2ZXJ5X2RhdGUnLCAnbm90ZXMnLCAncGFydF9udW1iZXInLCAnY2F0ZWdvcnknLAogICAgICAgICAgICAnY29zdF9jZW50ZXJfaWQnLAogICAgICAgICAgICAnc3VwcGxpZXJfbm90ZXMnLCAnYWx0ZXJuYXRpdmVfcHJvZHVjdF9uYW1lJywgJ2FsdGVybmF0aXZlX3Byb2R1Y3RfZGVzY3JpcHRpb24nCiAgICAgICAgXTsKCiAgICAgICAgY29uc3QgdXBkYXRlRmllbGRzID0gW107CiAgICAgICAgY29uc3QgdXBkYXRlVmFsdWVzID0gW107CgogICAgICAgIGZvciAoY29uc3Qga2V5IG9mIE9iamVjdC5rZXlzKHVwZGF0ZXMpKSB7CiAgICAgICAgICAgIGlmIChhbGxvd2VkRmllbGRzLmluY2x1ZGVzKGtleSkpIHsKICAgICAgICAgICAgICAgIHVwZGF0ZUZpZWxkcy5wdXNoKGAke2tleX0gPSA/YCk7CiAgICAgICAgICAgICAgICB1cGRhdGVWYWx1ZXMucHVzaCh1cGRhdGVzW2tleV0pOwogICAgICAgICAgICB9CiAgICAgICAgfQoKICAgICAgICBpZiAodXBkYXRlRmllbGRzLmxlbmd0aCA+IDApIHsKICAgICAgICAgICAgdXBkYXRlVmFsdWVzLnB1c2goaWQpOwoKICAgICAgICAgICAgYXdhaXQgY29ubmVjdGlvbi5xdWVyeSgKICAgICAgICAgICAgICAgIGBVUERBVEUgb3JkZXJzIFNFVCAke3VwZGF0ZUZpZWxkcy5qb2luKCcsICcpfSBXSEVSRSBpZCA9ID9gLAogICAgICAgICAgICAgICAgdXBkYXRlVmFsdWVzCiAgICAgICAgICAgICk7CgogICAgICAgICAgICAvLyBMb2cgaGlzdG9yeSBmb3IgZWFjaCBjaGFuZ2VkIGZpZWxkCiAgICAgICAgICAgIGZvciAoY29uc3Qga2V5IG9mIE9iamVjdC5rZXlzKHVwZGF0ZXMpKSB7CiAgICAgICAgICAgICAgICBpZiAoYWxsb3dlZEZpZWxkcy5pbmNsdWRlcyhrZXkpICYmIFN0cmluZyhvcmRlckRhdGFba2V5XSkgIT09IFN0cmluZyh1cGRhdGVzW2tleV0pKSB7CiAgICAgICAgICAgICAgICAgICAgYXdhaXQgY29ubmVjdGlvbi5xdWVyeSgKICAgICAgICAgICAgICAgICAgICAgICAgYElOU0VSVCBJTlRPIG9yZGVyX2hpc3RvcnkKICAgICAgICAgICAgICAgICAgICAgICAgKG9yZGVyX2lkLCBjaGFuZ2VkX2J5LCBmaWVsZF9uYW1lLCBvbGRfdmFsdWUsIG5ld192YWx1ZSkKICAgICAgICAgICAgICAgICAgICAgICAgVkFMVUVTICg/LCA/LCA/LCA/LCA/KWAsCiAgICAgICAgICAgICAgICAgICAgICAgIFtpZCwgcmVxLnVzZXIudXNlcm5hbWUsIGtleSwKICAgICAgICAgICAgICAgICAgICAgICAgIFN0cmluZyhvcmRlckRhdGFba2V5XSB8fCAnJyksIFN0cmluZyh1cGRhdGVzW2tleV0gfHwgJycpXQogICAgICAgICAgICAgICAgICAgICk7CiAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgIH0KICAgICAgICB9CgogICAgICAgIGF3YWl0IGNvbm5lY3Rpb24uY29tbWl0KCk7CgogICAgICAgIC8vIFNlbmQgZW1haWwgaWYgc3RhdHVzIGNoYW5nZWQKICAgICAgICBpZiAodXBkYXRlcy5zdGF0dXMgJiYgdXBkYXRlcy5zdGF0dXMgIT09IG9yZGVyRGF0YS5zdGF0dXMpIHsKICAgICAgICAgICAgZW1haWxTZXJ2aWNlLnNlbmRTdGF0dXNVcGRhdGVOb3RpZmljYXRpb24oewogICAgICAgICAgICAgICAgb3JkZXJJZDogaWQsCiAgICAgICAgICAgICAgICByZXF1ZXN0ZXJFbWFpbDogb3JkZXJEYXRhLnJlcXVlc3Rlcl9lbWFpbCwKICAgICAgICAgICAgICAgIHJlcXVlc3Rlck5hbWU6IG9yZGVyRGF0YS5yZXF1ZXN0ZXJfbmFtZSwKICAgICAgICAgICAgICAgIG9sZFN0YXR1czogb3JkZXJEYXRhLnN0YXR1cywKICAgICAgICAgICAgICAgIG5ld1N0YXR1czogdXBkYXRlcy5zdGF0dXMsCiAgICAgICAgICAgICAgICBidWlsZGluZzogb3JkZXJEYXRhLmJ1aWxkaW5nLAogICAgICAgICAgICAgICAgaXRlbURlc2NyaXB0aW9uOiBvcmRlckRhdGEuaXRlbV9kZXNjcmlwdGlvbgogICAgICAgICAgICB9KS5jYXRjaChlcnIgPT4gY29uc29sZS5lcnJvcignU3RhdHVzIHVwZGF0ZSBlbWFpbCBmYWlsZWQ6JywgZXJyLm1lc3NhZ2UpKTsKICAgICAgICB9CgogICAgICAgIHJlcy5qc29uKHsgc3VjY2VzczogdHJ1ZSwgbWVzc2FnZTogJ09yZGVyIHVwZGF0ZWQgc3VjY2Vzc2Z1bGx5JyB9KTsKICAgIH0gY2F0Y2ggKGVycm9yKSB7CiAgICAgICAgYXdhaXQgY29ubmVjdGlvbi5yb2xsYmFjaygpOwogICAgICAgIGNvbnNvbGUuZXJyb3IoJ1VwZGF0ZSBvcmRlciBlcnJvcjonLCBlcnJvcik7CiAgICAgICAgcmVzLnN0YXR1cyg1MDApLmpzb24oeyBzdWNjZXNzOiBmYWxzZSwgbWVzc2FnZTogJ0ZhaWxlZCB0byB1cGRhdGUgb3JkZXInIH0pOwogICAgfSBmaW5hbGx5IHsKICAgICAgICBjb25uZWN0aW9uLnJlbGVhc2UoKTsKICAgIH0KfTsKCmV4cG9ydHMuZGVsZXRlT3JkZXIgPSBhc3luYyAocmVxLCByZXMpID0+IHsKICAgIGNvbnN0IGNvbm5lY3Rpb24gPSBhd2FpdCBkYi5nZXRDb25uZWN0aW9uKCk7CgogICAgdHJ5IHsKICAgICAgICBhd2FpdCBjb25uZWN0aW9uLmJlZ2luVHJhbnNhY3Rpb24oKTsKCiAgICAgICAgY29uc3QgeyBpZCB9ID0gcmVxLnBhcmFtczsKCiAgICAgICAgY29uc3QgW29yZGVyc10gPSBhd2FpdCBjb25uZWN0aW9uLnF1ZXJ5KAogICAgICAgICAgICAnU0VMRUNUICogRlJPTSBvcmRlcnMgV0hFUkUgaWQgPSA/JywgW2lkXQogICAgICAgICk7CgogICAgICAgIGlmIChvcmRlcnMubGVuZ3RoID09PSAwKSB7CiAgICAgICAgICAgIGF3YWl0IGNvbm5lY3Rpb24ucm9sbGJhY2soKTsKICAgICAgICAgICAgcmV0dXJuIHJlcy5zdGF0dXMoNDA0KS5qc29uKHsgc3VjY2VzczogZmFsc2UsIG1lc3NhZ2U6ICdPcmRlciBub3QgZm91bmQnIH0pOwogICAgICAgIH0KCiAgICAgICAgLy8gRGVsZXRlIGZpbGVzIGZyb20gZmlsZXN5c3RlbQogICAgICAgIGNvbnN0IFtmaWxlc10gPSBhd2FpdCBjb25uZWN0aW9uLnF1ZXJ5KAogICAgICAgICAgICAnU0VMRUNUIGZpbGVfcGF0aCBGUk9NIG9yZGVyX2ZpbGVzIFdIRVJFIG9yZGVyX2lkID0gPycsIFtpZF0KICAgICAgICApOwoKICAgICAgICBjb25zdCBmcyA9IHJlcXVpcmUoJ2ZzJyk7CiAgICAgICAgY29uc3QgcGF0aCA9IHJlcXVpcmUoJ3BhdGgnKTsKICAgICAgICBjb25zdCB1cGxvYWREaXIgPSBwcm9jZXNzLmVudi5VUExPQURfRElSCiAgICAgICAgICAgID8gcmVxdWlyZSgncGF0aCcpLnJlc29sdmUocHJvY2Vzcy5lbnYuVVBMT0FEX0RJUikKICAgICAgICAgICAgOiByZXF1aXJlKCdwYXRoJykuam9pbihfX2Rpcm5hbWUsICcuLicsICd1cGxvYWRzJyk7CiAgICAgICAgZmlsZXMuZm9yRWFjaChmaWxlID0+IHsKICAgICAgICAgICAgLy8gZmlsZV9wYXRoIG5vdyBzdG9yZXMganVzdCB0aGUgZmlsZW5hbWUgKGUuZy4gImFiYzEyMy0xMjM0NTY3ODkwLnBkZiIpCiAgICAgICAgICAgIC8vIFJlY29uc3RydWN0IGFic29sdXRlIHBhdGggZm9yIGRlbGV0aW9uCiAgICAgICAgICAgIGNvbnN0IGFic1BhdGggPSBmaWxlLmZpbGVfcGF0aC5zdGFydHNXaXRoKCcvJykKICAgICAgICAgICAgICAgID8gZmlsZS5maWxlX3BhdGggIC8vIGxlZ2FjeSBhYnNvbHV0ZSBwYXRoIHN0b3JlZCBiZWZvcmUgZml4CiAgICAgICAgICAgICAgICA6IHJlcXVpcmUoJ3BhdGgnKS5qb2luKHVwbG9hZERpciwgZmlsZS5maWxlX3BhdGgpOwogICAgICAgICAgICBpZiAoZnMuZXhpc3RzU3luYyhhYnNQYXRoKSkgewogICAgICAgICAgICAgICAgZnMudW5saW5rU3luYyhhYnNQYXRoKTsKICAgICAgICAgICAgfQogICAgICAgIH0pOwoKICAgICAgICBhd2FpdCBjb25uZWN0aW9uLnF1ZXJ5KCdERUxFVEUgRlJPTSBvcmRlcnMgV0hFUkUgaWQgPSA/JywgW2lkXSk7CiAgICAgICAgYXdhaXQgY29ubmVjdGlvbi5jb21taXQoKTsKCiAgICAgICAgcmVzLmpzb24oeyBzdWNjZXNzOiB0cnVlLCBtZXNzYWdlOiAnT3JkZXIgZGVsZXRlZCBzdWNjZXNzZnVsbHknIH0pOwogICAgfSBjYXRjaCAoZXJyb3IpIHsKICAgICAgICBhd2FpdCBjb25uZWN0aW9uLnJvbGxiYWNrKCk7CiAgICAgICAgY29uc29sZS5lcnJvcignRGVsZXRlIG9yZGVyIGVycm9yOicsIGVycm9yKTsKICAgICAgICByZXMuc3RhdHVzKDUwMCkuanNvbih7IHN1Y2Nlc3M6IGZhbHNlLCBtZXNzYWdlOiAnRmFpbGVkIHRvIGRlbGV0ZSBvcmRlcicgfSk7CiAgICB9IGZpbmFsbHkgewogICAgICAgIGNvbm5lY3Rpb24ucmVsZWFzZSgpOwogICAgfQp9OwoKZXhwb3J0cy5nZXRPcmRlclN0YXRzID0gYXN5bmMgKHJlcSwgcmVzKSA9PiB7CiAgICB0cnkgewogICAgICAgIGNvbnN0IFtzdGF0dXNDb3VudHNdID0gYXdhaXQgZGIucXVlcnkoCiAgICAgICAgICAgICdTRUxFQ1Qgc3RhdHVzLCBDT1VOVCgqKSBhcyBjb3VudCBGUk9NIG9yZGVycyBHUk9VUCBCWSBzdGF0dXMnCiAgICAgICAgKTsKCiAgICAgICAgY29uc3QgW2J1aWxkaW5nQ291bnRzXSA9IGF3YWl0IGRiLnF1ZXJ5KAogICAgICAgICAgICAnU0VMRUNUIGJ1aWxkaW5nLCBDT1VOVCgqKSBhcyBjb3VudCBGUk9NIG9yZGVycyBHUk9VUCBCWSBidWlsZGluZycKICAgICAgICApOwoKICAgICAgICBjb25zdCBbdG90YWxWYWx1ZV0gPSBhd2FpdCBkYi5xdWVyeSgKICAgICAgICAgICAgYFNFTEVDVCBTVU0odG90YWxfcHJpY2UpIGFzIHRvdGFsIEZST00gb3JkZXJzIFdIRVJFIHN0YXR1cyBOT1QgSU4gKCdDYW5jZWxsZWQnKWAKICAgICAgICApOwoKICAgICAgICBjb25zdCBbcHJpb3JpdHlDb3VudHNdID0gYXdhaXQgZGIucXVlcnkoCiAgICAgICAgICAgICdTRUxFQ1QgcHJpb3JpdHksIENPVU5UKCopIGFzIGNvdW50IEZST00gb3JkZXJzIEdST1VQIEJZIHByaW9yaXR5JwogICAgICAgICk7CgogICAgICAgIGNvbnN0IFtyZWNlbnRPcmRlcnNdID0gYXdhaXQgZGIucXVlcnkoYAogICAgICAgICAgICBTRUxFQ1QgaWQsIGJ1aWxkaW5nLCBpdGVtX2Rlc2NyaXB0aW9uLCBzdGF0dXMsIHByaW9yaXR5LCBzdWJtaXNzaW9uX2RhdGUKICAgICAgICAgICAgRlJPTSBvcmRlcnMgT1JERVIgQlkgc3VibWlzc2lvbl9kYXRlIERFU0MgTElNSVQgMTAKICAgICAgICBgKTsKICAgICAgICAKICAgICAgICAvLyDirZAgTkVXOiBBc3NpZ25tZW50IHN0YXRpc3RpY3MKICAgICAgICBjb25zdCBbYXNzaWdubWVudFN0YXRzXSA9IGF3YWl0IGRiLnF1ZXJ5KGAKICAgICAgICAgICAgU0VMRUNUIAogICAgICAgICAgICAgICAgQ09VTlQoQ0FTRSBXSEVOIGFzc2lnbmVkX3RvX3VzZXJfaWQgSVMgTk9UIE5VTEwgVEhFTiAxIEVORCkgYXMgYXNzaWduZWRfY291bnQsCiAgICAgICAgICAgICAgICBDT1VOVChDQVNFIFdIRU4gYXNzaWduZWRfdG9fdXNlcl9pZCBJUyBOVUxMIFRIRU4gMSBFTkQpIGFzIHVuYXNzaWduZWRfY291bnQsCiAgICAgICAgICAgICAgICBDT1VOVChDQVNFIFdIRU4gYXNzaWduZWRfdG9fdXNlcl9pZCBJUyBOT1QgTlVMTCBBTkQgCiAgICAgICAgICAgICAgICAgICAgICBUSU1FU1RBTVBESUZGKE1JTlVURSwgbGFzdF9hY3Rpdml0eV9hdCwgTk9XKCkpID4gMzAgVEhFTiAxIEVORCkgYXMgc3RhbGVfY291bnQKICAgICAgICAgICAgRlJPTSBvcmRlcnMKICAgICAgICAgICAgV0hFUkUgc3RhdHVzIElOICgnTmV3JywgJ1BlbmRpbmcnLCAnUXVvdGUgUmVxdWVzdGVkJywgJ1F1b3RlIFJlY2VpdmVkJykKICAgICAgICBgKTsKCiAgICAgICAgcmVzLmpzb24oewogICAgICAgICAgICBzdWNjZXNzOiB0cnVlLAogICAgICAgICAgICBzdGF0czogewogICAgICAgICAgICAgICAgYnlTdGF0dXM6IHN0YXR1c0NvdW50cywKICAgICAgICAgICAgICAgIGJ5QnVpbGRpbmc6IGJ1aWxkaW5nQ291bnRzLAogICAgICAgICAgICAgICAgYnlQcmlvcml0eTogcHJpb3JpdHlDb3VudHMsCiAgICAgICAgICAgICAgICB0b3RhbFZhbHVlOiB0b3RhbFZhbHVlWzBdLnRvdGFsIHx8IDAsCiAgICAgICAgICAgICAgICByZWNlbnRPcmRlcnMsCiAgICAgICAgICAgICAgICBhc3NpZ25tZW50czogYXNzaWdubWVudFN0YXRzWzBdIHx8IHt9CiAgICAgICAgICAgIH0KICAgICAgICB9KTsKICAgIH0gY2F0Y2ggKGVycm9yKSB7CiAgICAgICAgY29uc29sZS5lcnJvcignR2V0IHN0YXRzIGVycm9yOicsIGVycm9yKTsKICAgICAgICByZXMuc3RhdHVzKDUwMCkuanNvbih7IHN1Y2Nlc3M6IGZhbHNlLCBtZXNzYWdlOiAnRmFpbGVkIHRvIHJldHJpZXZlIHN0YXRpc3RpY3MnIH0pOwogICAgfQp9Owo=
+// backend/controllers/orderController.js
+const db = require('../config/database');
+const emailService = require('../utils/emailService');
+
+exports.createOrder = async (req, res) => {
+    const connection = await db.getConnection();
+
+    try {
+        await connection.beginTransaction();
+
+        const {
+            building, itemDescription, partNumber, category,
+            quantity, dateNeeded, priority, notes,
+            requester, requesterEmail, costCenterId
+        } = req.body;
+
+        const [result] = await connection.query(
+            `INSERT INTO orders (
+                building, cost_center_id, item_description, part_number, category,
+                quantity, date_needed, priority, notes,
+                requester_id, requester_name, requester_email, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'New')`,
+            [building, costCenterId || null, itemDescription, partNumber || null, category || null,
+             quantity, dateNeeded, priority || 'Normal', notes,
+             req.user.id, requester, requesterEmail]
+        );
+
+        const orderId = result.insertId;
+
+        // Handle file uploads
+        if (req.files && req.files.length > 0) {
+            const fileInserts = req.files.map(file => [
+                orderId, file.originalname, file.filename, file.mimetype, file.size
+            ]);
+
+            await connection.query(
+                `INSERT INTO order_files
+                (order_id, file_name, file_path, file_type, file_size)
+                VALUES ?`,
+                [fileInserts]
+            );
+        }
+
+        // Get cost center code for email
+        let costCenterCode = null;
+        if (costCenterId) {
+            const [cc] = await connection.query(
+                'SELECT code FROM cost_centers WHERE id = ?',
+                [costCenterId]
+            );
+            if (cc.length > 0) costCenterCode = cc[0].code;
+        }
+
+        await connection.commit();
+
+        // Send email notification to admin/procurement (non-blocking)
+        emailService.sendNewOrderNotification({
+            orderId,
+            building,
+            itemDescription,
+            quantity,
+            requester,
+            dateNeeded,
+            priority: priority || 'Normal',
+            costCenterCode
+        }).catch(err => console.error('New order email failed:', err.message));
+
+        res.status(201).json({
+            success: true,
+            message: 'Order created successfully',
+            orderId
+        });
+    } catch (error) {
+        await connection.rollback();
+        console.error('Create order error:', error);
+        res.status(500).json({ success: false, message: 'Failed to create order' });
+    } finally {
+        connection.release();
+    }
+};
+
+exports.getOrders = async (req, res) => {
+    try {
+        const { status, building, priority, supplier_id, search, assigned_filter } = req.query;
+
+        let query = `
+            SELECT o.*,
+                   s.name as supplier_name,
+                   q.quote_number,
+                   cc.code as cost_center_code,
+                   cc.name as cost_center_name,
+                   u_assigned.name as assigned_to_name,
+                   u_assigned.username as assigned_to_username,
+                   TIMESTAMPDIFF(MINUTE, o.last_activity_at, NOW()) as minutes_since_activity,
+                   GROUP_CONCAT(
+                       DISTINCT JSON_OBJECT(
+                           'id', f.id,
+                           'name', f.file_name,
+                           'path', CONCAT('/uploads/', f.file_path),
+                           'type', f.file_type,
+                           'size', f.file_size
+                       )
+                   ) as files
+            FROM orders o
+            LEFT JOIN order_files f ON o.id = f.order_id
+            LEFT JOIN suppliers s ON o.supplier_id = s.id
+            LEFT JOIN quotes q ON o.quote_ref = q.id
+            LEFT JOIN cost_centers cc ON o.cost_center_id = cc.id
+            LEFT JOIN users u_assigned ON o.assigned_to_user_id = u_assigned.id
+        `;
+
+        const conditions = [];
+        const params = [];
+
+        // Role-based filtering
+        if (req.user.role === 'requester') {
+            conditions.push('o.building = ?');
+            params.push(req.user.building);
+        }
+
+        // Filters
+        if (status) { conditions.push('o.status = ?'); params.push(status); }
+        if (building) { conditions.push('o.building = ?'); params.push(building); }
+        if (priority) { conditions.push('o.priority = ?'); params.push(priority); }
+        if (supplier_id) { conditions.push('o.supplier_id = ?'); params.push(supplier_id); }
+        
+        // ⭐ NEW: Assignment filter for procurement
+        if (assigned_filter === 'mine' && ['admin', 'procurement'].includes(req.user.role)) {
+            conditions.push('o.assigned_to_user_id = ?');
+            params.push(req.user.id);
+        } else if (assigned_filter === 'unassigned') {
+            conditions.push('o.assigned_to_user_id IS NULL');
+        }
+        
+        if (search) {
+            const s = `%${search.trim()}%`;
+            const idMatch = parseInt(search.trim(), 10);
+            const idClause = !isNaN(idMatch) ? ' OR o.id = ?' : '';
+            const idParam = !isNaN(idMatch) ? [idMatch] : [];
+
+            conditions.push(`(
+                o.item_description LIKE ?
+                OR o.part_number LIKE ?
+                OR o.requester_name LIKE ?
+                OR o.notes LIKE ?
+                OR o.category LIKE ?
+                OR o.status LIKE ?
+                OR o.building LIKE ?
+                OR s.name LIKE ?
+                OR cc.code LIKE ?
+                OR cc.name LIKE ?
+                OR CAST(o.id AS CHAR) LIKE ?
+                OR EXISTS (SELECT 1 FROM order_files f2 WHERE f2.order_id = o.id AND f2.file_name LIKE ?)
+                ${idClause}
+            )`);
+            params.push(s, s, s, s, s, s, s, s, s, s, s, s, ...idParam);
+        }
+
+        if (conditions.length > 0) {
+            query += ' WHERE ' + conditions.join(' AND ');
+        }
+
+        query += ' GROUP BY o.id ORDER BY o.submission_date DESC';
+
+        const [orders] = await db.query(query, params);
+
+        // Parse files JSON
+        orders.forEach(order => {
+            if (order.files && order.files !== 'null') {
+                try {
+                    order.files = JSON.parse(`[${order.files}]`);
+                    order.files = order.files.filter(f => f.id !== null);
+                } catch { order.files = []; }
+            } else {
+                order.files = [];
+            }
+        });
+
+        res.json({ success: true, orders });
+    } catch (error) {
+        console.error('Get orders error:', error);
+        res.status(500).json({ success: false, message: 'Failed to retrieve orders' });
+    }
+};
+
+exports.getOrderById = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const [orders] = await db.query(`
+            SELECT o.*,
+                   s.name as supplier_name, s.email as supplier_email,
+                   s.contact_person as supplier_contact,
+                   q.quote_number, q.status as quote_status,
+                   cc.code as cost_center_code, cc.name as cost_center_name,
+                   u_assigned.id as assigned_to_id,
+                   u_assigned.name as assigned_to_name,
+                   u_assigned.username as assigned_to_username,
+                   u_assigned.email as assigned_to_email,
+                   TIMESTAMPDIFF(MINUTE, o.last_activity_at, NOW()) as minutes_since_activity
+            FROM orders o
+            LEFT JOIN suppliers s ON o.supplier_id = s.id
+            LEFT JOIN quotes q ON o.quote_ref = q.id
+            LEFT JOIN cost_centers cc ON o.cost_center_id = cc.id
+            LEFT JOIN users u_assigned ON o.assigned_to_user_id = u_assigned.id
+            WHERE o.id = ?
+        `, [id]);
+
+        if (orders.length === 0) {
+            return res.status(404).json({ success: false, message: 'Order not found' });
+        }
+
+        const order = orders[0];
+
+        // Get files
+        const [files] = await db.query(
+            'SELECT id, file_name, file_path, file_type, file_size, uploaded_at FROM order_files WHERE order_id = ?',
+            [id]
+        );
+        order.files = files;
+
+        // Get history
+        const [history] = await db.query(
+            'SELECT * FROM order_history WHERE order_id = ? ORDER BY changed_at DESC',
+            [id]
+        );
+        order.history = history;
+        
+        // ⭐ NEW: Get assignment history
+        const [assignmentHistory] = await db.query(
+            `SELECT ah.*, 
+                    u_from.name as from_user_name,
+                    u_to.name as to_user_name,
+                    u_by.name as by_user_name
+             FROM order_assignment_history ah
+             LEFT JOIN users u_from ON ah.assigned_from_user_id = u_from.id
+             LEFT JOIN users u_to ON ah.assigned_to_user_id = u_to.id
+             LEFT JOIN users u_by ON ah.assigned_by_user_id = u_by.id
+             WHERE ah.order_id = ?
+             ORDER BY ah.created_at DESC
+             LIMIT 5`,
+            [id]
+        );
+        order.assignmentHistory = assignmentHistory;
+
+        res.json({ success: true, order });
+    } catch (error) {
+        console.error('Get order error:', error);
+        res.status(500).json({ success: false, message: 'Failed to retrieve order' });
+    }
+};
+
+exports.updateOrder = async (req, res) => {
+    const connection = await db.getConnection();
+
+    try {
+        await connection.beginTransaction();
+
+        const { id } = req.params;
+        const updates = req.body;
+
+        const [currentOrder] = await connection.query(
+            'SELECT * FROM orders WHERE id = ?', [id]
+        );
+
+        if (currentOrder.length === 0) {
+            await connection.rollback();
+            return res.status(404).json({ success: false, message: 'Order not found' });
+        }
+
+        const orderData = currentOrder[0];
+        
+        // ⭐ NEW: Check assignment permissions
+        if (orderData.assigned_to_user_id && req.user.role !== 'admin') {
+            // If order is assigned, only the assigned user can edit it
+            if (orderData.assigned_to_user_id !== req.user.id) {
+                await connection.rollback();
+                
+                // Get assigned user name
+                const [assignedUser] = await connection.query(
+                    'SELECT name FROM users WHERE id = ?',
+                    [orderData.assigned_to_user_id]
+                );
+                
+                return res.status(403).json({ 
+                    success: false, 
+                    message: `This order is currently being processed by ${assignedUser[0]?.name || 'another user'}. Only they or an admin can edit it.`,
+                    assigned_to: assignedUser[0]?.name
+                });
+            }
+        }
+        
+        // ⭐ NEW: Auto-claim order on first edit if not assigned
+        if (!orderData.assigned_to_user_id && ['admin', 'procurement'].includes(req.user.role)) {
+            const now = new Date();
+            await connection.query(
+                `UPDATE orders 
+                 SET assigned_to_user_id = ?, assigned_at = ?, last_activity_at = ?
+                 WHERE id = ?`,
+                [req.user.id, now, now, id]
+            );
+            
+            // Log the auto-claim
+            await connection.query(
+                `INSERT INTO order_assignment_history 
+                 (order_id, assigned_to_user_id, assigned_by_user_id, assignment_type, reason)
+                 VALUES (?, ?, ?, 'claim', 'Auto-claimed on first edit')`,
+                [id, req.user.id, req.user.id]
+            );
+        }
+
+        // Allowed updatable fields
+        const allowedFields = [
+            'status', 'supplier', 'supplier_id', 'quote_id', 'price',
+            'unit_price', 'total_price', 'assigned_to', 'priority',
+            'expected_delivery_date', 'notes', 'part_number', 'category',
+            'cost_center_id',
+            'supplier_notes', 'alternative_product_name', 'alternative_product_description'
+        ];
+
+        const updateFields = [];
+        const updateValues = [];
+
+        for (const key of Object.keys(updates)) {
+            if (allowedFields.includes(key)) {
+                updateFields.push(`${key} = ?`);
+                updateValues.push(updates[key]);
+            }
+        }
+
+        if (updateFields.length > 0) {
+            updateValues.push(id);
+
+            await connection.query(
+                `UPDATE orders SET ${updateFields.join(', ')} WHERE id = ?`,
+                updateValues
+            );
+
+            // Log history for each changed field
+            for (const key of Object.keys(updates)) {
+                if (allowedFields.includes(key) && String(orderData[key]) !== String(updates[key])) {
+                    await connection.query(
+                        `INSERT INTO order_history
+                        (order_id, changed_by, field_name, old_value, new_value)
+                        VALUES (?, ?, ?, ?, ?)`,
+                        [id, req.user.username, key,
+                         String(orderData[key] || ''), String(updates[key] || '')]
+                    );
+                }
+            }
+        }
+
+        await connection.commit();
+
+        // Send email if status changed
+        if (updates.status && updates.status !== orderData.status) {
+            emailService.sendStatusUpdateNotification({
+                orderId: id,
+                requesterEmail: orderData.requester_email,
+                requesterName: orderData.requester_name,
+                oldStatus: orderData.status,
+                newStatus: updates.status,
+                building: orderData.building,
+                itemDescription: orderData.item_description
+            }).catch(err => console.error('Status update email failed:', err.message));
+        }
+
+        res.json({ success: true, message: 'Order updated successfully' });
+    } catch (error) {
+        await connection.rollback();
+        console.error('Update order error:', error);
+        res.status(500).json({ success: false, message: 'Failed to update order' });
+    } finally {
+        connection.release();
+    }
+};
+
+exports.deleteOrder = async (req, res) => {
+    const connection = await db.getConnection();
+
+    try {
+        await connection.beginTransaction();
+
+        const { id } = req.params;
+
+        const [orders] = await connection.query(
+            'SELECT * FROM orders WHERE id = ?', [id]
+        );
+
+        if (orders.length === 0) {
+            await connection.rollback();
+            return res.status(404).json({ success: false, message: 'Order not found' });
+        }
+
+        // Delete files from filesystem
+        const [files] = await connection.query(
+            'SELECT file_path FROM order_files WHERE order_id = ?', [id]
+        );
+
+        const fs = require('fs');
+        const path = require('path');
+        const uploadDir = process.env.UPLOAD_DIR
+            ? require('path').resolve(process.env.UPLOAD_DIR)
+            : require('path').join(__dirname, '..', 'uploads');
+        files.forEach(file => {
+            // file_path now stores just the filename (e.g. "abc123-1234567890.pdf")
+            // Reconstruct absolute path for deletion
+            const absPath = file.file_path.startsWith('/')
+                ? file.file_path  // legacy absolute path stored before fix
+                : require('path').join(uploadDir, file.file_path);
+            if (fs.existsSync(absPath)) {
+                fs.unlinkSync(absPath);
+            }
+        });
+
+        await connection.query('DELETE FROM orders WHERE id = ?', [id]);
+        await connection.commit();
+
+        res.json({ success: true, message: 'Order deleted successfully' });
+    } catch (error) {
+        await connection.rollback();
+        console.error('Delete order error:', error);
+        res.status(500).json({ success: false, message: 'Failed to delete order' });
+    } finally {
+        connection.release();
+    }
+};
+
+exports.getOrderStats = async (req, res) => {
+    try {
+        const [statusCounts] = await db.query(
+            'SELECT status, COUNT(*) as count FROM orders GROUP BY status'
+        );
+
+        const [buildingCounts] = await db.query(
+            'SELECT building, COUNT(*) as count FROM orders GROUP BY building'
+        );
+
+        const [totalValue] = await db.query(
+            `SELECT SUM(total_price) as total FROM orders WHERE status NOT IN ('Cancelled')`
+        );
+
+        const [priorityCounts] = await db.query(
+            'SELECT priority, COUNT(*) as count FROM orders GROUP BY priority'
+        );
+
+        const [recentOrders] = await db.query(`
+            SELECT id, building, item_description, status, priority, submission_date
+            FROM orders ORDER BY submission_date DESC LIMIT 10
+        `);
+        
+        // ⭐ NEW: Assignment statistics
+        const [assignmentStats] = await db.query(`
+            SELECT 
+                COUNT(CASE WHEN assigned_to_user_id IS NOT NULL THEN 1 END) as assigned_count,
+                COUNT(CASE WHEN assigned_to_user_id IS NULL THEN 1 END) as unassigned_count,
+                COUNT(CASE WHEN assigned_to_user_id IS NOT NULL AND 
+                      TIMESTAMPDIFF(MINUTE, last_activity_at, NOW()) > 30 THEN 1 END) as stale_count
+            FROM orders
+            WHERE status IN ('New', 'Pending', 'Quote Requested', 'Quote Received')
+        `);
+
+        res.json({
+            success: true,
+            stats: {
+                byStatus: statusCounts,
+                byBuilding: buildingCounts,
+                byPriority: priorityCounts,
+                totalValue: totalValue[0].total || 0,
+                recentOrders,
+                assignments: assignmentStats[0] || {}
+            }
+        });
+    } catch (error) {
+        console.error('Get stats error:', error);
+        res.status(500).json({ success: false, message: 'Failed to retrieve statistics' });
+    }
+};

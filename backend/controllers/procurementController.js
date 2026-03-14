@@ -608,33 +608,3 @@ exports.getQuoteLifecycle = async (req, res) => {
         res.status(500).json({ success: false, message: 'Failed to get quote lifecycle' });
     }
 };
-
-// ===== QUOTE PDF UPLOAD =====
-// POST /api/procurement/quotes/:quoteId/upload-pdf
-// Upload a supplier quote PDF without requiring order IDs
-// Uses multer - must be used with multer middleware in routes
-exports.uploadQuotePDF = async (req, res) => {
-    try {
-        const { quoteId } = req.params;
-        if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
-
-        const path = require('path');
-        const [result] = await db.query(`
-            INSERT INTO documents 
-            (order_id, document_type, file_path, file_name, file_size, mime_type, uploaded_by, description)
-            VALUES (NULL, 'quote_pdf', ?, ?, ?, ?, ?, ?)
-        `, [
-            req.file.path.replace(/\\/g, '/'),
-            req.file.originalname,
-            req.file.size,
-            req.file.mimetype,
-            req.user.id,
-            'Supplier Quote PDF — Quote #' + quoteId
-        ]);
-
-        res.json({ success: true, documentId: result.insertId, document: { id: result.insertId, file_name: req.file.originalname } });
-    } catch (err) {
-        console.error('uploadQuotePDF error:', err);
-        res.status(500).json({ success: false, message: 'Failed to upload PDF' });
-    }
-};

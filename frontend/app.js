@@ -15,7 +15,7 @@ let selectedOrderIds = new Set();
 let currentTab = 'ordersTab';
 let viewMode = 'flat'; // 'flat' or 'grouped'
 
-// ⭐ NEW: Pagination state
+// NEW: Pagination state
 let currentPage = 1;
 const ORDERS_PER_PAGE = 20;
 
@@ -142,7 +142,7 @@ const ORDER_STATUSES = [
     'Cancelled', 'On Hold'
 ];
 
-// ⭐ NEW: Priority order for sorting (Urgent first!)
+// NEW: Priority order for sorting (Urgent first!)
 const PRIORITY_ORDER = { 'Urgent': 1, 'High': 2, 'Normal': 3, 'Low': 4 };
 
 function fmtPrice(val) {
@@ -243,7 +243,7 @@ function setupEventListeners() {
     if (btnCancelUser) btnCancelUser.addEventListener('click', () => { userFormCard.hidden = true; });
     if (userForm) userForm.addEventListener('submit', handleSaveUser);
 
-    // ⭐ NEW: Procurement/Admin/Manager Create Order button
+    // NEW: Procurement/Admin/Manager Create Order button
     const btnProcurementCreateOrder = document.getElementById('btnProcurementCreateOrder');
     if (btnProcurementCreateOrder) {
         btnProcurementCreateOrder.addEventListener('click', openProcCreateOrderModal);
@@ -277,43 +277,30 @@ function clearFilters() {
 }
 
 function resetFiltersOnLogout() {
-    // Reset filter state
     filterState = { search: '', status: '', building: '', priority: '', supplier: '', delivery: '', quickFilter: '' };
-    
-    // Reset filter UI elements
     if (filterSearch) filterSearch.value = '';
     if (filterStatus) filterStatus.value = '';
     if (filterBuilding) filterBuilding.value = '';
     if (filterPriority) filterPriority.value = '';
     if (filterSupplier) filterSupplier.value = '';
     if (filterDelivery) filterDelivery.value = '';
-    
-    // Clear quick filter chips
     document.querySelectorAll('.quick-filter-chip').forEach(c => c.classList.remove('active'));
-    
-    // Reset view mode
     viewMode = 'flat';
     if (btnViewFlat) btnViewFlat.classList.add('active');
     if (btnViewGrouped) btnViewGrouped.classList.remove('active');
-    
-    // Reset pagination
     currentPage = 1;
 }
 
 // ===================== DELIVERY TIMELINE LOGIC =====================
 
-// ⭐ FIX: Delivered orders should never show "Late"
 function getDeliveryStatus(order) {
-    // If already delivered, no status needed
     if (order.status === 'Delivered') return 'delivered';
-    
     if (!order.expected_delivery_date) return 'none';
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const expected = new Date(order.expected_delivery_date);
     expected.setHours(0, 0, 0, 0);
     const diffDays = Math.ceil((expected - today) / (1000 * 60 * 60 * 24));
-
     if (diffDays < 0) return 'late';
     if (diffDays <= 7) return 'due7';
     if (diffDays <= 14) return 'due14';
@@ -322,38 +309,29 @@ function getDeliveryStatus(order) {
 
 function getDeliveryBadgeHtml(status) {
     const badges = {
-        'delivered': '<span class="delivery-badge delivery-ontrack">✓ Delivered</span>',
-        'late': '<span class="delivery-badge delivery-late">⚠ Late</span>',
-        'due7': '<span class="delivery-badge delivery-due7">🕒 Due 7d</span>',
-        'due14': '<span class="delivery-badge delivery-due14">📅 Due 14d</span>',
-        'ontrack': '<span class="delivery-badge delivery-ontrack">✓ On Track</span>',
+        'delivered': '<span class="delivery-badge delivery-ontrack">Delivered</span>',
+        'late': '<span class="delivery-badge delivery-late">Late</span>',
+        'due7': '<span class="delivery-badge delivery-due7">Due 7d</span>',
+        'due14': '<span class="delivery-badge delivery-due14">Due 14d</span>',
+        'ontrack': '<span class="delivery-badge delivery-ontrack">On Track</span>',
         'none': '-'
     };
     return badges[status] || '-';
 }
 
-// ⭐ NEW: Get delivered date from history
 function getDeliveredDate(order) {
     if (order.status !== 'Delivered') return null;
-    
-    // Try to find the delivered date from history
     if (order.history && order.history.length) {
         const deliveredHistory = order.history
             .filter(h => h.field_name === 'status' && h.new_value === 'Delivered')
             .sort((a, b) => new Date(b.changed_at) - new Date(a.changed_at));
-        
-        if (deliveredHistory.length > 0) {
-            return deliveredHistory[0].changed_at;
-        }
+        if (deliveredHistory.length > 0) return deliveredHistory[0].changed_at;
     }
-    
     return null;
 }
 
-// ⭐ NEW: Check if order is old delivered (delivered >7 days ago)
 function isOldDelivered(order) {
     if (order.status !== 'Delivered') return false;
-    
     const deliveredDate = getDeliveredDate(order);
     if (deliveredDate) {
         const delivered = new Date(deliveredDate);
@@ -361,15 +339,12 @@ function isOldDelivered(order) {
         const daysSince = Math.floor((today - delivered) / (1000 * 60 * 60 * 24));
         return daysSince > 7;
     }
-    
-    // Fallback: If no history, check created_at (conservative)
     if (order.created_at) {
         const createdDate = new Date(order.created_at);
         const today = new Date();
         const daysSince = Math.floor((today - createdDate) / (1000 * 60 * 60 * 24));
-        return daysSince > 14; // More conservative for created_at
+        return daysSince > 14;
     }
-    
     return false;
 }
 
@@ -377,15 +352,11 @@ function isOldDelivered(order) {
 
 function applyFilters() {
     filteredOrders = ordersState.filter(order => {
-        // Full-text search (across all fields)
         if (filterState.search) {
             const term = filterState.search.toLowerCase();
-
-            // Build file names string from files array
             const fileNames = (order.files || []).map(f => f.name || '').join(' ');
-
             const searchFields = [
-                String(order.id || ''),          // ORDER ID — e.g. "42"
+                String(order.id || ''),
                 order.item_description || '',
                 order.part_number || '',
                 order.category || '',
@@ -396,32 +367,19 @@ function applyFilters() {
                 order.supplier_name || '',
                 order.building || '',
                 order.status || '',
-                order.quote_number || '',         // Quote number e.g. QT-2026-12345
-                fileNames                         // File names of attachments
+                order.quote_number || '',
+                fileNames
             ].join(' ').toLowerCase();
-
             if (!searchFields.includes(term)) return false;
         }
-
-        // Status filter
         if (filterState.status && order.status !== filterState.status) return false;
-
-        // Building filter
         if (filterState.building && order.building !== filterState.building) return false;
-
-        // Priority filter
         if (filterState.priority && order.priority !== filterState.priority) return false;
-
-        // Supplier filter
         if (filterState.supplier && order.supplier_id !== parseInt(filterState.supplier, 10)) return false;
-
-        // Delivery timeline filter
         if (filterState.delivery) {
             const deliveryStatus = getDeliveryStatus(order);
             if (filterState.delivery !== deliveryStatus) return false;
         }
-
-        // Quick filters
         if (filterState.quickFilter) {
             const qf = filterState.quickFilter;
             if (qf === 'late' || qf === 'due7' || qf === 'due14') {
@@ -431,20 +389,13 @@ function applyFilters() {
             else if (qf === 'ordered' && order.status !== 'Ordered') return false;
             else if (qf === 'transit' && order.status !== 'In Transit') return false;
         }
-
         return true;
     });
 
-    // ⭐ NEW: Sort by priority (Urgent → High → Normal → Low)
     filteredOrders.sort((a, b) => {
         const priorityA = PRIORITY_ORDER[a.priority] || PRIORITY_ORDER['Normal'];
         const priorityB = PRIORITY_ORDER[b.priority] || PRIORITY_ORDER['Normal'];
-        
-        if (priorityA !== priorityB) {
-            return priorityA - priorityB; // Lower number = higher priority
-        }
-        
-        // Secondary sort by ID (newer orders first)
+        if (priorityA !== priorityB) return priorityA - priorityB;
         return b.id - a.id;
     });
 
@@ -495,10 +446,7 @@ function handleLogout() {
     localStorage.removeItem('authToken');
     authToken = null;
     currentUser = null;
-    
-    // Reset all filters and UI state
     resetFiltersOnLogout();
-    
     showLogin();
 }
 
@@ -513,7 +461,6 @@ function showDashboard() {
     dashboardScreen.classList.remove('hidden');
     userName.textContent = currentUser.name;
     
-    // ⭐ FIX: Proper role badge display including manager
     if (currentUser.role === 'admin') {
         userRoleBadge.textContent = 'Admin';
     } else if (currentUser.role === 'procurement') {
@@ -521,83 +468,47 @@ function showDashboard() {
     } else if (currentUser.role === 'manager') {
         userRoleBadge.textContent = 'Manager';
     } else {
-        userRoleBadge.textContent = `Requester · ${currentUser.building || ''}`;
+        userRoleBadge.textContent = `Requester - ${currentUser.building || ''}`;
     }
 
-    // Hide admin-only tabs by default
     if (usersTabButton) usersTabButton.hidden = true;
     if (buildingsTabButton) buildingsTabButton.hidden = true;
     if (costCentersTabButton) costCentersTabButton.hidden = true;
     if (approvalsTabButton) approvalsTabButton.hidden = true;
 
     if (currentUser.role === 'requester') {
-        // REQUESTER: Show order creation form, hide navigation tabs
         createOrderSection.classList.remove('hidden');
         requesterBuildingBadge.textContent = `Building ${currentUser.building}`;
         navTabs.classList.add('hidden');
-        
-        // HIDE ORDER ACTIONS CONTAINER FOR REQUESTERS (requester_patch)
         const orderActionsContainer = document.getElementById('orderActionsContainer');
-        if (orderActionsContainer) {
-            orderActionsContainer.style.display = 'none';
-        }
-        
-        // Hide the quote creation bar
-        if (orderActionsBar) {
-            orderActionsBar.style.display = 'none';
-        }
+        if (orderActionsContainer) orderActionsContainer.style.display = 'none';
+        if (orderActionsBar) orderActionsBar.style.display = 'none';
     } else if (currentUser.role === 'manager') {
-        // ⭐ MANAGER: Show navigation with approvals tab, read-only orders view
         createOrderSection.classList.add('hidden');
         navTabs.classList.remove('hidden');
         populateStatusFilter();
-        
-        // Show approvals tab for managers
         if (approvalsTabButton) approvalsTabButton.hidden = false;
-        
-        // Show order actions container (view toggle)
         const orderActionsContainer = document.getElementById('orderActionsContainer');
-        if (orderActionsContainer) {
-            orderActionsContainer.style.display = 'flex';
-        }
-        
-        // Hide quote creation for managers
-        if (orderActionsBar) {
-            orderActionsBar.style.display = 'none';
-        }
-
-        // ⭐ NEW: Show Create Order button for managers
+        if (orderActionsContainer) orderActionsContainer.style.display = 'flex';
+        if (orderActionsBar) orderActionsBar.style.display = 'none';
         const btnProcCreateMgr = document.getElementById('btnProcurementCreateOrder');
         if (btnProcCreateMgr) btnProcCreateMgr.classList.remove('hidden');
-        
-        // Initialize approvals if function exists
-        if (typeof loadApprovals === 'function') {
-            loadApprovals();
-        }
+        if (typeof loadApprovals === 'function') loadApprovals();
     } else {
-        // ADMIN / PROCUREMENT: Full access
         createOrderSection.classList.add('hidden');
         navTabs.classList.remove('hidden');
         populateStatusFilter();
-        
-        // Show order actions container for admin/procurement
         const orderActionsContainer = document.getElementById('orderActionsContainer');
-        if (orderActionsContainer) {
-            orderActionsContainer.style.display = 'flex';
-        }
-
+        if (orderActionsContainer) orderActionsContainer.style.display = 'flex';
         if (currentUser.role === 'admin') {
             if (usersTabButton) usersTabButton.hidden = false;
             if (buildingsTabButton) buildingsTabButton.hidden = false;
             if (costCentersTabButton) costCentersTabButton.hidden = false;
         }
-
-        // ⭐ NEW: Show Create Order button for admin/procurement
         const btnProcCreate = document.getElementById('btnProcurementCreateOrder');
         if (btnProcCreate) btnProcCreate.classList.remove('hidden');
     }
 
-    // Show orders tab by default
     document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
     const ordersTabEl = document.getElementById('ordersTab');
     if (ordersTabEl) ordersTabEl.classList.remove('hidden');
@@ -605,7 +516,6 @@ function showDashboard() {
 
     loadBuildings();
     loadCostCenters();
-    // ⭐ FIX: Only load suppliers for admin and procurement roles
     if (currentUser.role === 'admin' || currentUser.role === 'procurement') {
         loadSuppliers().then(() => { populateSupplierFilter(); });
     }
@@ -657,37 +567,19 @@ async function loadCostCenters() {
         const res = await apiGet('/cost-centers');
         if (res.success) {
             costCentersState = res.costCenters;
-            if (currentUser && currentUser.role === 'requester') {
-                renderCostCenterRadios(currentUser.building);
-            }
-            if (currentUser && currentUser.role === 'admin') {
-                renderCostCentersTable();
-                populateCCBuildingSelects();
-            }
+            if (currentUser && currentUser.role === 'requester') renderCostCenterRadios(currentUser.building);
+            if (currentUser && currentUser.role === 'admin') { renderCostCentersTable(); populateCCBuildingSelects(); }
         }
     } catch (err) { console.error('loadCostCenters error:', err); }
 }
 
 function renderCostCenterRadios(buildingCode) {
     if (!costCenterRadios) return;
-
-    if (!buildingCode) {
-        costCenterRadios.innerHTML = '<span class="text-muted">Select a building first</span>';
-        return;
-    }
-
+    if (!buildingCode) { costCenterRadios.innerHTML = '<span class="text-muted">Select a building first</span>'; return; }
     const filtered = costCentersState.filter(cc => cc.building_code === buildingCode && cc.active);
-
-    if (!filtered.length) {
-        costCenterRadios.innerHTML = '<span class="text-muted">No cost centers defined for this building</span>';
-        return;
-    }
-
+    if (!filtered.length) { costCenterRadios.innerHTML = '<span class="text-muted">No cost centers defined for this building</span>'; return; }
     costCenterRadios.innerHTML = filtered.map(cc =>
-        `<label class="radio-label">
-            <input type="radio" name="costCenter" value="${cc.id}" required>
-            <span class="radio-text"><strong>${escapeHtml(cc.code)}</strong> — ${escapeHtml(cc.name)}</span>
-        </label>`
+        `<label class="radio-label"><input type="radio" name="costCenter" value="${cc.id}" required><span class="radio-text"><strong>${escapeHtml(cc.code)}</strong> - ${escapeHtml(cc.name)}</span></label>`
     ).join('');
 }
 
@@ -704,44 +596,22 @@ function populateCCBuildingSelects() {
 
 function renderCostCentersTable() {
     if (!costCentersTable) return;
-
     const filterVal = ccFilterBuilding ? ccFilterBuilding.value : '';
     const filtered = filterVal ? costCentersState.filter(cc => cc.building_code === filterVal) : costCentersState;
-
-    if (!filtered.length) {
-        costCentersTable.innerHTML = '<p class="text-muted">No cost centers found.</p>';
-        return;
-    }
-
-    let html = '<div class="table-wrapper"><table><thead><tr>';
-    html += '<th>Building</th><th>Code</th><th>Name</th><th>Active</th><th></th>';
-    html += '</tr></thead><tbody>';
-
+    if (!filtered.length) { costCentersTable.innerHTML = '<p class="text-muted">No cost centers found.</p>'; return; }
+    let html = '<div class="table-wrapper"><table><thead><tr><th>Building</th><th>Code</th><th>Name</th><th>Active</th><th></th></tr></thead><tbody>';
     for (const cc of filtered) {
-        html += `<tr data-id="${cc.id}">
-            <td>${escapeHtml(cc.building_code)}</td>
-            <td>${escapeHtml(cc.code)}</td>
-            <td>${escapeHtml(cc.name)}</td>
-            <td>${cc.active ? 'Yes' : 'No'}</td>
-            <td><button class="btn btn-secondary btn-sm btn-edit-cc" data-id="${cc.id}">Edit</button></td>
-        </tr>`;
+        html += `<tr data-id="${cc.id}"><td>${escapeHtml(cc.building_code)}</td><td>${escapeHtml(cc.code)}</td><td>${escapeHtml(cc.name)}</td><td>${cc.active ? 'Yes' : 'No'}</td><td><button class="btn btn-secondary btn-sm btn-edit-cc" data-id="${cc.id}">Edit</button></td></tr>`;
     }
-
     html += '</tbody></table></div>';
     costCentersTable.innerHTML = html;
-
     document.querySelectorAll('.btn-edit-cc').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const id = parseInt(btn.dataset.id, 10);
-            const cc = costCentersState.find(x => x.id === id);
-            if (cc) openCostCenterForm(cc);
-        });
+        btn.addEventListener('click', () => { const id = parseInt(btn.dataset.id, 10); const cc = costCentersState.find(x => x.id === id); if (cc) openCostCenterForm(cc); });
     });
 }
 
 function openCostCenterForm(cc) {
     if (!costCenterFormCard) return;
-
     if (cc) {
         costCenterFormTitle.textContent = 'Edit Cost Center';
         costCenterIdInput.value = cc.id;
@@ -763,7 +633,6 @@ function openCostCenterForm(cc) {
 
 async function handleSaveCostCenter(e) {
     e.preventDefault();
-
     const payload = {
         building_code: ccBuildingSelect.value,
         code: ccCodeInput.value.trim(),
@@ -771,56 +640,28 @@ async function handleSaveCostCenter(e) {
         description: ccDescriptionInput.value.trim(),
         active: ccActiveSelect.value === '1'
     };
-
-    if (!payload.building_code || !payload.code || !payload.name) {
-        alert('Building, code, and name are required');
-        return;
-    }
-
+    if (!payload.building_code || !payload.code || !payload.name) { alert('Building, code, and name are required'); return; }
     const id = costCenterIdInput.value;
-    let res;
-    if (id) {
-        res = await apiPut(`/cost-centers/${id}`, payload);
-    } else {
-        res = await apiPost('/cost-centers', payload);
-    }
-
-    if (res.success) {
-        alert('Cost center saved');
-        costCenterFormCard.hidden = true;
-        loadCostCenters();
-    } else {
-        alert('Failed to save cost center: ' + (res.message || 'Unknown error'));
-    }
+    const res = id ? await apiPut(`/cost-centers/${id}`, payload) : await apiPost('/cost-centers', payload);
+    if (res.success) { alert('Cost center saved'); costCenterFormCard.hidden = true; loadCostCenters(); }
+    else { alert('Failed to save cost center: ' + (res.message || 'Unknown error')); }
 }
 
 async function handleDeleteCostCenter() {
     const id = costCenterIdInput.value;
     if (!id) return;
-
     if (!confirm('Are you sure you want to delete this cost center?')) return;
-
     const res = await apiDelete(`/cost-centers/${id}`);
-    if (res.success) {
-        alert('Cost center deleted');
-        costCenterFormCard.hidden = true;
-        loadCostCenters();
-    } else {
-        alert('Failed to delete: ' + (res.message || 'Unknown error'));
-    }
+    if (res.success) { alert('Cost center deleted'); costCenterFormCard.hidden = true; loadCostCenters(); }
+    else { alert('Failed to delete: ' + (res.message || 'Unknown error')); }
 }
 
 // ===================== ORDERS =====================
 
 async function handleCreateOrder(e) {
     e.preventDefault();
-
     const selectedCC = document.querySelector('input[name="costCenter"]:checked');
-    if (!selectedCC) {
-        alert('Please select a Cost Center');
-        return;
-    }
-
+    if (!selectedCC) { alert('Please select a Cost Center'); return; }
     const formData = new FormData();
     formData.append('building', buildingSelect.value);
     formData.append('costCenterId', selectedCC.value);
@@ -833,80 +674,33 @@ async function handleCreateOrder(e) {
     formData.append('notes', document.getElementById('notes').value.trim());
     formData.append('requester', currentUser.name);
     formData.append('requesterEmail', currentUser.email);
-
     const files = document.getElementById('attachments').files;
-    for (let i = 0; i < files.length; i++) {
-        formData.append('files', files[i]);
-    }
-
-    // Show progress overlay
-    if (window.UploadProgress) {
-        window.UploadProgress.show();
-    }
-
-    // Use XMLHttpRequest for upload progress tracking
+    for (let i = 0; i < files.length; i++) formData.append('files', files[i]);
+    if (window.UploadProgress) window.UploadProgress.show();
     return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
-
-        // Track upload progress
         xhr.upload.addEventListener('progress', (e) => {
-            if (e.lengthComputable && window.UploadProgress) {
-                const percentComplete = (e.loaded / e.total) * 100;
-                window.UploadProgress.update(percentComplete);
-            }
+            if (e.lengthComputable && window.UploadProgress) window.UploadProgress.update((e.loaded / e.total) * 100);
         });
-
-        // Handle completion
         xhr.addEventListener('load', () => {
-            if (window.UploadProgress) {
-                window.UploadProgress.hide();
-            }
-
+            if (window.UploadProgress) window.UploadProgress.hide();
             try {
                 const data = JSON.parse(xhr.responseText);
-                if (!data.success) {
-                    alert('Failed to create order: ' + (data.message || 'Unknown error'));
-                    reject(new Error(data.message));
-                    return;
-                }
+                if (!data.success) { alert('Failed to create order: ' + (data.message || 'Unknown error')); reject(new Error(data.message)); return; }
                 alert('Order created successfully!');
                 createOrderForm.reset();
-                if (currentUser.role === 'requester') {
-                    buildingSelect.value = currentUser.building;
-                    renderCostCenterRadios(currentUser.building);
-                }
+                if (currentUser.role === 'requester') { buildingSelect.value = currentUser.building; renderCostCenterRadios(currentUser.building); }
                 loadOrders();
                 resolve(data);
-            } catch (err) {
-                alert('Failed to process server response.');
-                reject(err);
-            }
+            } catch (err) { alert('Failed to process server response.'); reject(err); }
         });
-
-        // Handle errors
-        xhr.addEventListener('error', () => {
-            if (window.UploadProgress) {
-                window.UploadProgress.hide();
-            }
-            alert('Failed to create order. Network error.');
-            reject(new Error('Network error'));
-        });
-
-        xhr.addEventListener('abort', () => {
-            if (window.UploadProgress) {
-                window.UploadProgress.hide();
-            }
-            alert('Upload cancelled.');
-            reject(new Error('Upload cancelled'));
-        });
-
-        // Open connection and send
+        xhr.addEventListener('error', () => { if (window.UploadProgress) window.UploadProgress.hide(); alert('Failed to create order. Network error.'); reject(new Error('Network error')); });
+        xhr.addEventListener('abort', () => { if (window.UploadProgress) window.UploadProgress.hide(); alert('Upload cancelled.'); reject(new Error('Upload cancelled')); });
         xhr.open('POST', `${API_BASE}/orders`);
         xhr.setRequestHeader('Authorization', `Bearer ${authToken}`);
         xhr.send(formData);
     });
 }
-
 
 async function loadOrders() {
     try {
@@ -916,7 +710,7 @@ async function loadOrders() {
             filteredOrders = ordersState;
             selectedOrderIds.clear();
             updateSelectionUi();
-            currentPage = 1; // Reset to page 1
+            currentPage = 1;
             applyFilters();
         }
     } catch (err) {
@@ -925,46 +719,27 @@ async function loadOrders() {
     }
 }
 
-// ⭐ NEW: Render pagination controls
-function renderPaginationControls(totalOrders, containerId = 'ordersTable') {
+function renderPaginationControls(totalOrders) {
     const totalPages = Math.ceil(totalOrders / ORDERS_PER_PAGE);
-    
-    if (totalPages <= 1) return ''; // No pagination needed
-    
+    if (totalPages <= 1) return '';
     let html = '<div class="pagination-controls">';
     html += `<div class="pagination-info">Page ${currentPage} of ${totalPages} (${totalOrders} orders)</div>`;
     html += '<div class="pagination-buttons">';
-    
-    // First & Previous
-    html += `<button class="btn-pagination" data-page="1" ${currentPage === 1 ? 'disabled' : ''}>⏮ First</button>`;
-    html += `<button class="btn-pagination" data-page="${currentPage - 1}" ${currentPage === 1 ? 'disabled' : ''}>◀ Previous</button>`;
-    
-    // Page numbers (show current, ±2 pages)
+    html += `<button class="btn-pagination" data-page="1" ${currentPage === 1 ? 'disabled' : ''}>First</button>`;
+    html += `<button class="btn-pagination" data-page="${currentPage - 1}" ${currentPage === 1 ? 'disabled' : ''}>Previous</button>`;
     const startPage = Math.max(1, currentPage - 2);
     const endPage = Math.min(totalPages, currentPage + 2);
-    
-    if (startPage > 1) {
-        html += '<span class="pagination-ellipsis">...</span>';
-    }
-    
+    if (startPage > 1) html += '<span class="pagination-ellipsis">...</span>';
     for (let i = startPage; i <= endPage; i++) {
         html += `<button class="btn-pagination ${i === currentPage ? 'active' : ''}" data-page="${i}">${i}</button>`;
     }
-    
-    if (endPage < totalPages) {
-        html += '<span class="pagination-ellipsis">...</span>';
-    }
-    
-    // Next & Last
-    html += `<button class="btn-pagination" data-page="${currentPage + 1}" ${currentPage === totalPages ? 'disabled' : ''}>Next ▶</button>`;
-    html += `<button class="btn-pagination" data-page="${totalPages}" ${currentPage === totalPages ? 'disabled' : ''}>Last ⏭</button>`;
-    
+    if (endPage < totalPages) html += '<span class="pagination-ellipsis">...</span>';
+    html += `<button class="btn-pagination" data-page="${currentPage + 1}" ${currentPage === totalPages ? 'disabled' : ''}>Next</button>`;
+    html += `<button class="btn-pagination" data-page="${totalPages}" ${currentPage === totalPages ? 'disabled' : ''}>Last</button>`;
     html += '</div></div>';
-    
     return html;
 }
 
-// ⭐ NEW: Attach pagination event listeners
 function attachPaginationListeners() {
     document.querySelectorAll('.btn-pagination').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -972,7 +747,6 @@ function attachPaginationListeners() {
             if (!isNaN(page) && page > 0) {
                 currentPage = page;
                 renderOrdersTable();
-                // Scroll to top of orders table
                 ordersTable.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
         });
@@ -980,114 +754,52 @@ function attachPaginationListeners() {
 }
 
 function renderOrdersTable() {
-    // ⭐ NEW: Separate delivered orders >7 days old
     const activeOrders = filteredOrders.filter(o => !isOldDelivered(o));
     const oldDelivered = filteredOrders.filter(o => isOldDelivered(o));
-    
     if (!activeOrders.length && !oldDelivered.length) {
         ordersTable.innerHTML = '<p class="text-muted">No orders found.</p>';
         return;
     }
-
-    if (viewMode === 'grouped') {
-        renderGroupedOrders(activeOrders, oldDelivered);
-    } else {
-        renderFlatOrders(activeOrders, oldDelivered);
-    }
+    if (viewMode === 'grouped') renderGroupedOrders(activeOrders, oldDelivered);
+    else renderFlatOrders(activeOrders, oldDelivered);
 }
 
 function renderFlatOrders(activeOrders, oldDelivered) {
     const isAdminView = currentUser.role !== 'requester';
     const canSelectOrders = currentUser.role === 'admin' || currentUser.role === 'procurement';
-    
     let html = '';
-    
-    // ⭐ ACTIVE ORDERS (with pagination)
     if (activeOrders.length > 0) {
         const startIdx = (currentPage - 1) * ORDERS_PER_PAGE;
         const endIdx = startIdx + ORDERS_PER_PAGE;
         const paginatedOrders = activeOrders.slice(startIdx, endIdx);
-        
         html += '<div class="table-wrapper"><table><thead><tr>';
         if (canSelectOrders) html += '<th class="sticky"><input type="checkbox" id="selectAllOrders"></th>';
-        
-        html += '<th>ID</th>';
-        html += '<th></th>'; // View button column
-        html += '<th>Item</th>';
-        html += '<th>Cost Center</th>';
-        html += '<th>Qty</th>';
-        html += '<th>Status</th>';
-        html += '<th>Priority</th>';
-        html += '<th>Files</th>';
-        
+        html += '<th>ID</th><th></th><th>Item</th><th>Cost Center</th><th>Qty</th><th>Status</th><th>Priority</th><th>Files</th>';
         if (isAdminView) {
-            html += '<th>Requester</th>';
-            html += '<th>Delivery</th>';
-            html += '<th>Needed</th>';
-            html += '<th>Supplier</th>';
-            html += '<th>Building</th>';
-            html += '<th>Unit</th>';
-            html += '<th>Total</th>';
+            html += '<th>Requester</th><th>Delivery</th><th>Needed</th><th>Supplier</th><th>Lifecycle</th><th>Building</th><th>Unit</th><th>Total</th>';
         } else {
-            html += '<th>Delivery</th>';
-            html += '<th>Needed</th>';
+            html += '<th>Delivery</th><th>Needed</th>';
         }
-        
         html += '</tr></thead><tbody>';
-
-        for (const order of paginatedOrders) {
-            html += renderOrderRow(order, canSelectOrders, isAdminView);
-        }
-        
+        for (const order of paginatedOrders) html += renderOrderRow(order, canSelectOrders, isAdminView);
         html += '</tbody></table></div>';
-        
-        // Pagination controls
         html += renderPaginationControls(activeOrders.length);
     }
-    
-    // ⭐ OLD DELIVERED SECTION (collapsed, not paginated)
     if (oldDelivered.length > 0) {
         html += '<div class="old-delivered-section" style="margin-top: 1.5rem;">';
         html += `<div class="old-delivered-header" onclick="this.parentElement.classList.toggle('expanded')">`;
-        html += `<span class="old-delivered-title">📦 Delivered Orders (>7 days ago)</span>`;
+        html += `<span class="old-delivered-title">Delivered Orders (>7 days ago)</span>`;
         html += `<span class="old-delivered-count">${oldDelivered.length} orders</span>`;
-        html += `<span class="old-delivered-chevron">▼</span>`;
-        html += '</div>';
-        html += '<div class="old-delivered-body">';
-        
-        html += '<div class="table-wrapper"><table><thead><tr>';
+        html += `<span class="old-delivered-chevron">v</span></div>`;
+        html += '<div class="old-delivered-body"><div class="table-wrapper"><table><thead><tr>';
         if (canSelectOrders) html += '<th class="sticky"><input type="checkbox" id="selectAllOldOrders"></th>';
-        
-        html += '<th>ID</th>';
-        html += '<th></th>';
-        html += '<th>Item</th>';
-        html += '<th>Cost Center</th>';
-        html += '<th>Qty</th>';
-        html += '<th>Status</th>';
-        html += '<th>Priority</th>';
-        html += '<th>Files</th>';
-        
-        if (isAdminView) {
-            html += '<th>Requester</th>';
-            html += '<th>Delivered</th>'; // ⭐ NEW: Delivered date column
-            html += '<th>Supplier</th>';
-            html += '<th>Building</th>';
-            html += '<th>Unit</th>';
-            html += '<th>Total</th>';
-        } else {
-            html += '<th>Delivered</th>'; // ⭐ NEW: Delivered date column
-        }
-        
+        html += '<th>ID</th><th></th><th>Item</th><th>Cost Center</th><th>Qty</th><th>Status</th><th>Priority</th><th>Files</th>';
+        if (isAdminView) html += '<th>Requester</th><th>Delivered</th><th>Supplier</th><th>Building</th><th>Unit</th><th>Total</th>';
+        else html += '<th>Delivered</th>';
         html += '</tr></thead><tbody>';
-
-        for (const order of oldDelivered) {
-            html += renderOrderRow(order, canSelectOrders, isAdminView);
-        }
-        
-        html += '</tbody></table></div>';
-        html += '</div></div>';
+        for (const order of oldDelivered) html += renderOrderRow(order, canSelectOrders, isAdminView);
+        html += '</tbody></table></div></div></div>';
     }
-
     ordersTable.innerHTML = html;
     attachOrderEventListeners(canSelectOrders);
     attachPaginationListeners();
@@ -1097,172 +809,79 @@ function renderGroupedOrders(activeOrders, oldDelivered) {
     const isAdminView = currentUser.role !== 'requester';
     const canSelectOrders = currentUser.role === 'admin' || currentUser.role === 'procurement';
     const grouped = {};
-
-    // Group active orders by status
     for (const order of activeOrders) {
         if (!grouped[order.status]) grouped[order.status] = [];
         grouped[order.status].push(order);
     }
-
     let html = '';
-
-    // Render active orders grouped by status
     for (const status of ORDER_STATUSES) {
         if (!grouped[status] || grouped[status].length === 0) continue;
-
         const statusClass = 'status-' + status.toLowerCase().replace(/ /g, '-');
-        html += `<div class="status-group">
-            <div class="status-group-header" data-status="${status}">
-                <div class="status-group-title">
-                    <span class="status-badge ${statusClass}">${status}</span>
-                    <span class="status-group-count">${grouped[status].length}</span>
-                </div>
-                <span class="status-group-chevron">▼</span>
-            </div>
-            <div class="status-group-body" data-status="${status}">`;
-
+        html += `<div class="status-group"><div class="status-group-header" data-status="${status}"><div class="status-group-title"><span class="status-badge ${statusClass}">${status}</span><span class="status-group-count">${grouped[status].length}</span></div><span class="status-group-chevron">v</span></div><div class="status-group-body" data-status="${status}">`;
         html += '<div class="table-wrapper"><table><thead><tr>';
         if (canSelectOrders) html += '<th class="sticky"><input type="checkbox" class="select-all-group" data-status="${status}"></th>';
-        
-        html += '<th>ID</th>';
-        html += '<th></th>';
-        html += '<th>Item</th>';
-        html += '<th>Cost Center</th>';
-        html += '<th>Qty</th>';
-        html += '<th>Priority</th>';
-        html += '<th>Files</th>';
-        
-        if (isAdminView) {
-            html += '<th>Requester</th>';
-            html += '<th>Delivery</th>';
-            html += '<th>Needed</th>';
-            html += '<th>Supplier</th>';
-            html += '<th>Building</th>';
-            html += '<th>Unit</th>';
-            html += '<th>Total</th>';
-        } else {
-            html += '<th>Delivery</th>';
-            html += '<th>Needed</th>';
-        }
-        
+        html += '<th>ID</th><th></th><th>Item</th><th>Cost Center</th><th>Qty</th><th>Priority</th><th>Files</th>';
+        if (isAdminView) html += '<th>Requester</th><th>Delivery</th><th>Needed</th><th>Supplier</th><th>Building</th><th>Unit</th><th>Total</th>';
+        else html += '<th>Delivery</th><th>Needed</th>';
         html += '</tr></thead><tbody>';
-
-        for (const order of grouped[status]) {
-            html += renderOrderRow(order, canSelectOrders, isAdminView);
-        }
-
+        for (const order of grouped[status]) html += renderOrderRow(order, canSelectOrders, isAdminView);
         html += '</tbody></table></div></div></div>';
     }
-    
-    // ⭐ OLD DELIVERED SECTION (same as flat view)
     if (oldDelivered.length > 0) {
         html += '<div class="old-delivered-section" style="margin-top: 1.5rem;">';
-        html += `<div class="old-delivered-header" onclick="this.parentElement.classList.toggle('expanded')">`;
-        html += `<span class="old-delivered-title">📦 Delivered Orders (>7 days ago)</span>`;
-        html += `<span class="old-delivered-count">${oldDelivered.length} orders</span>`;
-        html += `<span class="old-delivered-chevron">▼</span>`;
-        html += '</div>';
-        html += '<div class="old-delivered-body">';
-        
-        html += '<div class="table-wrapper"><table><thead><tr>';
+        html += `<div class="old-delivered-header" onclick="this.parentElement.classList.toggle('expanded')"><span class="old-delivered-title">Delivered Orders (>7 days ago)</span><span class="old-delivered-count">${oldDelivered.length} orders</span><span class="old-delivered-chevron">v</span></div>`;
+        html += '<div class="old-delivered-body"><div class="table-wrapper"><table><thead><tr>';
         if (canSelectOrders) html += '<th class="sticky"><input type="checkbox" id="selectAllOldOrders"></th>';
-        
-        html += '<th>ID</th>';
-        html += '<th></th>';
-        html += '<th>Item</th>';
-        html += '<th>Cost Center</th>';
-        html += '<th>Qty</th>';
-        html += '<th>Status</th>';
-        html += '<th>Priority</th>';
-        html += '<th>Files</th>';
-        
-        if (isAdminView) {
-            html += '<th>Requester</th>';
-            html += '<th>Delivered</th>'; // ⭐ NEW: Delivered date column
-            html += '<th>Supplier</th>';
-            html += '<th>Building</th>';
-            html += '<th>Unit</th>';
-            html += '<th>Total</th>';
-        } else {
-            html += '<th>Delivered</th>'; // ⭐ NEW: Delivered date column
-        }
-        
+        html += '<th>ID</th><th></th><th>Item</th><th>Cost Center</th><th>Qty</th><th>Status</th><th>Priority</th><th>Files</th>';
+        if (isAdminView) html += '<th>Requester</th><th>Delivered</th><th>Supplier</th><th>Building</th><th>Unit</th><th>Total</th>';
+        else html += '<th>Delivered</th>';
         html += '</tr></thead><tbody>';
-
-        for (const order of oldDelivered) {
-            html += renderOrderRow(order, canSelectOrders, isAdminView);
-        }
-        
-        html += '</tbody></table></div>';
-        html += '</div></div>';
+        for (const order of oldDelivered) html += renderOrderRow(order, canSelectOrders, isAdminView);
+        html += '</tbody></table></div></div></div>';
     }
-
     ordersTable.innerHTML = html;
-
-    // Attach collapse/expand handlers
     document.querySelectorAll('.status-group-header').forEach(header => {
         header.addEventListener('click', () => {
             const status = header.dataset.status;
             const body = document.querySelector(`.status-group-body[data-status="${status}"]`);
-            if (body) {
-                body.classList.toggle('collapsed');
-                header.classList.toggle('collapsed');
-            }
+            if (body) { body.classList.toggle('collapsed'); header.classList.toggle('collapsed'); }
         });
     });
-
     attachOrderEventListeners(canSelectOrders);
 }
 
-// ⭐ NEW: Shared order row rendering function
 function renderOrderRow(order, canSelectOrders, isAdminView) {
     const statusClass = 'status-' + order.status.toLowerCase().replace(/ /g, '-');
     const priorityClass = 'priority-' + (order.priority || 'Normal').toLowerCase();
     const hasFiles = order.files && order.files.length > 0;
     const deliveryStatus = getDeliveryStatus(order);
     const deliveredDate = getDeliveredDate(order);
-
     let html = '<tr data-id="' + order.id + '">';
-    
-    if (canSelectOrders) {
-        html += `<td class="sticky"><input type="checkbox" class="row-select" data-id="${order.id}"></td>`;
-    }
-    
+    if (canSelectOrders) html += `<td class="sticky"><input type="checkbox" class="row-select" data-id="${order.id}"></td>`;
     html += `<td>#${order.id}</td>`;
     html += `<td><button class="btn btn-secondary btn-sm btn-view-order" data-id="${order.id}">View</button></td>`;
-    html += `<td title="${escapeHtml(order.item_description)}">${escapeHtml(order.item_description.substring(0, 40))}${order.item_description.length > 40 ? '…' : ''}</td>`;
+    html += `<td title="${escapeHtml(order.item_description)}">${escapeHtml(order.item_description.substring(0, 40))}${order.item_description.length > 40 ? '...' : ''}</td>`;
     html += `<td>${order.cost_center_code || '-'}</td>`;
     html += `<td>${order.quantity}</td>`;
-    
-    // Show status badge only if not in a group (flat view or old delivered)
     if (isOldDelivered(order) || viewMode === 'flat') {
         html += `<td><span class="status-badge ${statusClass}">${order.status}</span></td>`;
     }
-    
     html += `<td><span class="priority-pill ${priorityClass}">${order.priority || 'Normal'}</span></td>`;
-    html += `<td>${hasFiles ? '📎 ' + order.files.length : '-'}</td>`;
-
+    html += `<td>${hasFiles ? order.files.length + ' file(s)' : '-'}</td>`;
     if (isAdminView) {
         html += `<td>${order.requester_name}</td>`;
-        
-        // ⭐ FIX: For old delivered, show delivered date instead of delivery status
         if (isOldDelivered(order)) {
             html += `<td>${deliveredDate ? formatDate(deliveredDate) : '<span class="status-badge status-delivered">Delivered</span>'}</td>`;
         } else {
             html += `<td>${getDeliveryBadgeHtml(deliveryStatus)}</td>`;
         }
-        
-        // For active orders, show "Needed" date; for old delivered, skip it
-        if (!isOldDelivered(order)) {
-            html += `<td>${formatDate(order.date_needed)}</td>`;
-        }
-        
+        if (!isOldDelivered(order)) html += `<td>${formatDate(order.date_needed)}</td>`;
         html += `<td>${order.supplier_name || '-'}</td>`;
+        html += `<td>${typeof renderLifecycleBadge === 'function' ? renderLifecycleBadge(order) : (order.po_number ? order.po_number : '-')}</td>`;
         html += `<td>${order.building}</td>`;
         html += `<td class="text-right">${fmtPrice(order.unit_price)}</td>`;
         html += `<td class="text-right">${fmtPrice(order.total_price)}</td>`;
     } else {
-        // ⭐ FIX: For requesters, show delivered date for old delivered
         if (isOldDelivered(order)) {
             html += `<td>${deliveredDate ? formatDate(deliveredDate) : '<span class="status-badge status-delivered">Delivered</span>'}</td>`;
         } else {
@@ -1270,7 +889,6 @@ function renderOrderRow(order, canSelectOrders, isAdminView) {
             html += `<td>${formatDate(order.date_needed)}</td>`;
         }
     }
-
     html += '</tr>';
     return html;
 }
@@ -1282,12 +900,11 @@ function attachOrderEventListeners(canSelectOrders) {
             selectAll.addEventListener('change', e => {
                 const checked = e.target.checked;
                 selectedOrderIds.clear();
-                if (checked) { filteredOrders.forEach(o => selectedOrderIds.add(o.id)); }
+                if (checked) filteredOrders.forEach(o => selectedOrderIds.add(o.id));
                 document.querySelectorAll('.row-select').forEach(cb => { cb.checked = checked; });
                 updateSelectionUi();
             });
         }
-
         document.querySelectorAll('.row-select').forEach(cb => {
             cb.addEventListener('change', e => {
                 const id = parseInt(e.target.dataset.id, 10);
@@ -1297,7 +914,6 @@ function attachOrderEventListeners(canSelectOrders) {
             });
         });
     }
-
     document.querySelectorAll('.btn-view-order').forEach(btn => {
         btn.addEventListener('click', () => openOrderDetail(parseInt(btn.dataset.id, 10)));
     });
@@ -1315,14 +931,8 @@ async function openOrderDetail(orderId) {
         if (!res.success) return;
         renderOrderDetail(res.order);
         orderDetailPanel.classList.remove('hidden');
-        
-        // ⭐ LOAD DOCUMENTS FOR THIS ORDER (Phase 2 Integration)
-        if (typeof loadOrderDocuments === 'function') {
-            loadOrderDocuments(orderId);
-        }
-    } catch { 
-        alert('Failed to load order details'); 
-    }
+        if (typeof loadOrderDocuments === 'function') loadOrderDocuments(orderId);
+    } catch { alert('Failed to load order details'); }
 }
 
 function renderOrderDetail(o) {
@@ -1330,71 +940,45 @@ function renderOrderDetail(o) {
     const priorityClass = 'priority-' + (o.priority || 'Normal').toLowerCase();
     const deliveryStatus = getDeliveryStatus(o);
     const deliveredDate = getDeliveredDate(o);
-    
-    // ⭐ SECURITY: Check if current user can see sensitive data
     const canSeeSensitiveData = currentUser.role !== 'requester';
-
     let html = '';
     html += `<div class="detail-grid">
         <div><div class="detail-label">Order ID</div><div class="detail-value">#${o.id}</div></div>
         <div><div class="detail-label">Building</div><div class="detail-value">${o.building}</div></div>
-        <div><div class="detail-label">Cost Center</div><div class="detail-value">${o.cost_center_code ? `${o.cost_center_code} — ${o.cost_center_name}` : '-'}</div></div>
+        <div><div class="detail-label">Cost Center</div><div class="detail-value">${o.cost_center_code ? `${o.cost_center_code} - ${o.cost_center_name}` : '-'}</div></div>
         <div><div class="detail-label">Status</div><div class="detail-value"><span class="status-badge ${statusClass}">${o.status}</span></div></div>
         <div><div class="detail-label">Quantity</div><div class="detail-value">${o.quantity || '-'}</div></div>
         <div><div class="detail-label">Priority</div><div class="detail-value"><span class="priority-pill ${priorityClass}">${o.priority || 'Normal'}</span></div></div>
         <div><div class="detail-label">Date Needed</div><div class="detail-value">${formatDate(o.date_needed)}</div></div>
         <div><div class="detail-label">Expected Delivery</div><div class="detail-value">${o.expected_delivery_date ? formatDate(o.expected_delivery_date) : '-'}</div></div>`;
-    
-    // ⭐ NEW: Show delivered date if available
     if (deliveredDate) {
         html += `<div><div class="detail-label">Delivered Date</div><div class="detail-value">${formatDate(deliveredDate)}</div></div>`;
     } else {
         html += `<div><div class="detail-label">Delivery Status</div><div class="detail-value">${getDeliveryBadgeHtml(deliveryStatus)}</div></div>`;
     }
-    
     html += `<div><div class="detail-label">Requester</div><div class="detail-value">${o.requester_name}</div></div>`;
-    
-    // ⭐ HIDE SUPPLIER AND PRICES FROM REQUESTERS
     if (canSeeSensitiveData) {
-        html += `
-        <div><div class="detail-label">Supplier</div><div class="detail-value">${o.supplier_name || '-'}</div></div>
+        html += `<div><div class="detail-label">Supplier</div><div class="detail-value">${o.supplier_name || '-'}</div></div>
         <div><div class="detail-label">Unit Price</div><div class="detail-value">${fmtPrice(o.unit_price)}</div></div>
         <div><div class="detail-label">Total Price</div><div class="detail-value">${fmtPrice(o.total_price)}</div></div>`;
     }
-    
     html += `</div>`;
-
-    html += `<div class="detail-section-title">Item Description</div>
-        <div class="text-muted mt-1">${escapeHtml(o.item_description)}</div>`;
-
+    html += `<div class="detail-section-title">Item Description</div><div class="text-muted mt-1">${escapeHtml(o.item_description)}</div>`;
     if (o.part_number || o.category) {
         html += '<div class="detail-grid mt-1">';
         if (o.part_number) html += `<div><div class="detail-label">Part Number</div><div class="detail-value">${escapeHtml(o.part_number)}</div></div>`;
         if (o.category) html += `<div><div class="detail-label">Category</div><div class="detail-value">${escapeHtml(o.category)}</div></div>`;
         html += '</div>';
     }
-
-    if (o.notes) {
-        html += `<div class="detail-section-title mt-1">Notes</div><div class="text-muted mt-1">${escapeHtml(o.notes)}</div>`;
-    }
-
-    // ⭐ NEW: Supplier Notes & Alternative Product (read-only display for admin/procurement)
+    if (o.notes) html += `<div class="detail-section-title mt-1">Notes</div><div class="text-muted mt-1">${escapeHtml(o.notes)}</div>`;
     if (canSeeSensitiveData) {
-        if (o.supplier_notes) {
-            html += '<div class="detail-section-title mt-1">Supplier Notes</div><div class="text-muted mt-1">' + escapeHtml(o.supplier_notes) + '</div>';
-        }
+        if (o.supplier_notes) html += '<div class="detail-section-title mt-1">Supplier Notes</div><div class="text-muted mt-1">' + escapeHtml(o.supplier_notes) + '</div>';
         if (o.alternative_product_name || o.alternative_product_description) {
             html += '<div class="detail-section-title mt-1">Alternative Product</div>';
-            if (o.alternative_product_name) {
-                html += '<div class="text-muted mt-1"><strong>Name:</strong> ' + escapeHtml(o.alternative_product_name) + '</div>';
-            }
-            if (o.alternative_product_description) {
-                html += '<div class="text-muted mt-1"><strong>Description:</strong> ' + escapeHtml(o.alternative_product_description) + '</div>';
-            }
+            if (o.alternative_product_name) html += '<div class="text-muted mt-1"><strong>Name:</strong> ' + escapeHtml(o.alternative_product_name) + '</div>';
+            if (o.alternative_product_description) html += '<div class="text-muted mt-1"><strong>Description:</strong> ' + escapeHtml(o.alternative_product_description) + '</div>';
         }
     }
-
-    // ⭐ KEEP ATTACHMENTS VISIBLE TO REQUESTERS (these are files they uploaded!)
     html += '<div class="detail-section-title mt-2">Attachments</div>';
     if (o.files && o.files.length) {
         html += '<ul class="file-list">';
@@ -1406,7 +990,6 @@ function renderOrderDetail(o) {
     } else {
         html += '<div class="text-muted mt-1">No attachments.</div>';
     }
-
     if (currentUser.role !== 'requester' && currentUser.role !== 'manager' && o.history && o.history.length) {
         html += '<div class="detail-section-title mt-2">History</div>';
         html += '<div class="text-muted" style="max-height: 120px; overflow-y: auto; font-size: 0.78rem;">';
@@ -1415,42 +998,22 @@ function renderOrderDetail(o) {
         }
         html += '</div>';
     }
-
-    // ⭐ NEW: Phase 1 - Smart Supplier Suggestions (BEFORE Update Order section)
     if (currentUser.role === 'admin' || currentUser.role === 'procurement') {
         html += '<hr class="mt-2" style="border-color: rgba(31,41,55,0.9); margin-bottom: 0.6rem;">';
-        html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">';
-        html += '<div>';
-        html += '<div class="detail-section-title" style="margin:0;">💡 Suggested Suppliers</div>';
+        html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;"><div>';
+        html += '<div class="detail-section-title" style="margin:0;">Suggested Suppliers</div>';
         html += '<div style="font-size:0.75rem;color:#94a3b8;margin-top:0.2rem;">AI-powered recommendations based on item description and history</div>';
         html += '</div>';
-        
-        // Option to open full supplier selector
         if (typeof openSupplierSelector === 'function') {
-            html += '<button class="btn btn-secondary btn-sm" onclick="openSupplierSelector(' + o.id + ', ' + (o.supplier_id || 'null') + ')" style="white-space:nowrap;">🏢 Browse All</button>';
+            html += '<button class="btn btn-secondary btn-sm" onclick="openSupplierSelector(' + o.id + ', ' + (o.supplier_id || 'null') + ')" style="white-space:nowrap;">Browse All</button>';
         }
-        
-        html += '</div>';
-        
-        // ⭐ FIX: Container is now OUTSIDE the flex wrapper, on its own line
-        html += '<div id="supplierSuggestionsContainer"></div>';
+        html += '</div><div id="supplierSuggestionsContainer"></div>';
     }
-
-    // Only admin/procurement can edit orders
     if (currentUser.role === 'admin' || currentUser.role === 'procurement') {
         html += '<hr class="mt-2" style="border-color: rgba(31,41,55,0.9); margin-bottom: 0.6rem;">';
         html += '<div class="detail-section-title">Update Order</div>';
         html += `<div class="form-group mt-1"><label>Status</label><select id="detailStatus" class="form-control form-control-sm">${ORDER_STATUSES.map(s => `<option value="${s}" ${s === o.status ? 'selected' : ''}>${s}</option>`).join('')}</select></div>`;
-        
-        // ⭐ REPLACE SUPPLIER DROPDOWN WITH BUTTON
-        html += `<div class="form-group">
-            <label>Supplier</label>
-            <div style="display: flex; align-items: center; gap: 0.5rem;">
-                <input type="text" id="detailSupplierDisplay" class="form-control form-control-sm" value="${o.supplier_name || 'No supplier selected'}" readonly style="flex: 1; background: #0f172a; cursor: pointer;" />
-                <button id="btnSelectSupplier" class="btn btn-primary btn-sm" style="white-space: nowrap;">🏢 Select</button>
-            </div>
-        </div>`;
-        
+        html += `<div class="form-group"><label>Supplier</label><div style="display: flex; align-items: center; gap: 0.5rem;"><input type="text" id="detailSupplierDisplay" class="form-control form-control-sm" value="${o.supplier_name || 'No supplier selected'}" readonly style="flex: 1; background: #0f172a; cursor: pointer;" /><button id="btnSelectSupplier" class="btn btn-primary btn-sm" style="white-space: nowrap;">Select</button></div></div>`;
         html += `<div class="detail-grid"><div><div class="form-group"><label>Expected Delivery</label><input type="date" id="detailExpected" class="form-control form-control-sm date-picker" value="${o.expected_delivery_date ? o.expected_delivery_date.substring(0,10) : ''}"></div></div><div><div class="form-group"><label>Unit Price</label><input type="number" step="0.01" id="detailUnitPrice" class="form-control form-control-sm" value="${parseFloat(o.unit_price) || ''}"></div></div></div>`;
         html += `<div class="form-group"><label>Total Price</label><input type="number" step="0.01" id="detailTotalPrice" class="form-control form-control-sm" value="${parseFloat(o.total_price) || ''}"></div>`;
         html += `<div class="form-group"><label>Supplier Notes</label><textarea id="detailSupplierNotes" class="form-control form-control-sm" rows="2" placeholder="Internal notes about the supplier for this order">${o.supplier_notes || ''}</textarea></div>`;
@@ -1458,29 +1021,20 @@ function renderOrderDetail(o) {
         html += `<div class="form-group"><label>Alternative Product Description</label><textarea id="detailAltProductDesc" class="form-control form-control-sm" rows="2" placeholder="Description of the alternative product">${o.alternative_product_description || ''}</textarea></div>`;
         html += `<div class="form-actions"><button id="btnSaveOrder" class="btn btn-primary btn-sm">Save</button></div>`;
     }
-
     orderDetailBody.innerHTML = html;
-
-    // ⭐ NEW: Load supplier suggestions (Phase 1)
-    if ((currentUser.role === 'admin' || currentUser.role === 'procurement') && 
-        typeof loadSupplierSuggestions === 'function') {
+    if ((currentUser.role === 'admin' || currentUser.role === 'procurement') && typeof loadSupplierSuggestions === 'function') {
         loadSupplierSuggestions(o.id, o.supplier_id);
     }
-
-    // ⭐ ATTACH SUPPLIER SELECTOR BUTTON
     const btnSelectSupplier = document.getElementById('btnSelectSupplier');
     if (btnSelectSupplier && typeof openSupplierSelector === 'function') {
-        btnSelectSupplier.addEventListener('click', () => {
-            openSupplierSelector(o.id, o.supplier_id);
-        });
+        btnSelectSupplier.addEventListener('click', () => openSupplierSelector(o.id, o.supplier_id));
     }
-
     const btnSave = document.getElementById('btnSaveOrder');
     if (btnSave) {
         btnSave.addEventListener('click', async () => {
             const payload = {
                 status: document.getElementById('detailStatus').value,
-                supplier_id: o.supplier_id || null, // Keep current supplier_id (updated by modal)
+                supplier_id: o.supplier_id || null,
                 expected_delivery_date: document.getElementById('detailExpected').value || null,
                 unit_price: parseFloat(document.getElementById('detailUnitPrice').value || 0) || null,
                 total_price: parseFloat(document.getElementById('detailTotalPrice').value || 0) || null,
@@ -1510,36 +1064,18 @@ function renderQuotesTable() {
     let html = '<div class="table-wrapper"><table><thead><tr><th>Quote #</th><th>Supplier</th><th>Status</th><th>Items</th><th>Total</th><th>Valid Until</th><th>Created</th><th></th></tr></thead><tbody>';
     for (const q of quotesState) {
         const isSent = q.status === 'Sent to Supplier';
-        const sentBadge = isSent
-            ? '<span class="quote-sent-badge sent">✓ Sent</span>'
-            : '<span class="quote-sent-badge not-sent">● Pending</span>';
-        html += `<tr data-id="${q.id}">
-            <td>${q.quote_number}</td>
-            <td>${q.supplier_name || '-'}</td>
-            <td>${q.status}</td>
-            <td>${q.item_count || 0}</td>
-            <td class="text-right">${fmtPrice(q.total_amount)}</td>
-            <td>${q.valid_until ? formatDate(q.valid_until) : '-'}</td>
-            <td>${formatDateTime(q.created_at)}</td>
-            <td style="display:flex;gap:0.4rem;align-items:center;">
-                ${sentBadge}
-                <button class="btn btn-secondary btn-sm btn-view-quote" data-id="${q.id}">View</button>
-                <button class="btn btn-primary btn-sm btn-send-quote" data-id="${q.id}" title="Compose &amp; Send">📧</button>
-            </td>
-        </tr>`;
+        const sentBadge = isSent ? '<span class="quote-sent-badge sent">Sent</span>' : '<span class="quote-sent-badge not-sent">Pending</span>';
+        html += `<tr data-id="${q.id}"><td>${q.quote_number}</td><td>${q.supplier_name || '-'}</td><td>${q.status}</td><td>${q.item_count || 0}</td><td class="text-right">${fmtPrice(q.total_amount)}</td><td>${q.valid_until ? formatDate(q.valid_until) : '-'}</td><td>${formatDateTime(q.created_at)}</td><td style="display:flex;gap:0.4rem;align-items:center;">${sentBadge}<button class="btn btn-secondary btn-sm btn-view-quote" data-id="${q.id}">View</button><button class="btn btn-primary btn-sm btn-send-quote" data-id="${q.id}" title="Compose &amp; Send">Send</button></td></tr>`;
     }
     html += '</tbody></table></div>';
     quotesTable.innerHTML = html;
     document.querySelectorAll('.btn-view-quote').forEach(btn => {
         btn.addEventListener('click', () => openQuoteDetail(parseInt(btn.dataset.id, 10)));
     });
-    // ⭐ Send email button
     document.querySelectorAll('.btn-send-quote').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
-            if (typeof openQuoteSendPanel === 'function') {
-                openQuoteSendPanel(parseInt(btn.dataset.id, 10));
-            }
+            if (typeof openQuoteSendPanel === 'function') openQuoteSendPanel(parseInt(btn.dataset.id, 10));
         });
     });
 }
@@ -1558,62 +1094,36 @@ function renderQuoteDetail(q) {
     if (q.notes) html += `<div class="detail-section-title mt-1">Notes</div><div class="text-muted mt-1">${escapeHtml(q.notes)}</div>`;
     if (q.items && q.items.length) {
         html += '<div class="detail-section-title mt-2">Items</div><div class="table-wrapper"><table><thead><tr><th>Order</th><th>Building</th><th>Description</th><th>Qty</th><th>Unit</th><th>Total</th></tr></thead><tbody>';
-        for (const it of q.items) html += `<tr><td>#${it.order_id}</td><td>${it.building}</td><td>${escapeHtml(it.item_description.substring(0,40))}${it.item_description.length>40?'…':''}</td><td>${it.quantity}</td><td class="text-right">${fmtPrice(it.unit_price)}</td><td class="text-right">${fmtPrice(it.total_price)}</td></tr>`;
+        for (const it of q.items) html += `<tr><td>#${it.order_id}</td><td>${it.building}</td><td>${escapeHtml(it.item_description.substring(0,40))}${it.item_description.length>40?'...':''}</td><td>${it.quantity}</td><td class="text-right">${fmtPrice(it.unit_price)}</td><td class="text-right">${fmtPrice(it.total_price)}</td></tr>`;
         html += '</tbody></table></div>';
     }
-    
-    // ⭐ ADD SUBMIT FOR APPROVAL BUTTON (for admin/procurement only)
-    if ((currentUser.role === 'admin' || currentUser.role === 'procurement') && 
-        (q.status === 'Draft' || q.status === 'Received')) {
-        html += `
-            <hr class="mt-2" style="border-color: rgba(31,41,55,0.9); margin-bottom: 0.6rem;">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">
-                <div>
-                    <div class="detail-section-title" style="margin:0;">Approval Workflow</div>
-                    <div style="font-size:0.75rem;color:#94a3b8;margin-top:0.2rem;">Submit this quote to a manager for approval</div>
-                </div>
-                <button id="btnSubmitForApproval" class="btn btn-primary btn-sm" style="white-space:nowrap;" data-quote-id="${q.id}">
-                    📋 Submit for Approval
-                </button>
-            </div>
-        `;
+    if ((currentUser.role === 'admin' || currentUser.role === 'procurement') && (q.status === 'Draft' || q.status === 'Received')) {
+        html += `<hr class="mt-2" style="border-color: rgba(31,41,55,0.9); margin-bottom: 0.6rem;"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;"><div><div class="detail-section-title" style="margin:0;">Approval Workflow</div><div style="font-size:0.75rem;color:#94a3b8;margin-top:0.2rem;">Submit this quote to a manager for approval</div></div><button id="btnSubmitForApproval" class="btn btn-primary btn-sm" style="white-space:nowrap;" data-quote-id="${q.id}">Submit for Approval</button></div>`;
     }
-    
-    // ⭐ Smart Send Button (admin/procurement only)
+    // v3.0: Procurement Workspace + Smart Send Button
     if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'procurement')) {
-        html += `
-            <div style="margin: 0.75rem 0;">
-                <button id="btnOpenSendPanel" class="btn btn-primary btn-sm" style="width:100%;"
-                    data-quote-id="${q.id}">
-                    📧 Compose &amp; Send Email
-                </button>
-            </div>
-        `;
+        html += `<div style="margin: 0.75rem 0; display:flex; gap:0.5rem; flex-direction:column;"><button id="btnOpenProcurementWorkspace" class="btn btn-primary btn-sm" style="width:100%;" data-quote-id="${q.id}">Open Procurement Workspace</button><button id="btnOpenSendPanel" class="btn btn-secondary btn-sm" style="width:100%;" data-quote-id="${q.id}">Compose &amp; Send Email</button></div>`;
     }
-
     html += '<div class="detail-section-title mt-2">Update Quote</div>';
     html += `<div class="form-group mt-1"><label>Status</label><select id="quoteStatus" class="form-control form-control-sm">${['Draft','Sent to Supplier','Received','Under Approval','Approved','Rejected'].map(s => `<option value="${s}" ${s===q.status?'selected':''}>${s}</option>`).join('')}</select></div>`;
     html += `<div class="form-group mt-1"><label>Notes</label><textarea id="quoteNotes" class="form-control form-control-sm" rows="2">${q.notes || ''}</textarea></div>`;
     html += '<div class="form-actions"><button id="btnSaveQuote" class="btn btn-primary btn-sm">Save</button></div>';
     quoteDetailBody.innerHTML = html;
-
-    // ⭐ Attach Smart Send Panel button
+    // v3.0: Attach Procurement Workspace button
+    const btnOpenWorkspace = document.getElementById('btnOpenProcurementWorkspace');
+    if (btnOpenWorkspace && typeof openQuoteLifecyclePanel === 'function') {
+        btnOpenWorkspace.addEventListener('click', () => {
+            openQuoteLifecyclePanel(parseInt(btnOpenWorkspace.dataset.quoteId, 10));
+        });
+    }
     const btnOpenSend = document.getElementById('btnOpenSendPanel');
     if (btnOpenSend && typeof openQuoteSendPanel === 'function') {
-        btnOpenSend.addEventListener('click', () => {
-            openQuoteSendPanel(parseInt(btnOpenSend.dataset.quoteId, 10));
-        });
+        btnOpenSend.addEventListener('click', () => openQuoteSendPanel(parseInt(btnOpenSend.dataset.quoteId, 10)));
     }
-    
-    // Attach submit for approval button handler
     const btnSubmitApproval = document.getElementById('btnSubmitForApproval');
     if (btnSubmitApproval && typeof openSubmitForApprovalDialog === 'function') {
-        btnSubmitApproval.addEventListener('click', () => {
-            const quoteId = parseInt(btnSubmitApproval.dataset.quoteId, 10);
-            openSubmitForApprovalDialog(quoteId);
-        });
+        btnSubmitApproval.addEventListener('click', () => openSubmitForApprovalDialog(parseInt(btnSubmitApproval.dataset.quoteId, 10)));
     }
-    
     document.getElementById('btnSaveQuote').addEventListener('click', async () => {
         const payload = { status: document.getElementById('quoteStatus').value, notes: document.getElementById('quoteNotes').value };
         const res = await apiPut(`/quotes/${q.id}`, payload);
@@ -1627,31 +1137,26 @@ function openCreateQuoteDialog() {
         alert('Select one or more orders first, then click "Create Quote from Selected"');
         return;
     }
-
-    // Populate the createQuoteModal fields
+    // v3.0: Use enhanced wizard if available
+    if (typeof openEnhancedCreateQuoteModal === 'function') {
+        openEnhancedCreateQuoteModal();
+        return;
+    }
     const modal = document.getElementById('createQuoteModal');
     if (!modal) return;
-
-    // Fill supplier dropdown
     const supplierSel = document.getElementById('cqSupplier');
     if (supplierSel) {
         supplierSel.innerHTML = '<option value="">Select supplier</option>' +
             suppliersState.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
     }
-
-    // Show selected order count
     const orderCountEl = document.getElementById('cqOrderCount');
     if (orderCountEl) orderCountEl.textContent = selectedOrderIds.size;
-
-    // Reset other fields
     const notesEl = document.getElementById('cqNotes');
     if (notesEl) notesEl.value = '';
     const currencyEl = document.getElementById('cqCurrency');
     if (currencyEl) currencyEl.value = 'EUR';
     const validEl = document.getElementById('cqValidUntil');
     if (validEl) validEl.value = '';
-
-    // Show modal
     modal.classList.remove('hidden');
 }
 
@@ -1665,7 +1170,6 @@ async function handleCreateQuote(e) {
     const orders = ordersState.filter(o => selectedOrderIds.has(o.id));
     const supplierId = document.getElementById('cqSupplier')?.value;
     if (!supplierId) { alert('Please select a supplier'); return; }
-
     const body = {
         supplier_id: parseInt(supplierId, 10),
         order_ids: orders.map(o => o.id),
@@ -1673,7 +1177,6 @@ async function handleCreateQuote(e) {
         currency: document.getElementById('cqCurrency')?.value || 'EUR',
         valid_until: document.getElementById('cqValidUntil')?.value || null
     };
-
     const res = await apiPost('/quotes', body);
     if (res.success) {
         closeCreateQuoteModal();
@@ -1681,8 +1184,10 @@ async function handleCreateQuote(e) {
         updateSelectionUi();
         loadOrders();
         loadQuotes();
-        // ⭐ Open Smart Send Panel immediately
-        if (typeof openQuoteSendPanel === 'function') {
+        // v3.0: Open Procurement Lifecycle Panel
+        if (typeof openQuoteLifecyclePanel === 'function') {
+            openQuoteLifecyclePanel(res.quoteId);
+        } else if (typeof openQuoteSendPanel === 'function') {
             openQuoteSendPanel(res.quoteId);
         } else {
             alert('Quote ' + res.quoteNumber + ' created');
@@ -1700,7 +1205,7 @@ async function loadBuildings() {
         if (res.success) {
             buildingsState = res.buildings;
             populateBuildingSelects();
-            if (currentUser && currentUser.role === 'admin') { renderBuildingsTable(); }
+            if (currentUser && currentUser.role === 'admin') renderBuildingsTable();
         }
     } catch (err) {
         console.error('loadBuildings error:', err);
@@ -1712,10 +1217,7 @@ function populateBuildingSelects() {
     if (buildingSelect) {
         buildingSelect.innerHTML = '<option value="">Select Building</option>' +
             buildingsState.filter(b => b.active).map(b => `<option value="${b.code}">${escapeHtml(b.code)} - ${escapeHtml(b.name)}</option>`).join('');
-        if (currentUser && currentUser.role === 'requester') {
-            buildingSelect.value = currentUser.building;
-            buildingSelect.disabled = true;
-        }
+        if (currentUser && currentUser.role === 'requester') { buildingSelect.value = currentUser.building; buildingSelect.disabled = true; }
     }
     if (userBuildingSelect) {
         userBuildingSelect.innerHTML = '<option value="">None</option>' +
@@ -1760,7 +1262,8 @@ async function handleSaveBuilding(e) {
     if (!payload.code || !payload.name) { alert('Code and name are required'); return; }
     const id = buildingIdInput.value;
     const res = id ? await apiPut(`/buildings/${id}`, payload) : await apiPost('/buildings', payload);
-    if (res.success) { alert('Building saved'); buildingFormCard.hidden = true; loadBuildings(); loadCostCenters(); } else { alert('Failed to save building: ' + (res.message || 'Unknown error')); }
+    if (res.success) { alert('Building saved'); buildingFormCard.hidden = true; loadBuildings(); loadCostCenters(); }
+    else { alert('Failed to save building: ' + (res.message || 'Unknown error')); }
 }
 
 // ===================== USERS =====================
@@ -1851,12 +1354,14 @@ async function handleSaveSupplier(e) {
     if (!payload.name) { alert('Name is required'); return; }
     const id = supplierIdInput.value;
     const res = id ? await apiPut(`/suppliers/${id}`, payload) : await apiPost('/suppliers', payload);
-    if (res.success) { alert('Supplier saved'); supplierFormCard.hidden = true; loadSuppliers(); populateSupplierFilter(); } else { alert('Failed to save supplier'); }
+    if (res.success) { alert('Supplier saved'); supplierFormCard.hidden = true; loadSuppliers(); populateSupplierFilter(); }
+    else { alert('Failed to save supplier'); }
 }
 
 function populateStatusFilter() {
     filterStatus.innerHTML = '<option value="">Status: All</option>' + ORDER_STATUSES.map(s => `<option value="${s}">${s}</option>`).join('');
 }
+
 function populateSupplierFilter() {
     filterSupplier.innerHTML = '<option value="">Supplier: All</option>' + suppliersState.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
 }
@@ -1867,19 +1372,13 @@ function switchTab(tabId) {
     document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
     document.getElementById(tabId).classList.remove('hidden');
     currentTab = tabId;
-
-    // ⭐ NEW: Show brand training UI for admins in Suppliers tab
     if (tabId === 'suppliersTab' && currentUser && currentUser.role === 'admin') {
         const brandTrainingCard = document.getElementById('brandTrainingCard');
         if (brandTrainingCard) {
             brandTrainingCard.hidden = false;
-            // Load brand training UI if function exists
-            if (typeof loadBrandTrainingUI === 'function') {
-                loadBrandTrainingUI();
-            }
+            if (typeof loadBrandTrainingUI === 'function') loadBrandTrainingUI();
         }
     }
-    
 }
 
 function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c] || c)); }
@@ -1892,30 +1391,17 @@ function formatFileSize(bytes) { if (!bytes) return ''; const kb = bytes / 1024;
 function openProcCreateOrderModal() {
     const modal = document.getElementById('procCreateOrderModal');
     if (!modal) return;
-
     const bldgSel = document.getElementById('procBuilding');
     if (bldgSel) {
         bldgSel.innerHTML = '<option value="">Select Building</option>' +
-            buildingsState.filter(b => b.active).map(b =>
-                `<option value="${b.code}">${escapeHtml(b.code)} - ${escapeHtml(b.name)}</option>`
-            ).join('');
+            buildingsState.filter(b => b.active).map(b => `<option value="${b.code}">${escapeHtml(b.code)} - ${escapeHtml(b.name)}</option>`).join('');
     }
-
     const ccContainer = document.getElementById('procCostCenterRadios');
     if (ccContainer) ccContainer.innerHTML = '<span class="text-muted">Select a building first</span>';
-
     const form = document.getElementById('procCreateOrderForm');
     if (form) form.reset();
-
-    if (bldgSel) {
-        bldgSel.onchange = () => renderProcCostCenterRadios(bldgSel.value);
-    }
-
-    // Initialize autocomplete for proc modal if available
-    if (typeof initProcModalAutocomplete === 'function') {
-        initProcModalAutocomplete();
-    }
-
+    if (bldgSel) bldgSel.onchange = () => renderProcCostCenterRadios(bldgSel.value);
+    if (typeof initProcModalAutocomplete === 'function') initProcModalAutocomplete();
     modal.classList.remove('hidden');
 }
 
@@ -1927,41 +1413,24 @@ function closeProcCreateOrderModal() {
 function renderProcCostCenterRadios(buildingCode) {
     const container = document.getElementById('procCostCenterRadios');
     if (!container) return;
-
-    if (!buildingCode) {
-        container.innerHTML = '<span class="text-muted">Select a building first</span>';
-        return;
-    }
-
+    if (!buildingCode) { container.innerHTML = '<span class="text-muted">Select a building first</span>'; return; }
     const filtered = costCentersState.filter(cc => cc.building_code === buildingCode && cc.active);
-    if (!filtered.length) {
-        container.innerHTML = '<span class="text-muted">No cost centers for this building</span>';
-        return;
-    }
-
+    if (!filtered.length) { container.innerHTML = '<span class="text-muted">No cost centers for this building</span>'; return; }
     container.innerHTML = filtered.map(cc =>
-        `<label class="radio-label">
-            <input type="radio" name="procCostCenter" value="${cc.id}" required>
-            <span class="radio-text"><strong>${escapeHtml(cc.code)}</strong> — ${escapeHtml(cc.name)}</span>
-        </label>`
+        `<label class="radio-label"><input type="radio" name="procCostCenter" value="${cc.id}" required><span class="radio-text"><strong>${escapeHtml(cc.code)}</strong> - ${escapeHtml(cc.name)}</span></label>`
     ).join('');
 }
 
 async function handleProcCreateOrder(e) {
     e.preventDefault();
-
     const building = document.getElementById('procBuilding')?.value;
     if (!building) { alert('Please select a building'); return; }
-
     const selectedCC = document.querySelector('input[name="procCostCenter"]:checked');
     if (!selectedCC) { alert('Please select a cost center'); return; }
-
     const itemDescription = document.getElementById('procItemDescription')?.value.trim() || '';
     const dateNeeded = document.getElementById('procDateNeeded')?.value || '';
-
     if (!itemDescription) { alert('Item description is required'); return; }
     if (!dateNeeded) { alert('Date needed is required'); return; }
-
     const formData = new FormData();
     formData.append('building', building);
     formData.append('costCenterId', selectedCC.value);
@@ -1974,88 +1443,60 @@ async function handleProcCreateOrder(e) {
     formData.append('notes', document.getElementById('procNotes')?.value.trim() || '');
     formData.append('requester', currentUser.name);
     formData.append('requesterEmail', currentUser.email);
-
-    // Attach files from procAttachments input if present
     const procFiles = document.getElementById('procAttachments');
     if (procFiles && procFiles.files) {
-        for (let i = 0; i < procFiles.files.length; i++) {
-            formData.append('files', procFiles.files[i]);
-        }
+        for (let i = 0; i < procFiles.files.length; i++) formData.append('files', procFiles.files[i]);
     }
-
-    // Show progress overlay
-    if (window.UploadProgress) {
-        window.UploadProgress.show();
-    }
-
-    // Use XMLHttpRequest for upload progress tracking
+    if (window.UploadProgress) window.UploadProgress.show();
     return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
-
-        // Track upload progress
         xhr.upload.addEventListener('progress', (evt) => {
-            if (evt.lengthComputable && window.UploadProgress) {
-                const percentComplete = (evt.loaded / evt.total) * 100;
-                window.UploadProgress.update(percentComplete);
-            }
+            if (evt.lengthComputable && window.UploadProgress) window.UploadProgress.update((evt.loaded / evt.total) * 100);
         });
-
-        // Handle completion
         xhr.addEventListener('load', () => {
-            if (window.UploadProgress) {
-                window.UploadProgress.hide();
-            }
-
+            if (window.UploadProgress) window.UploadProgress.hide();
             try {
                 const data = JSON.parse(xhr.responseText);
-                if (!data.success) {
-                    alert('Failed to create order: ' + (data.message || 'Unknown error'));
-                    reject(new Error(data.message));
-                    return;
-                }
+                if (!data.success) { alert('Failed to create order: ' + (data.message || 'Unknown error')); reject(new Error(data.message)); return; }
                 alert('Order created successfully!');
                 closeProcCreateOrderModal();
                 loadOrders();
                 resolve(data);
-            } catch (err) {
-                alert('Failed to process server response.');
-                reject(err);
-            }
+            } catch (err) { alert('Failed to process server response.'); reject(err); }
         });
-
-        // Handle errors
-        xhr.addEventListener('error', () => {
-            if (window.UploadProgress) {
-                window.UploadProgress.hide();
-            }
-            alert('Failed to create order. Network error.');
-            reject(new Error('Network error'));
-        });
-
-        xhr.addEventListener('abort', () => {
-            if (window.UploadProgress) {
-                window.UploadProgress.hide();
-            }
-            alert('Upload cancelled.');
-            reject(new Error('Upload cancelled'));
-        });
-
-        // Open connection and send
+        xhr.addEventListener('error', () => { if (window.UploadProgress) window.UploadProgress.hide(); alert('Failed to create order. Network error.'); reject(new Error('Network error')); });
+        xhr.addEventListener('abort', () => { if (window.UploadProgress) window.UploadProgress.hide(); alert('Upload cancelled.'); reject(new Error('Upload cancelled')); });
         xhr.open('POST', `${API_BASE}/orders`);
         xhr.setRequestHeader('Authorization', `Bearer ${authToken}`);
         xhr.send(formData);
     });
 }
 
-// ⭐ Attach form handlers on DOMContentLoaded
+// Attach form handlers on DOMContentLoaded
 document.addEventListener('DOMContentLoaded', () => {
     const procForm = document.getElementById('procCreateOrderForm');
-    if (procForm) {
-        procForm.addEventListener('submit', handleProcCreateOrder);
-    }
-
+    if (procForm) procForm.addEventListener('submit', handleProcCreateOrder);
     const cqForm = document.getElementById('createQuoteForm');
-    if (cqForm) {
-        cqForm.addEventListener('submit', handleCreateQuote);
-    }
+    if (cqForm) cqForm.addEventListener('submit', handleCreateQuote);
 });
+
+// v3.0: showToast - global toast notification function
+function showToast(message, type) {
+    if (typeof window.showToast === 'function' && window.showToast !== showToast) {
+        window.showToast(message, type);
+        return;
+    }
+    const container = document.getElementById('toastContainer') || (() => {
+        const c = document.createElement('div');
+        c.id = 'toastContainer';
+        c.style.cssText = 'position:fixed;bottom:1rem;right:1rem;z-index:9999;display:flex;flex-direction:column;gap:0.5rem;';
+        document.body.appendChild(c);
+        return c;
+    })();
+    const toast = document.createElement('div');
+    const colors = { success: '#10b981', error: '#ef4444', info: '#06b6d4', warning: '#f59e0b' };
+    toast.style.cssText = 'background:' + (colors[type] || colors.success) + ';color:white;padding:0.75rem 1.25rem;border-radius:0.5rem;font-size:0.875rem;box-shadow:0 4px 6px rgba(0,0,0,0.3);animation:slideInRight 0.3s ease;max-width:320px;';
+    toast.textContent = message;
+    container.appendChild(toast);
+    setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; setTimeout(() => toast.remove(), 300); }, 3500);
+}

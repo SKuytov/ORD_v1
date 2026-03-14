@@ -87,7 +87,7 @@ async function getSupplierSuggestions(orderId) {
                 console.log(`    🏆 BRAND BONUS: +${brandBonus} (${brandResults.detectedBrands.join(', ')})`);
             }
             
-            // A. Check TRAINING_ORDERS table (uses different column names!)
+            // A. Check TRAINING_ORDERS table (column is item_description, no category col)
             let trainingMatches = 0;
             try {
                 for (const keyword of keywords) {
@@ -95,11 +95,8 @@ async function getSupplierSuggestions(orderId) {
                         SELECT COUNT(*) as match_count
                         FROM training_orders
                         WHERE supplier_id = ?
-                        AND (
-                            LOWER(description) LIKE ?
-                            OR LOWER(category) LIKE ?
-                        )
-                    `, [supplier.id, `%${keyword}%`, `%${keyword}%`]);
+                        AND LOWER(item_description) LIKE ?
+                    `, [supplier.id, `%${keyword}%`]);
                     
                     const matches = parseInt(trainingRows[0].match_count) || 0;
                     if (matches > 0) {
@@ -161,17 +158,17 @@ async function getSupplierSuggestions(orderId) {
                 }
             }
             
-            // D. Check category matches (BOTH tables)
+            // D. Check category matches (training_orders: search item_description; orders: category col)
             if (category) {
                 let trainingCatCount = 0;
                 try {
                     const [trainingCatRows] = await pool.query(
-                        'SELECT COUNT(*) as count FROM training_orders WHERE supplier_id = ? AND LOWER(category) = ?',
-                        [supplier.id, category]
+                        'SELECT COUNT(*) as count FROM training_orders WHERE supplier_id = ? AND LOWER(item_description) LIKE ?',
+                        [supplier.id, '%' + category + '%']
                     );
                     trainingCatCount = parseInt(trainingCatRows[0].count) || 0;
                 } catch (e) {
-                    // Column may not exist
+                    // Ignore
                 }
                 
                 const [categoryRows] = await pool.query(

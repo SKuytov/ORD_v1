@@ -133,9 +133,27 @@ exports.getOrders = async (req, res) => {
         }
         
         if (search) {
-            conditions.push('(o.item_description LIKE ? OR o.part_number LIKE ? OR o.requester_name LIKE ?)');
-            const s = `%${search}%`;
-            params.push(s, s, s);
+            const s = `%${search.trim()}%`;
+            const idMatch = parseInt(search.trim(), 10);
+            const idClause = !isNaN(idMatch) ? ' OR o.id = ?' : '';
+            const idParam = !isNaN(idMatch) ? [idMatch] : [];
+
+            conditions.push(`(
+                o.item_description LIKE ?
+                OR o.part_number LIKE ?
+                OR o.requester_name LIKE ?
+                OR o.notes LIKE ?
+                OR o.category LIKE ?
+                OR o.status LIKE ?
+                OR o.building LIKE ?
+                OR s.name LIKE ?
+                OR cc.code LIKE ?
+                OR cc.name LIKE ?
+                OR CAST(o.id AS CHAR) LIKE ?
+                OR EXISTS (SELECT 1 FROM order_files f2 WHERE f2.order_id = o.id AND f2.file_name LIKE ?)
+                ${idClause}
+            )`);
+            params.push(s, s, s, s, s, s, s, s, s, s, s, s, ...idParam);
         }
 
         if (conditions.length > 0) {

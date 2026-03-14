@@ -109,63 +109,6 @@ function pwApiPut(path, body) {
     }).then(r => r.json());
 }
 
-function pwApiDelete(path) {
-    const token = localStorage.getItem('authToken') || (typeof authToken !== 'undefined' ? authToken : '');
-    return fetch('/api' + path, {
-        method: 'DELETE',
-        headers: { 'Authorization': 'Bearer ' + token }
-    }).then(r => r.json());
-}
-
-/**
- * Upload a file as a quote PDF document.
- * Uses the procurement quote PDF upload endpoint.
- * @param {File} file - the PDF file to upload
- * @param {number} quoteId - quote ID
- * @param {Array} orderIds - order IDs to link the document to
- * Returns { success, documentId }
- */
-async function pwApiUploadQuotePDF(file, quoteId, orderIds) {
-    const token = localStorage.getItem('authToken') || (typeof authToken !== 'undefined' ? authToken : '');
-    const fd = new FormData();
-    fd.append('file', file);
-    fd.append('description', 'Supplier Quote PDF — Quote #' + quoteId);
-    fd.append('documentType', 'quote_pdf');
-    // The documents/upload endpoint requires at least one orderId.
-    // Pass the provided order IDs, or fallback to sending quoteId as placeholder
-    const ids = (orderIds && orderIds.length) ? orderIds : [];
-    if (ids.length > 0) {
-        ids.forEach(id => fd.append('orderIds', String(id)));
-    } else {
-        // No order IDs available — use the procurement-specific PDF route
-        try {
-            const res = await fetch(`/api/procurement/quotes/${quoteId}/upload-pdf`, {
-                method: 'POST',
-                headers: { 'Authorization': 'Bearer ' + token },
-                body: fd
-            });
-            if (!res.ok) { const txt = await res.text(); return { success: false, message: txt }; }
-            const data = await res.json();
-            return { success: data.success, documentId: data.documentId || (data.document && data.document.id), ...data };
-        } catch (err) {
-            return { success: false, message: err.message };
-        }
-    }
-    try {
-        const res = await fetch('/api/documents/upload', {
-            method: 'POST',
-            headers: { 'Authorization': 'Bearer ' + token },
-            body: fd
-        });
-        if (!res.ok) { const txt = await res.text(); return { success: false, message: txt }; }
-        const data = await res.json();
-        // documents/upload returns { success, document: { id, ... } }
-        return { success: data.success, documentId: data.document && data.document.id, ...data };
-    } catch (err) {
-        return { success: false, message: err.message };
-    }
-}
-
 // ============================================================
 // FORMAT HELPERS
 // ============================================================
@@ -620,665 +563,432 @@ async function executeCreateQuote() {
 async function getAISuggestionsForOrders(orderIds) {
     if (!orderIds || !orderIds.length) return [];
     try {
-        // Fetch suggestions for each order in parallel using the real endpoint
-        const results = await Promise.allSettled(
-            orderIds.map(id => pwApiGet(`/suppliers/suggestions/${id}`).catch(() => null))
+        // Call the real per-order endpoint for each order, then merge results
+        const perOrderResults = await Promise.all(
+            orderIds.map(id => pwApiGet(`/api/suppliers/suggestions/${id}`).catch(() => null))
         );
-        // Merge and deduplicate by supplier_id, summing scores
-        const scoreMap = {};
-        for (const r of results) {
-            if (r.status !== 'fulfilled' || !r.value || !r.value.suggestions) continue;
-            for (const s of r.value.suggestions) {
-                const sid = s.supplier_id || s.id;
-                if (!scoreMap[sid]) {
-                    scoreMap[sid] = { ...s, score: s.score || 0, match_reasons: s.match_reasons || [] };
-                } else {
-                    scoreMap[sid].score = (scoreMap[sid].score || 0) + (s.score || 0);
-                    if (s.match_reasons) scoreMap[sid].match_reasons = [...new Set([...scoreMap[sid].match_reasons, ...s.match_reasons])];
+        // Collect all unique supplier suggestions by supplier_id
+        const seen = new Set();
+        const merged = [];
+        for (const res of perOrderResults) {
+            if (!res || !res.suggestions) continue;
+            for (const s of res.suggestions) {
+                const key = s.supplier_id || s.id || s.name;
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    merged.push(s);
                 }
             }
         }
-        // Sort by score descending, return top 5
-        return Object.values(scoreMap)
-            .sort((a, b) => (b.score || 0) - (a.score || 0))
-            .slice(0, 5)
-            .map(s => ({
-                id: s.supplier_id || s.id,
-                supplier_id: s.supplier_id || s.id,
-                name: s.name || s.supplier_name,
-                email: s.email,
-                contact_person: s.contact_person,
-                score: Math.min(s.score, 1),
-                reasons: s.match_reasons || []
-            }));
-    } catch (err) {
-        console.error('getAISuggestionsForOrders error:', err);
-        return [];
-    }
+        return merged.slice(0, 3);
+    } catch (err) { console.error('getAISuggestionsForOrders error:', err); return []; }
 }
 
 // ============================================================
 // B. QUOTE LIFECYCLE PANEL
 // ============================================================
-
-function openQuoteLifecyclePanel(quoteId) {
-    PW.currentQuoteId = quoteId;
-    const existing = document.getElementById('pwLifecyclePanel');
+async function openQuoteLifecyclePanel(quoteId) {
+    if (!quoteId) return;
+    const existing = document.getElementById('lifecyclePanel');
     if (existing) existing.remove();
+    PW.currentQuoteId = quoteId;
+    PW.panelOpen = true;
     const panel = document.createElement('div');
-    panel.id = 'pwLifecyclePanel';
-    panel.className = 'pw-lifecycle-panel';
+    panel.id = 'lifecyclePanel';
+    panel.className = 'lifecycle-panel';
     panel.innerHTML = `
-        <div class="pw-panel-header">
-            <h3 class="pw-panel-title">📋 Quote Lifecycle</h3>
-            <button class="pw-close-btn" id="pwLifecyclePanelClose">✕</button>
+        <div class="lifecycle-panel-header">
+            <div><h3 class="lifecycle-panel-title">🚀 Procurement Workspace</h3><div id="lcPanelSubtitle" class="lifecycle-panel-subtitle">Loading…</div></div>
+            <button class="pw-close-btn" id="btnCloseLifecycle">✕</button>
         </div>
-        <div class="pw-panel-body" id="pwLifecyclePanelBody">${pwSpinner()}</div>
-    `;
+        <div class="lifecycle-panel-body" id="lifecyclePanelBody">
+            <div style="padding:2rem;text-align:center;">${pwSpinner()}<p style="margin-top:1rem;color:#94a3b8;">Loading lifecycle data…</p></div>
+        </div>`;
     document.body.appendChild(panel);
-    panel.querySelector('#pwLifecyclePanelClose').addEventListener('click', closeQuoteLifecyclePanel);
-    requestAnimationFrame(() => panel.classList.add('pw-panel-open'));
-    loadQuoteLifecycle(quoteId);
+    document.getElementById('btnCloseLifecycle').addEventListener('click', closeLifecyclePanel);
+    const backdrop = document.createElement('div');
+    backdrop.id = 'lifecycleBackdrop';
+    backdrop.className = 'lifecycle-backdrop';
+    backdrop.addEventListener('click', closeLifecyclePanel);
+    document.body.insertBefore(backdrop, panel);
+    requestAnimationFrame(() => { panel.classList.add('panel-open'); backdrop.classList.add('backdrop-visible'); });
+    await loadAndRenderLifecycle(quoteId);
 }
 
-function closeQuoteLifecyclePanel() {
-    const panel = document.getElementById('pwLifecyclePanel');
-    if (panel) { panel.classList.remove('pw-panel-open'); setTimeout(() => panel.remove(), 350); }
+function closeLifecyclePanel() {
+    const panel = document.getElementById('lifecyclePanel');
+    const backdrop = document.getElementById('lifecycleBackdrop');
+    if (panel) { panel.classList.remove('panel-open'); panel.classList.add('panel-closing'); setTimeout(() => panel.remove(), 350); }
+    if (backdrop) { backdrop.classList.remove('backdrop-visible'); setTimeout(() => backdrop.remove(), 350); }
+    PW.panelOpen = false;
     PW.currentQuoteId = null;
-    PW.currentLifecycle = null;
 }
 
-async function loadQuoteLifecycle(quoteId) {
-    const body = document.getElementById('pwLifecyclePanelBody');
-    if (!body) return;
+async function loadAndRenderLifecycle(quoteId) {
     try {
-        const data = await pwApiGet(`/procurement/lifecycle/quote/${quoteId}`);
-        if (!data.success) { body.innerHTML = '<div class="pw-error">Failed to load lifecycle data</div>'; return; }
-        PW.currentLifecycle = data.lifecycle;
-        body.innerHTML = renderLifecyclePanel(data.lifecycle);
-        bindLifecyclePanelEvents(data.lifecycle);
+        const res = await pwApiGet(`/procurement/lifecycle/quote/${quoteId}`);
+        if (!res.success) { showLifecycleError(res.message || 'Failed to load lifecycle'); return; }
+        PW.currentLifecycle = res.lifecycle;
+        const { quote, items, responses, purchase_orders, invoices, sendLog } = res.lifecycle;
+        const subtitle = document.getElementById('lcPanelSubtitle');
+        if (subtitle) subtitle.textContent = `${quote.quote_number} • ${quote.supplier_name} • ${items.length} item(s)`;
+        const body = document.getElementById('lifecyclePanelBody');
+        if (body) body.innerHTML = renderLifecycleContent(quote, items, responses, purchase_orders, invoices, sendLog);
+        bindLifecycleEvents(quoteId, quote, items, responses, purchase_orders, invoices);
     } catch (err) {
-        body.innerHTML = '<div class="pw-error">Error loading lifecycle: ' + escHtml(err.message) + '</div>';
+        console.error('loadAndRenderLifecycle error:', err);
+        showLifecycleError('Network error loading lifecycle');
     }
 }
 
-function renderLifecyclePanel(lifecycle) {
-    const { quote, items, responses, purchase_orders, invoices, sendLog } = lifecycle;
-    let html = '';
-
-    // ---- Quote Header ----
-    html += `
-        <div class="pw-lc-section">
-            <div class="pw-lc-section-header">
-                <span>📋 Quote ${escHtml(quote.quote_number)}</span>
-                ${pwStatusBadge(quote.status, 'quote')}
-            </div>
-            <div class="pw-lc-grid">
-                <div><div class="pw-lc-label">Supplier</div><div class="pw-lc-value">${escHtml(quote.supplier_name || '—')}</div></div>
-                <div><div class="pw-lc-label">Total</div><div class="pw-lc-value">${pwFmtPrice(quote.total_amount, quote.currency)}</div></div>
-                <div><div class="pw-lc-label">Valid Until</div><div class="pw-lc-value">${pwFmtDate(quote.valid_until)}</div></div>
-                <div><div class="pw-lc-label">Created</div><div class="pw-lc-value">${pwFmtDate(quote.created_at)}</div></div>
-            </div>
-            ${quote.notes ? `<div class="pw-lc-notes">💬 ${escHtml(quote.notes)}</div>` : ''}
-        </div>`;
-
-    // ---- Items ----
-    if (items && items.length) {
-        html += `<div class="pw-lc-section"><div class="pw-lc-section-header"><span>📦 Items (${items.length})</span></div>`;
-        const responseMap = {};
-        if (responses) for (const r of responses) { if (!responseMap[r.order_id]) responseMap[r.order_id] = r; }
-        html += '<div class="pw-table-wrapper"><table class="pw-table pw-sm-table"><thead><tr><th>Order</th><th>Description</th><th>Qty</th><th>Response</th><th>Price</th><th>Delivery</th></tr></thead><tbody>';
-        for (const item of items) {
-            const resp = responseMap[item.order_id];
-            html += `<tr>
-                <td>#${item.order_id}</td>
-                <td>${escHtml((item.item_description || '').substring(0, 35))}</td>
-                <td>${item.quantity || item.order_qty || '—'}</td>
-                <td>${resp ? pwStatusBadge(resp.status, 'response') : '<span class="pw-badge badge-gray">Pending</span>'}</td>
-                <td>${resp && resp.unit_price ? pwFmtPrice(resp.unit_price, resp.currency) : '—'}</td>
-                <td>${resp && resp.promised_delivery_date ? pwFmtDate(resp.promised_delivery_date) : '—'}</td>
-            </tr>`;
-        }
-        html += '</tbody></table></div></div>';
-    }
-
-    // ---- Actions ----
-    html += `<div class="pw-lc-actions">`;
-
-    // Send to Supplier
-    if (quote.status === 'Draft' || quote.status === 'Received') {
-        html += `<button class="btn btn-secondary btn-sm" id="pwBtnSendSupplier">📧 Send to Supplier</button>`;
-    }
-
-    // Record Response button
-    if (quote.status === 'Sent to Supplier' || quote.status === 'Received') {
-        html += `<button class="btn btn-primary btn-sm" id="pwBtnRecordResponse">🗒 Record Response</button>`;
-    }
-
-    // Upload PDF
-    html += `<button class="btn btn-secondary btn-sm" id="pwBtnUploadPDF">📄 Upload Quote PDF</button>`;
-
-    // Create PO
-    if ((quote.status === 'Approved' || quote.status === 'Received') && (!purchase_orders || !purchase_orders.length)) {
-        html += `<button class="btn btn-primary btn-sm" id="pwBtnCreatePO">📦 Create Purchase Order</button>`;
-    }
-
-    // Record Invoice
-    if (purchase_orders && purchase_orders.length > 0 && (!invoices || !invoices.length)) {
-        html += `<button class="btn btn-primary btn-sm" id="pwBtnRecordInvoice">🧾 Record Invoice</button>`;
-    }
-
-    // Send to Accounting
-    if (invoices && invoices.length > 0) {
-        const pendingInvoices = invoices.filter(inv => inv.status === 'received' || inv.status === 'verified');
-        if (pendingInvoices.length) {
-            html += `<button class="btn btn-primary btn-sm" id="pwBtnSendAccounting">🏦 Send to Accounting</button>`;
-        }
-    }
-
-    html += `</div>`;
-
-    // ---- PO Section ----
-    if (purchase_orders && purchase_orders.length) {
-        const po = purchase_orders[0];
-        html += `
-            <div class="pw-lc-section">
-                <div class="pw-lc-section-header"><span>📦 Purchase Order</span>${pwStatusBadge(po.status, 'po')}</div>
-                <div class="pw-lc-grid">
-                    <div><div class="pw-lc-label">PO Number</div><div class="pw-lc-value">${escHtml(po.po_number)}</div></div>
-                    <div><div class="pw-lc-label">Total</div><div class="pw-lc-value">${pwFmtPrice(po.total_amount, po.currency)}</div></div>
-                    <div><div class="pw-lc-label">Created</div><div class="pw-lc-value">${pwFmtDate(po.created_at)}</div></div>
-                    ${po.expected_delivery_date ? `<div><div class="pw-lc-label">Expected Delivery</div><div class="pw-lc-value">${pwFmtDate(po.expected_delivery_date)}</div></div>` : ''}
-                </div>
-                <div class="pw-lc-actions" style="margin-top:0.5rem;">
-                    <select id="poStatusSelect" class="pw-form-control" style="max-width:180px;">
-                        ${['draft','sent','confirmed','partially_delivered','delivered','cancelled'].map(s => `<option value="${s}" ${po.status === s ? 'selected' : ''}>${s.replace(/_/g,' ')}</option>`).join('')}
-                    </select>
-                    <button class="btn btn-primary btn-sm" id="pwBtnUpdatePO" data-po-id="${po.id}">Update Status</button>
-                </div>
-            </div>`;
-    }
-
-    // ---- Invoice Section ----
-    if (invoices && invoices.length) {
-        const inv = invoices[0];
-        html += `
-            <div class="pw-lc-section">
-                <div class="pw-lc-section-header"><span>🧾 Invoice</span>${pwStatusBadge(inv.status, 'invoice')}</div>
-                <div class="pw-lc-grid">
-                    <div><div class="pw-lc-label">Invoice #</div><div class="pw-lc-value">${escHtml(inv.invoice_number || '—')}</div></div>
-                    <div><div class="pw-lc-label">Amount</div><div class="pw-lc-value">${pwFmtPrice(inv.total_amount, inv.currency)}</div></div>
-                    <div><div class="pw-lc-label">Due Date</div><div class="pw-lc-value">${pwFmtDate(inv.due_date)}</div></div>
-                    <div><div class="pw-lc-label">Status</div><div class="pw-lc-value">${pwStatusBadge(inv.status, 'invoice')}</div></div>
-                </div>
-            </div>`;
-    }
-
-    // ---- Send Log ----
-    if (sendLog && sendLog.length) {
-        html += `<div class="pw-lc-section"><div class="pw-lc-section-header"><span>📧 Send History</span></div>`;
-        for (const entry of sendLog) {
-            html += `<div class="pw-lc-log-item"><span class="pw-lc-log-date">${pwFmtDateTime(entry.sent_at)}</span> → ${escHtml(entry.sent_to_email || '—')} by ${escHtml(entry.sent_by_name || '—')}</div>`;
-        }
-        html += '</div>';
-    }
-
-    return html;
+function showLifecycleError(msg) {
+    const body = document.getElementById('lifecyclePanelBody');
+    if (body) body.innerHTML = `<div style="padding:2rem;text-align:center;color:#ef4444;">⚠ ${escHtml(msg)}</div>`;
 }
 
-function bindLifecyclePanelEvents(lifecycle) {
-    const { quote, items, purchase_orders, invoices } = lifecycle;
-
-    const btnSendSupplier = document.getElementById('pwBtnSendSupplier');
-    if (btnSendSupplier) {
-        btnSendSupplier.addEventListener('click', () => openSendQuoteDialogPW(quote));
-    }
-
-    const btnRecordResponse = document.getElementById('pwBtnRecordResponse');
-    if (btnRecordResponse) {
-        btnRecordResponse.addEventListener('click', () => openRecordResponseDialog(quote.id, items));
-    }
-
-    const btnUploadPDF = document.getElementById('pwBtnUploadPDF');
-    if (btnUploadPDF) {
-        btnUploadPDF.addEventListener('click', () => openUploadPDFDialog(quote.id, items));
-    }
-
-    const btnCreatePO = document.getElementById('pwBtnCreatePO');
-    if (btnCreatePO) {
-        btnCreatePO.addEventListener('click', () => openCreatePODialog(quote, items));
-    }
-
-    const btnRecordInvoice = document.getElementById('pwBtnRecordInvoice');
-    if (btnRecordInvoice) {
-        btnRecordInvoice.addEventListener('click', () => openRecordInvoiceDialog(quote, purchase_orders));
-    }
-
-    const btnSendAccounting = document.getElementById('pwBtnSendAccounting');
-    if (btnSendAccounting) {
-        btnSendAccounting.addEventListener('click', () => sendToAccounting(invoices[0].id));
-    }
-
-    const btnUpdatePO = document.getElementById('pwBtnUpdatePO');
-    if (btnUpdatePO) {
-        btnUpdatePO.addEventListener('click', async () => {
-            const poId = btnUpdatePO.dataset.poId;
-            const status = document.getElementById('poStatusSelect').value;
-            const actualDelivery = status === 'delivered' ? new Date().toISOString().split('T')[0] : null;
-            const res = await pwApiPut(`/procurement/purchase-orders/${poId}`, { status, actual_delivery_date: actualDelivery });
-            if (res.success) { showToast('PO updated', 'success'); loadQuoteLifecycle(quote.id); }
-            else showToast('Failed to update PO: ' + (res.message || 'Error'), 'error');
-        });
-    }
+function renderLifecycleContent(quote, items, responses, purchase_orders, invoices, sendLog) {
+    const po = purchase_orders && purchase_orders.length ? purchase_orders[0] : null;
+    return `
+        ${renderStage1(quote, items)}
+        ${renderStage2(quote, responses, sendLog)}
+        ${renderStage3(quote, items)}
+        ${renderStage4(po, quote)}
+        ${renderStage5(po, invoices)}
+    `;
 }
 
 // ============================================================
-// C. SEND QUOTE TO SUPPLIER (PW version)
+// STAGE 1: Quote Overview
 // ============================================================
-async function openSendQuoteDialogPW(quote) {
-    const overlay = document.createElement('div');
-    overlay.className = 'pw-modal-overlay';
-    const suppEmail = quote.supplier_email || '';
-    overlay.innerHTML = `
-        <div class="pw-modal-card">
-            <div class="pw-modal-header"><h3 class="pw-modal-title">📧 Send Quote to Supplier</h3><button class="pw-close-btn" id="sendDialogClose">✕</button></div>
-            <div style="padding:1rem;">
-                <div class="pw-form-group"><label class="pw-label">Supplier Email *</label>
-                    <input id="sendEmailInput" type="email" class="pw-form-control" value="${escHtml(suppEmail)}" placeholder="supplier@example.com">
-                </div>
-                <div class="pw-form-group"><label class="pw-label">Message (optional)</label>
-                    <textarea id="sendMessageInput" class="pw-form-control" rows="3" placeholder="Additional message..."></textarea>
-                </div>
-            </div>
-            <div class="pw-modal-footer">
-                <button class="btn btn-secondary btn-sm" id="sendDialogCancel">Cancel</button>
-                <button class="btn btn-primary btn-sm" id="sendDialogConfirm">📧 Send Email</button>
-            </div>
-        </div>`;
-    document.body.appendChild(overlay);
-    overlay.querySelector('#sendDialogClose').addEventListener('click', () => overlay.remove());
-    overlay.querySelector('#sendDialogCancel').addEventListener('click', () => overlay.remove());
-    overlay.querySelector('#sendDialogConfirm').addEventListener('click', async () => {
-        const email = document.getElementById('sendEmailInput').value.trim();
-        const message = document.getElementById('sendMessageInput').value.trim();
-        if (!email) { showToast('Please enter supplier email', 'warning'); return; }
-        const btn = overlay.querySelector('#sendDialogConfirm');
-        btn.disabled = true; btn.innerHTML = pwSpinner() + ' Sending…';
-        const res = await pwApiPost(`/quotes/${quote.id}/send`, { supplier_email: email, message: message || null });
-        if (res.success) { showToast('Quote sent to supplier', 'success'); overlay.remove(); loadQuoteLifecycle(quote.id); }
-        else { showToast('Send failed: ' + (res.message || 'Error'), 'error'); btn.disabled = false; btn.textContent = '📧 Send Email'; }
-    });
-}
+function renderStage1(quote, items) {
+    const isActive = ['Draft', 'Sent to Supplier', 'Received'].includes(quote.status);
+    const isDone = ['Under Approval', 'Approved', 'Rejected'].includes(quote.status) || (quote.status && !['Draft', 'Sent to Supplier', 'Received'].includes(quote.status));
+    const cls = isDone ? 'stage-done' : isActive ? 'stage-active' : 'stage-pending';
+    const icon = isDone ? '✅' : '📋';
 
-// ============================================================
-// E. RECORD SUPPLIER RESPONSE DIALOG
-// ============================================================
-function openRecordResponseDialog(quoteId, items) {
-    const overlay = document.createElement('div');
-    overlay.className = 'pw-modal-overlay';
-    const itemOpts = (items || []).map(i =>
-        `<option value="${i.order_id}">${escHtml(i.item_description || 'Order #' + i.order_id)} (Order #${i.order_id})</option>`
-    ).join('');
-    overlay.innerHTML = `
-        <div class="pw-modal-card">
-            <div class="pw-modal-header"><h3 class="pw-modal-title">🗒 Record Supplier Response</h3><button class="pw-close-btn" id="respDialogClose">✕</button></div>
-            <div style="padding:1rem;display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
-                <div style="grid-column:1/-1;"><label class="pw-label">Order Item *</label>
-                    <select id="respDlgOrderId" class="pw-form-control"><option value="">Select item…</option>${itemOpts}</select>
-                </div>
-                <div><label class="pw-label">Unit Price</label><input id="respDlgUnitPrice" type="number" class="pw-form-control" step="0.01" placeholder="0.00"></div>
-                <div><label class="pw-label">Currency</label>
-                    <select id="respDlgCurrency" class="pw-form-control">
-                        <option value="EUR">EUR</option><option value="BGN">BGN</option><option value="USD">USD</option>
-                    </select>
-                </div>
-                <div><label class="pw-label">Delivery Date</label><input id="respDlgDelivery" type="date" class="pw-form-control"></div>
-                <div><label class="pw-label">Lead Time (days)</label><input id="respDlgLeadTime" type="number" class="pw-form-control" min="0"></div>
-                <div><label class="pw-label">Availability</label>
-                    <select id="respDlgAvailability" class="pw-form-control">
-                        <option value="available">Available</option><option value="in_stock">In Stock</option>
-                        <option value="on_order">On Order</option><option value="partial">Partial</option>
-                        <option value="unavailable">Unavailable</option>
-                    </select>
-                </div>
-                <div><label class="pw-label">Status</label>
-                    <select id="respDlgStatus" class="pw-form-control">
-                        <option value="pending">Pending</option><option value="accepted">Accepted</option>
-                        <option value="rejected">Rejected</option><option value="negotiating">Negotiating</option>
-                    </select>
-                </div>
-                <div style="grid-column:1/-1;"><label class="pw-label">Supplier Notes</label>
-                    <textarea id="respDlgNotes" class="pw-form-control" rows="2" placeholder="Any notes from the supplier..."></textarea>
-                </div>
-                <div id="respPdfSection" style="grid-column:1/-1;">
-                    <label class="pw-label">📄 Attach Supplier Quote PDF (optional)</label>
-                    <input type="file" id="respDlgPdfFile" accept=".pdf" class="pw-form-control">
-                    <div id="respPdfStatus" style="font-size:0.75rem;color:#64748b;margin-top:0.25rem;"></div>
-                </div>
-            </div>
-            <div class="pw-modal-footer">
-                <button class="btn btn-secondary btn-sm" id="respDialogCancel">Cancel</button>
-                <button class="btn btn-primary btn-sm" id="respDialogSave">Save Response</button>
-            </div>
-        </div>`;
-    document.body.appendChild(overlay);
-    overlay.querySelector('#respDialogClose').addEventListener('click', () => overlay.remove());
-    overlay.querySelector('#respDialogCancel').addEventListener('click', () => overlay.remove());
-    overlay.querySelector('#respDialogSave').addEventListener('click', async () => {
-        const orderId = document.getElementById('respDlgOrderId').value;
-        if (!orderId) { showToast('Please select an order item', 'warning'); return; }
-        const btn = overlay.querySelector('#respDialogSave');
-        btn.disabled = true; btn.innerHTML = pwSpinner() + ' Saving…';
-        // Upload PDF first if provided
-        let pdfDocId = null;
-        const pdfFile = document.getElementById('respDlgPdfFile').files[0];
-        if (pdfFile) {
-            document.getElementById('respPdfStatus').textContent = 'Uploading PDF...';
-            const uploadRes = await pwApiUploadQuotePDF(pdfFile, quoteId, [orderId]);
-            if (uploadRes.success) {
-                pdfDocId = uploadRes.documentId;
-                document.getElementById('respPdfStatus').textContent = 'PDF uploaded successfully';
-            } else {
-                showToast('PDF upload failed: ' + (uploadRes.message || 'Error'), 'error');
-                btn.disabled = false; btn.textContent = 'Save Response'; return;
-            }
-        }
-        const payload = {
-            order_id: parseInt(orderId, 10),
-            unit_price: document.getElementById('respDlgUnitPrice').value ? parseFloat(document.getElementById('respDlgUnitPrice').value) : null,
-            currency: document.getElementById('respDlgCurrency').value,
-            promised_delivery_date: document.getElementById('respDlgDelivery').value || null,
-            lead_time_days: document.getElementById('respDlgLeadTime').value ? parseInt(document.getElementById('respDlgLeadTime').value, 10) : null,
-            availability: document.getElementById('respDlgAvailability').value,
-            status: document.getElementById('respDlgStatus').value,
-            supplier_notes: document.getElementById('respDlgNotes').value || null,
-            response_document_id: pdfDocId || null
-        };
-        const res = await pwApiPost(`/procurement/quotes/${quoteId}/responses`, payload);
-        if (res.success) {
-            showToast('Response saved', 'success');
-            overlay.remove();
-            loadQuoteLifecycle(quoteId);
-            if (typeof loadQuotes === 'function') loadQuotes();
-        } else {
-            showToast('Failed: ' + (res.message || 'Error'), 'error');
-            btn.disabled = false; btn.textContent = 'Save Response';
-        }
-    });
-}
-
-// ============================================================
-// F. UPLOAD PDF DIALOG (Standalone, no order ID required)
-// ============================================================
-function openUploadPDFDialog(quoteId, items) {
-    const overlay = document.createElement('div');
-    overlay.className = 'pw-modal-overlay';
-    const orderOpts = (items || []).map(i =>
-        `<option value="${i.order_id}">${escHtml(i.item_description || 'Order #' + i.order_id)}</option>`
-    ).join('');
-    overlay.innerHTML = `
-        <div class="pw-modal-card" style="max-width:480px;">
-            <div class="pw-modal-header"><h3 class="pw-modal-title">📄 Upload Supplier Quote PDF</h3><button class="pw-close-btn" id="pdfDlgClose">✕</button></div>
-            <div style="padding:1rem;">
-                <div class="pw-form-group">
-                    <label class="pw-label">Select PDF File *</label>
-                    <input type="file" id="pdfDlgFile" accept=".pdf" class="pw-form-control">
-                </div>
-                <div class="pw-form-group">
-                    <label class="pw-label">Link to Order Item (optional)</label>
-                    <select id="pdfDlgOrderId" class="pw-form-control">
-                        <option value="">General quote PDF (no specific order)</option>
-                        ${orderOpts}
-                    </select>
-                </div>
-                <div id="pdfUploadStatus" style="font-size:0.8rem;color:#94a3b8;"></div>
-            </div>
-            <div class="pw-modal-footer">
-                <button class="btn btn-secondary btn-sm" id="pdfDlgCancel">Cancel</button>
-                <button class="btn btn-primary btn-sm" id="pdfDlgUpload">📄 Upload</button>
-            </div>
-        </div>`;
-    document.body.appendChild(overlay);
-    overlay.querySelector('#pdfDlgClose').addEventListener('click', () => overlay.remove());
-    overlay.querySelector('#pdfDlgCancel').addEventListener('click', () => overlay.remove());
-    overlay.querySelector('#pdfDlgUpload').addEventListener('click', async () => {
-        const file = document.getElementById('pdfDlgFile').files[0];
-        if (!file) { showToast('Please select a PDF file', 'warning'); return; }
-        const orderIdVal = document.getElementById('pdfDlgOrderId').value;
-        const orderIds = orderIdVal ? [parseInt(orderIdVal, 10)] : [];
-        const statusEl = document.getElementById('pdfUploadStatus');
-        const btn = overlay.querySelector('#pdfDlgUpload');
-        btn.disabled = true; btn.innerHTML = pwSpinner() + ' Uploading…';
-        statusEl.textContent = 'Uploading...';
-        const res = await pwApiUploadQuotePDF(file, quoteId, orderIds);
-        if (res.success) {
-            showToast('PDF uploaded successfully (Document ID: ' + res.documentId + ')', 'success');
-            statusEl.textContent = '✓ Uploaded: Document ID ' + res.documentId;
-            btn.textContent = 'Done';
-            setTimeout(() => { overlay.remove(); loadQuoteLifecycle(quoteId); }, 1000);
-        } else {
-            showToast('Upload failed: ' + (res.message || 'Error'), 'error');
-            statusEl.textContent = '✕ Failed: ' + (res.message || 'Error');
-            btn.disabled = false; btn.textContent = '📄 Upload';
-        }
-    });
-}
-
-// ============================================================
-// G. CREATE PURCHASE ORDER DIALOG
-// ============================================================
-function openCreatePODialog(quote, items) {
-    const overlay = document.createElement('div');
-    overlay.className = 'pw-modal-overlay';
-    let itemRows = (items || []).map((item, idx) => `
+    const itemRows = items.map(item => `
         <tr>
-            <td>${escHtml(item.item_description || ('Order #' + item.order_id))}</td>
-            <td>${item.order_qty || item.quantity || 1}</td>
-            <td><input type="number" class="pw-form-control po-unit-price" data-order-id="${item.order_id}" data-idx="${idx}" step="0.01" placeholder="0.00" value="${item.unit_price || ''}"></td>
-            <td class="po-total-cell" data-idx="${idx}">—</td>
-        </tr>
-    `).join('');
-    overlay.innerHTML = `
-        <div class="pw-modal-card" style="max-width:600px;">
-            <div class="pw-modal-header"><h3 class="pw-modal-title">📦 Create Purchase Order</h3><button class="pw-close-btn" id="poDlgClose">✕</button></div>
-            <div style="padding:1rem;">
-                <div class="pw-lc-grid" style="margin-bottom:1rem;">
-                    <div><div class="pw-lc-label">Supplier</div><div class="pw-lc-value">${escHtml(quote.supplier_name || '—')}</div></div>
-                    <div><div class="pw-lc-label">Currency</div>
-                        <select id="poCurrency" class="pw-form-control"><option value="EUR">EUR</option><option value="BGN">BGN</option><option value="USD">USD</option></select>
-                    </div>
-                    <div style="grid-column:1/-1;"><label class="pw-label">Expected Delivery Date</label>
-                        <input type="date" id="poExpectedDelivery" class="pw-form-control">
-                    </div>
-                    <div style="grid-column:1/-1;"><label class="pw-label">Delivery Address</label>
-                        <input type="text" id="poDeliveryAddress" class="pw-form-control" placeholder="Optional">  
-                    </div>
-                    <div style="grid-column:1/-1;"><label class="pw-label">Payment Terms</label>
-                        <input type="text" id="poPaymentTerms" class="pw-form-control" placeholder="e.g. Net 30">
-                    </div>
-                </div>
-                <div class="pw-table-wrapper">
-                    <table class="pw-table pw-sm-table">
-                        <thead><tr><th>Item</th><th>Qty</th><th>Unit Price</th><th>Total</th></tr></thead>
-                        <tbody id="poItemsBody">${itemRows}</tbody>
-                    </table>
-                </div>
-                <div style="margin-top:0.5rem;font-weight:600;text-align:right;">Total: <span id="poGrandTotal">—</span></div>
-            </div>
-            <div class="pw-modal-footer">
-                <button class="btn btn-secondary btn-sm" id="poDlgCancel">Cancel</button>
-                <button class="btn btn-primary btn-sm" id="poDlgCreate">📦 Create PO</button>
-            </div>
-        </div>`;
-    document.body.appendChild(overlay);
-    overlay.querySelector('#poDlgClose').addEventListener('click', () => overlay.remove());
-    overlay.querySelector('#poDlgCancel').addEventListener('click', () => overlay.remove());
-    // Live total calculation
-    function recalcTotals() {
-        let grand = 0;
-        overlay.querySelectorAll('.po-unit-price').forEach(input => {
-            const tr = input.closest('tr');
-            const qty = parseFloat(tr.cells[1].textContent) || 1;
-            const price = parseFloat(input.value) || 0;
-            const total = qty * price;
-            grand += total;
-            const idx = input.dataset.idx;
-            const totalCell = overlay.querySelector(`.po-total-cell[data-idx="${idx}"]`);
-            if (totalCell) totalCell.textContent = total > 0 ? total.toFixed(2) : '—';
-        });
-        const grandEl = document.getElementById('poGrandTotal');
-        if (grandEl) grandEl.textContent = grand > 0 ? grand.toFixed(2) + ' ' + (document.getElementById('poCurrency')?.value || 'EUR') : '—';
+            <td>${escHtml(item.item_description)}</td>
+            <td>${escHtml(item.part_number || '—')}</td>
+            <td>${item.quantity || 1}</td>
+            <td>${item.unit_price ? pwFmtPrice(item.unit_price, item.currency) : '<span class="pw-muted">Pending</span>'}</td>
+            <td>${item.total_price ? pwFmtPrice(item.total_price, item.currency) : '<span class="pw-muted">Pending</span>'}</td>
+            <td>${escHtml(item.building || '—')}</td>
+            <td>${pwFmtDate(item.date_needed)}</td>
+            <td>${item.files && item.files.length ? item.files.map(f => `<a href="${f.path}" target="_blank" class="pw-pdf-badge" style="display:inline-flex;align-items:center;gap:0.25rem;padding:0.15rem 0.4rem;background:#1e3a5f;border-radius:0.25rem;font-size:0.7rem;color:#60a5fa;text-decoration:none;">📄 ${escHtml(f.name)}</a>`).join(' ') : '<span class="pw-muted">—</span>'}</td>
+        </tr>`).join('');
+
+    return `<div class="lifecycle-stage ${cls}" id="stage1"><div class="stage-header">${icon}<div class="stage-title-area"><div class="stage-title">📋 Quote Overview</div><div class="stage-meta">${escHtml(quote.quote_number)} • ${pwStatusBadge(quote.status, 'quote')} • ${pwFmtDate(quote.created_at)}</div></div></div><div class="stage-body"><div class="pw-meta-grid"><div class="pw-meta-item"><span class="pw-detail-label">Supplier</span><span class="pw-detail-value">${escHtml(quote.supplier_name)}</span></div><div class="pw-meta-item"><span class="pw-detail-label">Total</span><span class="pw-detail-value" style="color:#10b981;font-weight:600;">${quote.total_amount ? pwFmtPrice(quote.total_amount, quote.currency) : 'Pending'}</span></div><div class="pw-meta-item"><span class="pw-detail-label">Valid Until</span><span class="pw-detail-value">${pwFmtDate(quote.valid_until)}</span></div><div class="pw-meta-item"><span class="pw-detail-label">Items</span><span class="pw-detail-value">${items.length}</span></div>${quote.notes ? `<div class="pw-meta-item pw-meta-full"><span class="pw-detail-label">Notes</span><span class="pw-detail-value">${escHtml(quote.notes)}</span></div>` : ''}</div><div class="pw-subsection-title" style="margin-top:1rem;">Quote Items</div><div class="pw-table-wrapper"><table class="pw-table"><thead><tr><th>Description</th><th>Part #</th><th>Qty</th><th>Unit Price</th><th>Total</th><th>Building</th><th>Date Needed</th><th>Files</th></tr></thead><tbody>${itemRows}</tbody></table></div></div></div>`;
+}
+
+// ============================================================
+// STAGE 2: Supplier Interaction
+// ============================================================
+function renderStage2(quote, responses, sendLog) {
+    const hasResponse = responses && responses.length > 0;
+    const isActive = quote.status === 'Sent to Supplier' || quote.status === 'Received';
+    const isDone = hasResponse || ['Under Approval', 'Approved'].includes(quote.status);
+    const cls = isDone ? 'stage-done' : isActive ? 'stage-active' : 'stage-pending';
+    const icon = isDone ? '✅' : '📧';
+    const canAddResponse = ['Draft', 'Sent to Supplier', 'Received'].includes(quote.status);
+
+    const sendLogHtml = sendLog && sendLog.length
+        ? `<div class="pw-subsection-title" style="margin-top:1rem;">Send History</div><div style="font-size:0.8rem;">${sendLog.map(l => `<div style="display:flex;gap:0.5rem;align-items:center;padding:0.25rem 0;border-bottom:1px solid rgba(148,163,184,0.1);"><span style="color:#64748b;">${pwFmtDateTime(l.sent_at)}</span><span>${escHtml(l.recipient_email || '')}</span><span style="color:#94a3b8;">— ${escHtml(l.sent_by_name || '')}</span></div>`).join('')}</div>`
+        : '';
+
+    const existingResponses = (responses || []).map(r => `<div class="pw-response-card" style="margin-bottom:0.75rem;" data-response-id="${r.id}"><div class="pw-response-header"><span>${escHtml(r.item_description || 'All items')}</span>${pwStatusBadge(r.status, 'response')}${pwStatusBadge(r.availability, 'availability')}<span class="pw-muted">${pwFmtDateTime(r.responded_at)}</span><button class="btn btn-secondary btn-sm pw-edit-response-btn" style="margin-left:auto;padding:0.2rem 0.6rem;font-size:0.75rem;" data-response-id="${r.id}">✏️ Edit</button></div><div class="pw-response-details">${r.unit_price ? `<div><span class="pw-detail-label">Unit Price:</span> <strong>${pwFmtPrice(r.unit_price, r.currency)}</strong></div>` : ''}${r.total_price ? `<div><span class="pw-detail-label">Total:</span> <strong>${pwFmtPrice(r.total_price, r.currency)}</strong></div>` : ''}${r.promised_delivery_date ? `<div><span class="pw-detail-label">Promised Delivery:</span> ${pwFmtDate(r.promised_delivery_date)}</div>` : ''}${r.lead_time_days ? `<div><span class="pw-detail-label">Lead Time:</span> ${r.lead_time_days} days</div>` : ''}${r.has_alternative ? `<div style="margin-top:0.5rem;padding:0.5rem;background:#1e293b;border-radius:0.375rem;border-left:3px solid #f59e0b;"><strong>Alternative:</strong> ${escHtml(r.alternative_description || '')} ${r.alternative_unit_price ? '— ' + pwFmtPrice(r.alternative_unit_price, r.currency) : ''}</div>` : ''}${r.supplier_notes ? `<div><span class="pw-detail-label">Supplier Notes:</span> ${escHtml(r.supplier_notes)}</div>` : ''}${r.internal_notes ? `<div><span class="pw-detail-label">Internal Notes:</span> ${escHtml(r.internal_notes)}</div>` : ''}${r.response_document_id ? `<div style="margin-top:0.4rem;"><a class="pw-pdf-badge" href="/api/documents/${r.response_document_id}/download" target="_blank" style="display:inline-flex;align-items:center;gap:0.3rem;padding:0.2rem 0.6rem;background:#1e3a5f;border-radius:0.375rem;font-size:0.75rem;color:#60a5fa;text-decoration:none;">📄 PDF</a></div>` : ''}<div style="font-size:0.75rem;color:#64748b;margin-top:0.3rem;">Recorded by ${escHtml(r.recorded_by_name || '—')}</div><div id="pw-edit-form-${r.id}" class="hidden" style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px solid rgba(148,163,184,0.2);"></div></div></div>`).join('');
+
+    const addResponseForm = canAddResponse ? `<div class="pw-subsection-title" style="margin-top:1rem;">Record Supplier Response</div><div class="pw-form-row"><div class="pw-form-group"><label class="pw-label">Unit Price</label><input type="number" id="respUnitPrice" class="pw-form-control" step="0.01" placeholder="0.00"></div><div class="pw-form-group"><label class="pw-label">Total Price</label><input type="number" id="respTotalPrice" class="pw-form-control" step="0.01" placeholder="0.00"></div><div class="pw-form-group"><label class="pw-label">Currency</label><select id="respCurrency" class="pw-form-control"><option value="EUR">EUR</option><option value="BGN">BGN</option><option value="USD">USD</option><option value="GBP">GBP</option></select></div></div><div class="pw-form-row"><div class="pw-form-group"><label class="pw-label">Promised Delivery</label><input type="date" id="respDeliveryDate" class="pw-form-control"></div><div class="pw-form-group"><label class="pw-label">Lead Time (days)</label><input type="number" id="respLeadTime" class="pw-form-control" placeholder="e.g. 14"></div><div class="pw-form-group"><label class="pw-label">Availability</label><select id="respAvailability" class="pw-form-control"><option value="available">Available</option><option value="in_stock">In Stock</option><option value="on_order">On Order</option><option value="partial">Partial</option><option value="unavailable">Unavailable</option></select></div></div><div class="pw-form-group"><label class="pw-label">Supplier Notes</label><textarea id="respSupplierNotes" class="pw-form-control" rows="2" placeholder="Notes from supplier…"></textarea></div><div class="pw-form-group"><label class="pw-label">Internal Notes</label><textarea id="respInternalNotes" class="pw-form-control" rows="2" placeholder="Internal notes…"></textarea></div><div style="display:flex;gap:0.5rem;align-items:center;"><button class="btn btn-primary" id="btnRecordResponse">💾 Save Response</button><label style="cursor:pointer;display:flex;align-items:center;gap:0.4rem;font-size:0.85rem;"><input type="checkbox" id="respHasAlternative"> Has Alternative</label></div><div id="respAlternativeArea" class="hidden" style="margin-top:0.75rem;padding:0.75rem;background:#0f172a;border-radius:6px;border-left:3px solid #f59e0b;"><div class="pw-form-row"><div class="pw-form-group"><label class="pw-label">Alternative Description</label><input type="text" id="respAltDesc" class="pw-form-control" placeholder="Alternative product…"></div><div class="pw-form-group"><label class="pw-label">Alternative Unit Price</label><input type="number" id="respAltPrice" class="pw-form-control" step="0.01"></div></div></div>` : '';
+
+    return `<div class="lifecycle-stage ${cls}" id="stage2"><div class="stage-header">${icon}<div class="stage-title-area"><div class="stage-title">📧 Supplier Interaction</div><div class="stage-meta">${hasResponse ? `${responses.length} response(s) recorded` : 'Awaiting supplier response'}</div></div></div><div class="stage-body">${sendLogHtml}${existingResponses ? `<div class="pw-subsection-title" style="margin-top:${sendLogHtml ? '1rem' : '0'};">Responses Received</div>${existingResponses}` : ''}${addResponseForm}</div></div>`;
+}
+
+// ============================================================
+// STAGE 3: Approval
+// ============================================================
+function renderStage3(quote, items) {
+    const isApproved = quote.status === 'Approved';
+    const isUnderApproval = quote.status === 'Under Approval';
+    const isRejected = quote.status === 'Rejected';
+    const canSubmit = ['Draft', 'Received'].includes(quote.status);
+    const isDone = isApproved;
+    const cls = isDone ? 'stage-done' : isUnderApproval ? 'stage-active' : isRejected ? 'stage-error' : 'stage-pending';
+    const icon = isDone ? '✅' : isRejected ? '❌' : '🔄';
+
+    const submitButton = canSubmit ? `<button class="btn btn-primary" id="btnSubmitApproval" style="margin-top:1rem;">📋 Submit for Approval</button>` : '';
+    const statusMessage = isUnderApproval
+        ? `<div style="padding:0.75rem;background:#1e3a5f;border-radius:6px;border-left:3px solid #3b82f6;"><strong>🔄 Under Review</strong> — Awaiting manager approval.</div>`
+        : isApproved
+            ? `<div style="padding:0.75rem;background:#064e3b;border-radius:6px;border-left:3px solid #10b981;"><strong>✅ Approved</strong> — Quote has been approved.</div>`
+            : isRejected
+                ? `<div style="padding:0.75rem;background:#450a0a;border-radius:6px;border-left:3px solid #ef4444;"><strong>❌ Rejected</strong> — Quote was rejected.</div>`
+                : `<div style="color:#94a3b8;font-size:0.9rem;">Quote must be submitted for manager approval before a PO can be created.</div>`;
+
+    return `<div class="lifecycle-stage ${cls}" id="stage3"><div class="stage-header">${icon}<div class="stage-title-area"><div class="stage-title">✅ Approval</div><div class="stage-meta">${isApproved ? 'Approved' : isUnderApproval ? 'Under Review' : isRejected ? 'Rejected' : 'Pending'}</div></div></div><div class="stage-body">${statusMessage}${submitButton}</div></div>`;
+}
+
+// ============================================================
+// STAGE 4: Purchase Order
+// ============================================================
+function renderStage4(po, quote) {
+    const hasPO = !!po;
+    const canCreatePO = quote.status === 'Approved' && !hasPO;
+    const isDone = hasPO && (po.status === 'delivered' || po.status === 'confirmed');
+    const cls = isDone ? 'stage-done' : hasPO ? 'stage-active' : 'stage-pending';
+    const icon = isDone ? '✅' : hasPO ? '📦' : '⏳';
+
+    let poDetails = '';
+    if (hasPO) {
+        poDetails = `<div class="pw-meta-grid"><div class="pw-meta-item"><span class="pw-detail-label">PO Number</span><span class="pw-detail-value" style="font-weight:600;color:#06b6d4;">${escHtml(po.po_number)}</span></div><div class="pw-meta-item"><span class="pw-detail-label">Status</span>${pwStatusBadge(po.status, 'po')}</div><div class="pw-meta-item"><span class="pw-detail-label">Total</span><span class="pw-detail-value">${pwFmtPrice(po.total_amount, po.currency)}</span></div><div class="pw-meta-item"><span class="pw-detail-label">Expected Delivery</span><span class="pw-detail-value">${pwFmtDate(po.expected_delivery_date)}</span></div>${po.actual_delivery_date ? `<div class="pw-meta-item"><span class="pw-detail-label">Actual Delivery</span><span class="pw-detail-value">${pwFmtDate(po.actual_delivery_date)}</span></div>` : ''}</div>`;
+        if (!['delivered', 'cancelled'].includes(po.status)) {
+            poDetails += `<div style="margin-top:1rem;"><div class="pw-subsection-title">Update PO Status</div><div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.5rem;">${po.status === 'draft' ? `<button class="btn btn-primary btn-sm pw-po-status-btn" data-status="sent">📤 Mark as Sent</button>` : ''}${po.status === 'sent' ? `<button class="btn btn-primary btn-sm pw-po-status-btn" data-status="confirmed">✅ Confirm PO</button>` : ''}${po.status !== 'delivered' && po.status !== 'cancelled' ? `<button class="btn btn-success btn-sm pw-po-status-btn" data-status="delivered">🚚 Mark Delivered</button>` : ''}<button class="btn btn-secondary btn-sm pw-po-status-btn" data-status="cancelled">❌ Cancel PO</button></div>${(po.status === 'confirmed' || po.status === 'sent') ? `<div style="margin-top:0.5rem;"><label class="pw-label">Actual Delivery Date</label><input type="date" id="poActualDelivery" class="pw-form-control" style="max-width:200px;margin-top:0.25rem;"></div>` : ''}</div>`;
+        }
     }
-    overlay.querySelectorAll('.po-unit-price').forEach(input => input.addEventListener('input', recalcTotals));
-    document.getElementById('poCurrency').addEventListener('change', recalcTotals);
-    recalcTotals();
-    overlay.querySelector('#poDlgCreate').addEventListener('click', async () => {
-        const currency = document.getElementById('poCurrency').value;
-        const expectedDelivery = document.getElementById('poExpectedDelivery').value;
-        const deliveryAddress = document.getElementById('poDeliveryAddress').value.trim();
-        const paymentTerms = document.getElementById('poPaymentTerms').value.trim();
-        const poItems = [];
-        overlay.querySelectorAll('.po-unit-price').forEach(input => {
-            const tr = input.closest('tr');
-            const qty = parseFloat(tr.cells[1].textContent) || 1;
-            const orderId = parseInt(input.dataset.orderId, 10);
-            const unitPrice = parseFloat(input.value) || 0;
-            const matchItem = items.find(i => i.order_id === orderId);
-            poItems.push({
-                order_id: orderId,
-                item_description: matchItem ? (matchItem.item_description || 'Item') : 'Item',
-                quantity: qty,
-                unit_price: unitPrice || null,
-                currency
+
+    const createPOForm = canCreatePO ? `<div class="pw-subsection-title" style="margin-top:${hasPO ? '1rem' : '0'};">Create Purchase Order</div><div class="pw-form-row"><div class="pw-form-group"><label class="pw-label">Currency</label><select id="poCurrency" class="pw-form-control"><option value="EUR">EUR</option><option value="BGN">BGN</option><option value="USD">USD</option><option value="GBP">GBP</option></select></div><div class="pw-form-group"><label class="pw-label">Expected Delivery</label><input type="date" id="poExpectedDelivery" class="pw-form-control"></div></div><div class="pw-form-group"><label class="pw-label">Delivery Address</label><input type="text" id="poDeliveryAddress" class="pw-form-control" placeholder="Delivery address…"></div><div class="pw-form-group"><label class="pw-label">Payment Terms</label><input type="text" id="poPaymentTerms" class="pw-form-control" placeholder="e.g. Net 30"></div><div class="pw-form-group"><label class="pw-label">Notes</label><textarea id="poNotes" class="pw-form-control" rows="2" placeholder="PO notes…"></textarea></div><button class="btn btn-primary" id="btnCreatePO">📦 Create Purchase Order</button>` : '';
+
+    return `<div class="lifecycle-stage ${cls}" id="stage4"><div class="stage-header">${icon}<div class="stage-title-area"><div class="stage-title">📦 Purchase Order</div><div class="stage-meta">${hasPO ? `PO ${po.po_number}` : 'No PO yet'}</div></div></div><div class="stage-body po-panel">${poDetails}${createPOForm}${!hasPO && !canCreatePO ? `<p class="pw-muted">Quote must be approved before creating a PO.</p>` : ''}</div></div>`;
+}
+
+// ============================================================
+// STAGE 5: Invoice & Accounting
+// ============================================================
+function renderStage5(po, invoices) {
+    const hasInvoices = invoices && invoices.length > 0;
+    const canAddInvoice = po && po.status !== 'cancelled';
+    const isDone = hasInvoices && invoices.some(i => i.status === 'paid' || i.status === 'booked');
+    const cls = isDone ? 'stage-done' : hasInvoices ? 'stage-active' : 'stage-pending';
+    const icon = isDone ? '✅' : '🧾';
+
+    const invoiceRows = hasInvoices ? invoices.map(inv => `<div class="pw-invoice-card" data-invoice-id="${inv.id}"><div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;"><span style="font-weight:600;">${escHtml(inv.invoice_number || 'N/A')}</span>${pwStatusBadge(inv.status, 'invoice')}<span class="pw-muted">${pwFmtDateTime(inv.received_at)}</span><button class="btn btn-secondary btn-sm pw-invoice-status-btn" style="margin-left:auto;padding:0.15rem 0.5rem;font-size:0.75rem;" data-invoice-id="${inv.id}">📤 Update Status</button></div><div class="pw-meta-grid" style="margin-top:0.5rem;"><div class="pw-meta-item"><span class="pw-detail-label">Amount</span><span>${pwFmtPrice(inv.amount, inv.currency)}</span></div><div class="pw-meta-item"><span class="pw-detail-label">VAT</span><span>${pwFmtPrice(inv.vat_amount, inv.currency)}</span></div><div class="pw-meta-item"><span class="pw-detail-label">Total</span><span style="font-weight:600;color:#10b981;">${pwFmtPrice(inv.total_amount, inv.currency)}</span></div><div class="pw-meta-item"><span class="pw-detail-label">Due</span><span>${pwFmtDate(inv.due_date)}</span></div></div>${inv.accounting_notes ? `<div style="font-size:0.8rem;color:#94a3b8;margin-top:0.3rem;">Accounting: ${escHtml(inv.accounting_notes)}</div>` : ''}${inv.booking_reference ? `<div style="font-size:0.8rem;color:#94a3b8;">Booking ref: ${escHtml(inv.booking_reference)}</div>` : ''}<div id="inv-status-form-${inv.id}" class="hidden" style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px solid rgba(148,163,184,0.2);"></div></div>`).join('') : '';
+
+    return `<div class="lifecycle-stage ${cls}" id="stage5"><div class="stage-header">${icon}<div class="stage-title-area"><div class="stage-title">🧾 Invoice &amp; Accounting</div><div class="stage-meta">${invoices && invoices.length ? `${invoices.length} invoice(s)` : 'No invoices yet'}</div></div></div><div class="stage-body invoice-panel">${invoiceRows}${canAddInvoice ? `<div class="pw-subsection-title" style="margin-top:1rem;">Record New Invoice</div><div class="pw-form-row"><div class="pw-form-group"><label class="pw-label">Supplier Invoice #</label><input type="text" id="invNumber" class="pw-form-control" placeholder="Supplier's invoice number"></div><div class="pw-form-group"><label class="pw-label">Invoice Date</label><input type="date" id="invDate" class="pw-form-control"></div><div class="pw-form-group"><label class="pw-label">Due Date</label><input type="date" id="invDueDate" class="pw-form-control"></div></div><div class="pw-form-row"><div class="pw-form-group"><label class="pw-label">Amount (excl. VAT)</label><input type="number" id="invAmount" class="pw-form-control" step="0.01" placeholder="0.00"></div><div class="pw-form-group"><label class="pw-label">VAT Amount</label><input type="number" id="invVat" class="pw-form-control" step="0.01" placeholder="0.00"></div><div class="pw-form-group"><label class="pw-label">Total</label><input type="number" id="invTotal" class="pw-form-control" step="0.01" placeholder="0.00"></div><div class="pw-form-group"><label class="pw-label">Currency</label><select id="invCurrency" class="pw-form-control"><option value="EUR">EUR</option><option value="BGN">BGN</option><option value="USD">USD</option><option value="GBP">GBP</option></select></div></div><div class="pw-form-group"><label class="pw-label">Notes</label><textarea id="invNotes" class="pw-form-control" rows="2" placeholder="Invoice notes…"></textarea></div><button class="btn btn-primary" id="btnRecordInvoice">🧾 Record Invoice</button>` : `<p class="pw-muted">No purchase order linked yet.</p>`}</div></div>`;
+}
+
+// ============================================================
+// C. LIFECYCLE PANEL EVENT BINDINGS
+// ============================================================
+function bindLifecycleEvents(quoteId, quote, items, responses, purchase_orders, invoices) {
+    const po = purchase_orders && purchase_orders.length ? purchase_orders[0] : null;
+
+    // --- Stage 2: Record Response ---
+    const btnRecordResp = document.getElementById('btnRecordResponse');
+    if (btnRecordResp) {
+        btnRecordResp.addEventListener('click', async () => {
+            const unitPrice = parseFloat(document.getElementById('respUnitPrice')?.value) || null;
+            const totalPrice = parseFloat(document.getElementById('respTotalPrice')?.value) || null;
+            const currency = document.getElementById('respCurrency')?.value || 'EUR';
+            const deliveryDate = document.getElementById('respDeliveryDate')?.value || null;
+            const leadTime = parseInt(document.getElementById('respLeadTime')?.value) || null;
+            const availability = document.getElementById('respAvailability')?.value || 'available';
+            const supplierNotes = document.getElementById('respSupplierNotes')?.value || null;
+            const internalNotes = document.getElementById('respInternalNotes')?.value || null;
+            const hasAlt = document.getElementById('respHasAlternative')?.checked || false;
+            const altDesc = document.getElementById('respAltDesc')?.value || null;
+            const altPrice = parseFloat(document.getElementById('respAltPrice')?.value) || null;
+
+            const payload = {
+                unit_price: unitPrice, total_price: totalPrice, currency,
+                promised_delivery_date: deliveryDate, lead_time_days: leadTime,
+                availability, supplier_notes: supplierNotes, internal_notes: internalNotes,
+                has_alternative: hasAlt, alternative_description: altDesc, alternative_unit_price: altPrice,
+                status: 'pending'
+            };
+
+            try {
+                btnRecordResp.disabled = true; btnRecordResp.textContent = 'Saving…';
+                const res = await pwApiPost(`/procurement/quotes/${quoteId}/responses`, payload);
+                if (res.success) {
+                    showToast('Response recorded', 'success');
+                    await loadAndRenderLifecycle(quoteId);
+                } else {
+                    showToast(res.message || 'Failed to save response', 'error');
+                    btnRecordResp.disabled = false; btnRecordResp.textContent = '💾 Save Response';
+                }
+            } catch (err) {
+                console.error('btnRecordResponse error:', err);
+                showToast('Network error', 'error');
+                btnRecordResp.disabled = false; btnRecordResp.textContent = '💾 Save Response';
+            }
+        });
+    }
+
+    // Alternative toggle
+    const altCheck = document.getElementById('respHasAlternative');
+    if (altCheck) {
+        altCheck.addEventListener('change', () => {
+            const area = document.getElementById('respAlternativeArea');
+            if (area) area.classList.toggle('hidden', !altCheck.checked);
+        });
+    }
+
+    // Edit response buttons
+    document.querySelectorAll('#lifecyclePanelBody .pw-edit-response-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const rid = btn.dataset.responseId;
+            const formDiv = document.getElementById(`pw-edit-form-${rid}`);
+            if (!formDiv) return;
+            if (!formDiv.classList.contains('hidden')) { formDiv.classList.add('hidden'); return; }
+            const resp = responses.find(r => String(r.id) === String(rid));
+            if (!resp) return;
+            formDiv.classList.remove('hidden');
+            formDiv.innerHTML = `<div class="pw-form-row"><div class="pw-form-group"><label class="pw-label">Unit Price</label><input type="number" id="editRespUP_${rid}" class="pw-form-control" step="0.01" value="${resp.unit_price || ''}"></div><div class="pw-form-group"><label class="pw-label">Total Price</label><input type="number" id="editRespTP_${rid}" class="pw-form-control" step="0.01" value="${resp.total_price || ''}"></div><div class="pw-form-group"><label class="pw-label">Status</label><select id="editRespStatus_${rid}" class="pw-form-control"><option value="pending" ${resp.status === 'pending' ? 'selected' : ''}>Pending</option><option value="accepted" ${resp.status === 'accepted' ? 'selected' : ''}>Accepted</option><option value="rejected" ${resp.status === 'rejected' ? 'selected' : ''}>Rejected</option><option value="negotiating" ${resp.status === 'negotiating' ? 'selected' : ''}>Negotiating</option></select></div></div><div class="pw-form-group"><label class="pw-label">Internal Notes</label><textarea id="editRespNotes_${rid}" class="pw-form-control" rows="2">${escHtml(resp.internal_notes || '')}</textarea></div><button class="btn btn-primary btn-sm" id="btnSaveEditResp_${rid}">💾 Update</button>`;
+            document.getElementById(`btnSaveEditResp_${rid}`).addEventListener('click', async () => {
+                const payload = {
+                    unit_price: parseFloat(document.getElementById(`editRespUP_${rid}`)?.value) || null,
+                    total_price: parseFloat(document.getElementById(`editRespTP_${rid}`)?.value) || null,
+                    status: document.getElementById(`editRespStatus_${rid}`)?.value,
+                    internal_notes: document.getElementById(`editRespNotes_${rid}`)?.value || null
+                };
+                try {
+                    const res = await pwApiPut(`/procurement/quotes/responses/${rid}`, payload);
+                    if (res.success) { showToast('Response updated', 'success'); await loadAndRenderLifecycle(quoteId); }
+                    else showToast(res.message || 'Update failed', 'error');
+                } catch (err) { showToast('Network error', 'error'); }
             });
         });
-        const btn = overlay.querySelector('#poDlgCreate');
-        btn.disabled = true; btn.innerHTML = pwSpinner() + ' Creating…';
-        const res = await pwApiPost('/procurement/purchase-orders', {
-            quote_id: quote.id,
-            supplier_id: quote.supplier_id,
-            currency, items: poItems,
-            expected_delivery_date: expectedDelivery || null,
-            delivery_address: deliveryAddress || null,
-            payment_terms: paymentTerms || null
+    });
+
+    // --- Stage 3: Submit for Approval ---
+    const btnSubmitApproval = document.getElementById('btnSubmitApproval');
+    if (btnSubmitApproval) {
+        btnSubmitApproval.addEventListener('click', () => {
+            if (typeof openSubmitForApprovalDialog === 'function') {
+                openSubmitForApprovalDialog(quoteId);
+            } else {
+                alert('Approval submission module not loaded.');
+            }
         });
-        if (res.success) {
-            showToast('PO ' + res.poNumber + ' created', 'success');
-            overlay.remove();
-            loadQuoteLifecycle(quote.id);
-            if (typeof loadOrders === 'function') loadOrders();
-        } else {
-            showToast('Failed: ' + (res.message || 'Error'), 'error');
-            btn.disabled = false; btn.textContent = '📦 Create PO';
-        }
+    }
+
+    // --- Stage 4: Create PO ---
+    const btnCreatePO = document.getElementById('btnCreatePO');
+    if (btnCreatePO) {
+        btnCreatePO.addEventListener('click', async () => {
+            const currency = document.getElementById('poCurrency')?.value || 'EUR';
+            const expectedDelivery = document.getElementById('poExpectedDelivery')?.value || null;
+            const deliveryAddress = document.getElementById('poDeliveryAddress')?.value || null;
+            const paymentTerms = document.getElementById('poPaymentTerms')?.value || null;
+            const notes = document.getElementById('poNotes')?.value || null;
+            const payload = {
+                quote_id: quoteId,
+                supplier_id: PW.currentLifecycle?.quote?.supplier_id,
+                currency, expected_delivery_date: expectedDelivery,
+                delivery_address: deliveryAddress, payment_terms: paymentTerms, notes
+            };
+            try {
+                btnCreatePO.disabled = true; btnCreatePO.textContent = 'Creating…';
+                const res = await pwApiPost('/procurement/purchase-orders', payload);
+                if (res.success) {
+                    showToast(`PO ${res.poNumber} created`, 'success');
+                    await loadAndRenderLifecycle(quoteId);
+                } else {
+                    showToast(res.message || 'Failed to create PO', 'error');
+                    btnCreatePO.disabled = false; btnCreatePO.textContent = '📦 Create Purchase Order';
+                }
+            } catch (err) {
+                console.error('btnCreatePO error:', err);
+                showToast('Network error', 'error');
+                btnCreatePO.disabled = false; btnCreatePO.textContent = '📦 Create Purchase Order';
+            }
+        });
+    }
+
+    // PO Status Update buttons
+    document.querySelectorAll('#lifecyclePanelBody .pw-po-status-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            if (!po) return;
+            const newStatus = btn.dataset.status;
+            const actualDelivery = newStatus === 'delivered' ? document.getElementById('poActualDelivery')?.value || null : null;
+            try {
+                const res = await pwApiPut(`/procurement/purchase-orders/${po.id}`, { status: newStatus, actual_delivery_date: actualDelivery });
+                if (res.success) {
+                    showToast(`PO status updated to ${newStatus}`, 'success');
+                    await loadAndRenderLifecycle(quoteId);
+                } else showToast(res.message || 'Update failed', 'error');
+            } catch (err) { showToast('Network error', 'error'); }
+        });
+    });
+
+    // --- Stage 5: Invoice ---
+    const btnRecordInvoice = document.getElementById('btnRecordInvoice');
+    if (btnRecordInvoice) {
+        btnRecordInvoice.addEventListener('click', async () => {
+            const payload = {
+                po_id: po ? po.id : null,
+                quote_id: quoteId,
+                supplier_id: PW.currentLifecycle?.quote?.supplier_id,
+                invoice_number: document.getElementById('invNumber')?.value || null,
+                invoice_date: document.getElementById('invDate')?.value || null,
+                due_date: document.getElementById('invDueDate')?.value || null,
+                amount: parseFloat(document.getElementById('invAmount')?.value) || 0,
+                vat_amount: parseFloat(document.getElementById('invVat')?.value) || 0,
+                total_amount: parseFloat(document.getElementById('invTotal')?.value) || 0,
+                currency: document.getElementById('invCurrency')?.value || 'EUR',
+                notes: document.getElementById('invNotes')?.value || null
+            };
+            try {
+                btnRecordInvoice.disabled = true; btnRecordInvoice.textContent = 'Recording…';
+                const res = await pwApiPost('/procurement/invoices', payload);
+                if (res.success) {
+                    showToast('Invoice recorded', 'success');
+                    await loadAndRenderLifecycle(quoteId);
+                } else {
+                    showToast(res.message || 'Failed to record invoice', 'error');
+                    btnRecordInvoice.disabled = false; btnRecordInvoice.textContent = '🧾 Record Invoice';
+                }
+            } catch (err) {
+                console.error('btnRecordInvoice error:', err);
+                showToast('Network error', 'error');
+                btnRecordInvoice.disabled = false; btnRecordInvoice.textContent = '🧾 Record Invoice';
+            }
+        });
+    }
+
+    // Invoice status update buttons
+    document.querySelectorAll('#lifecyclePanelBody .pw-invoice-status-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const invId = btn.dataset.invoiceId;
+            const formDiv = document.getElementById(`inv-status-form-${invId}`);
+            if (!formDiv) return;
+            if (!formDiv.classList.contains('hidden')) { formDiv.classList.add('hidden'); return; }
+            formDiv.classList.remove('hidden');
+            formDiv.innerHTML = `<div class="pw-form-row"><div class="pw-form-group"><label class="pw-label">New Status</label><select id="invStatusSel_${invId}" class="pw-form-control"><option value="received">Received</option><option value="verified">Verified</option><option value="sent_to_accounting">Sent to Accounting</option><option value="booked">Booked</option><option value="paid">Paid</option><option value="disputed">Disputed</option></select></div></div><div class="pw-form-group"><label class="pw-label">Accounting Notes</label><textarea id="invAccNotes_${invId}" class="pw-form-control" rows="2" placeholder="Notes for accounting…"></textarea></div><div class="pw-form-group"><label class="pw-label">Booking Reference</label><input type="text" id="invBookRef_${invId}" class="pw-form-control" placeholder="e.g. ACC-2024-001"></div><button class="btn btn-primary btn-sm" id="btnSaveInvStatus_${invId}">💾 Save</button>`;
+            document.getElementById(`btnSaveInvStatus_${invId}`).addEventListener('click', async () => {
+                const payload = {
+                    status: document.getElementById(`invStatusSel_${invId}`)?.value,
+                    accounting_notes: document.getElementById(`invAccNotes_${invId}`)?.value || null,
+                    booking_reference: document.getElementById(`invBookRef_${invId}`)?.value || null
+                };
+                try {
+                    const res = await pwApiPut(`/procurement/invoices/${invId}`, payload);
+                    if (res.success) { showToast('Invoice updated', 'success'); await loadAndRenderLifecycle(quoteId); }
+                    else showToast(res.message || 'Update failed', 'error');
+                } catch (err) { showToast('Network error', 'error'); }
+            });
+        });
     });
 }
 
 // ============================================================
-// H. RECORD INVOICE DIALOG
+// EXPORTS (attach to window for global access)
 // ============================================================
-function openRecordInvoiceDialog(quote, purchaseOrders) {
-    const po = purchaseOrders && purchaseOrders[0];
-    const overlay = document.createElement('div');
-    overlay.className = 'pw-modal-overlay';
-    overlay.innerHTML = `
-        <div class="pw-modal-card" style="max-width:500px;">
-            <div class="pw-modal-header"><h3 class="pw-modal-title">🧾 Record Invoice</h3><button class="pw-close-btn" id="invDlgClose">✕</button></div>
-            <div style="padding:1rem;display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
-                <div><label class="pw-label">Invoice Number</label><input id="invNumber" type="text" class="pw-form-control" placeholder="INV-2025-001"></div>
-                <div><label class="pw-label">Invoice Date</label><input id="invDate" type="date" class="pw-form-control" value="${new Date().toISOString().split('T')[0]}"></div>
-                <div><label class="pw-label">Due Date</label><input id="invDueDate" type="date" class="pw-form-control"></div>
-                <div><label class="pw-label">Currency</label>
-                    <select id="invCurrency" class="pw-form-control"><option value="EUR">EUR</option><option value="BGN">BGN</option><option value="USD">USD</option></select>
-                </div>
-                <div><label class="pw-label">Amount (ex. VAT)</label><input id="invAmount" type="number" class="pw-form-control" step="0.01" placeholder="0.00"></div>
-                <div><label class="pw-label">VAT Amount</label><input id="invVat" type="number" class="pw-form-control" step="0.01" placeholder="0.00" value="0"></div>
-                <div><label class="pw-label">Total Amount</label><input id="invTotal" type="number" class="pw-form-control" step="0.01" placeholder="0.00"></div>
-                <div style="grid-column:1/-1;"><label class="pw-label">Notes</label>
-                    <textarea id="invNotes" class="pw-form-control" rows="2" placeholder="Optional notes..."></textarea>
-                </div>
-            </div>
-            <div class="pw-modal-footer">
-                <button class="btn btn-secondary btn-sm" id="invDlgCancel">Cancel</button>
-                <button class="btn btn-primary btn-sm" id="invDlgSave">🧾 Record Invoice</button>
-            </div>
-        </div>`;
-    document.body.appendChild(overlay);
-    // Auto-calc total
-    function calcTotal() {
-        const amt = parseFloat(document.getElementById('invAmount').value) || 0;
-        const vat = parseFloat(document.getElementById('invVat').value) || 0;
-        document.getElementById('invTotal').value = (amt + vat).toFixed(2);
+window.openEnhancedCreateQuoteModal = openEnhancedCreateQuoteModal;
+window.openEnhancedQuoteModal = openEnhancedQuoteModal;
+window.closeEnhancedQuoteModal = closeEnhancedQuoteModal;
+window.openQuoteLifecyclePanel = openQuoteLifecyclePanel;
+window.closeLifecyclePanel = closeLifecyclePanel;
+window.renderLifecycleBadge = renderLifecycleBadge;
+window.getAISuggestionsForOrders = getAISuggestionsForOrders;
+window.showToast = showToast;
+
+// ============================================================
+// INIT
+// ============================================================
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+        if (PW.panelOpen) closeLifecyclePanel();
+        const wizard = document.getElementById('pwWizardOverlay');
+        if (wizard) closeEnhancedQuoteModal();
     }
-    document.getElementById('invAmount').addEventListener('input', calcTotal);
-    document.getElementById('invVat').addEventListener('input', calcTotal);
-    overlay.querySelector('#invDlgClose').addEventListener('click', () => overlay.remove());
-    overlay.querySelector('#invDlgCancel').addEventListener('click', () => overlay.remove());
-    overlay.querySelector('#invDlgSave').addEventListener('click', async () => {
-        const btn = overlay.querySelector('#invDlgSave');
-        btn.disabled = true; btn.innerHTML = pwSpinner() + ' Saving…';
-        const payload = {
-            quote_id: quote.id,
-            po_id: po ? po.id : null,
-            supplier_id: quote.supplier_id,
-            invoice_number: document.getElementById('invNumber').value.trim() || null,
-            invoice_date: document.getElementById('invDate').value || null,
-            due_date: document.getElementById('invDueDate').value || null,
-            currency: document.getElementById('invCurrency').value,
-            amount: parseFloat(document.getElementById('invAmount').value) || 0,
-            vat_amount: parseFloat(document.getElementById('invVat').value) || 0,
-            total_amount: parseFloat(document.getElementById('invTotal').value) || 0,
-            notes: document.getElementById('invNotes').value.trim() || null
-        };
-        const res = await pwApiPost('/procurement/invoices', payload);
-        if (res.success) {
-            showToast('Invoice recorded', 'success');
-            overlay.remove();
-            loadQuoteLifecycle(quote.id);
-        } else {
-            showToast('Failed: ' + (res.message || 'Error'), 'error');
-            btn.disabled = false; btn.textContent = '🧾 Record Invoice';
-        }
-    });
-}
-
-// ============================================================
-// I. SEND TO ACCOUNTING
-// ============================================================
-async function sendToAccounting(invoiceId) {
-    if (!confirm('Send this invoice to accounting?')) return;
-    const res = await pwApiPut(`/procurement/invoices/${invoiceId}`, { status: 'sent_to_accounting' });
-    if (res.success) {
-        showToast('Invoice sent to accounting', 'success');
-        if (PW.currentQuoteId) loadQuoteLifecycle(PW.currentQuoteId);
-    } else {
-        showToast('Failed: ' + (res.message || 'Error'), 'error');
-    }
-}
-
-// ============================================================
-// J. INTEGRATION: Wire PW into app.js button
-// ============================================================
-
-/**
- * Call this from app.js instead of openCreateQuoteDialog()
- * to use the enhanced quote creation wizard.
- */
-function pwOpenCreateQuoteModal() {
-    openEnhancedCreateQuoteModal();
-}
-
-/**
- * Wire up a "View Lifecycle" button in the quote table row.
- * Call from renderQuotesTable() in app.js
- */
-function pwAddLifecycleButton(rowEl, quoteId) {
-    const btn = document.createElement('button');
-    btn.className = 'btn btn-secondary btn-sm';
-    btn.textContent = '📋 Lifecycle';
-    btn.style.marginLeft = '0.3rem';
-    btn.addEventListener('click', e => { e.stopPropagation(); openQuoteLifecyclePanel(quoteId); });
-    rowEl.appendChild(btn);
-}
-
-console.log('✅ procurement-workspace.js loaded');
+});

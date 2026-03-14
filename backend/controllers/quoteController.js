@@ -348,3 +348,163 @@ exports.approveQuote = async (req, res) => {
         connection.release();
     }
 };
+
+// =====================================================================
+// ⭐ SMART QUOTE SEND — New exports for Phase 6
+// =====================================================================
+
+// GET /api/quotes/:id/email-data
+// Returns all data needed to compose the quote request email
+exports.getQuoteEmailData = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Quote + supplier info
+        const [quotes] = await db.query(`
+            SELECT q.*,
+                   s.name AS supplier_name,
+                   s.email AS supplier_email,
+                   s.contact_person AS supplier_contact,
+                   s.phone AS supplier_phone,
+                   u.name AS created_by_name
+            FROM quotes q
+            LEFT JOIN suppliers s ON q.supplier_id = s.id
+            LEFT JOIN users u ON q.created_by = u.id
+            WHERE q.id = ?
+        `, [id]);
+
+        if (quotes.length === 0) {
+            return res.status(404).json({ success: false, message: 'Quote not found' });
+        }
+
+        // All items with full order details for email composition
+        const [items] = await db.query(`
+            SELECT
+                qi.id AS quote_item_id,
+                qi.quantity,
+                o.id AS order_id,
+                o.item_description,
+                o.part_number,
+                o.building,
+                o.date_needed,
+                o.priority,
+                o.notes AS order_notes,
+                cc.code AS cost_center_code,
+                cc.name AS cost_center_name
+            FROM quote_items qi
+            JOIN orders o ON qi.order_id = o.id
+            LEFT JOIN cost_centers cc ON o.cost_center_id = cc.id
+            WHERE qi.quote_id = ?
+            ORDER BY qi.id ASC
+        `, [id]);
+
+        // Previous send log
+        const [sendLog] = await db.query(`
+            SELECT qsl.*, u.name AS sent_by_name
+            FROM quote_send_log qsl
+            LEFT JOIN users u ON qsl.sent_by = u.id
+            WHERE qsl.quote_id = ?
+            ORDER BY qsl.sent_at DESC
+        `, [id]);
+
+        res.json({
+            success: true,
+            quote: { ...quotes[0], items },
+            sendLog
+        });
+    } catch (error) {
+        console.error('Get quote email data error:', error);
+        res.status(500).json({ success: false, message: 'Failed to retrieve quote email data' });
+    }
+};
+
+// POST /api/quotes/:id/send-log
+// Records a send action, updates quote status to "Sent to Supplier",
+// updates linked orders to "Quote Requested" if not already there
+exports.logQuoteSend = async (req, res) => {
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        const { id } = req.params;
+        const { method, supplier_email, notes } = req.body;
+
+        if (!method) {
+            return res.status(400).json({ success: false, message: 'method is required (outlook|copy|link)' });
+        }
+
+        // Verify quote exists
+        const [quotes] = await connection.query('SELECT id, status FROM quotes WHERE id = ?', [id]);
+        if (quotes.length === 0) {
+            return res.status(404).json({ success: false, message: 'Quote not found' });
+        }
+
+        // Insert send log
+        await connection.query(
+            `INSERT INTO quote_send_log (quote_id, sent_by, method, supplier_email, notes)
+             VALUES (?, ?, ?, ?, ?)`,
+            [id, req.user.id, method, supplier_email || null, notes || null]
+        );
+
+        // Update quote status to "Sent to Supplier"
+        await connection.query(
+            `UPDATE quotes SET status = 'Sent to Supplier' WHERE id = ?`,
+            [id]
+        );
+
+        // Update linked orders to "Quote Requested" where not already in a more advanced state
+        await connection.query(
+            `UPDATE orders SET status = 'Quote Requested'
+             WHERE quote_ref = ?
+               AND status IN ('New', 'Pending')`,
+            [id]
+        );
+
+        await connection.commit();
+
+        // Return updated quote + new log
+        const [updatedQuote] = await connection.query(
+            `SELECT q.*, s.name AS supplier_name, s.email AS supplier_email
+             FROM quotes q LEFT JOIN suppliers s ON q.supplier_id = s.id
+             WHERE q.id = ?`, [id]
+        );
+        const [sendLog] = await connection.query(
+            `SELECT qsl.*, u.name AS sent_by_name
+             FROM quote_send_log qsl LEFT JOIN users u ON qsl.sent_by = u.id
+             WHERE qsl.quote_id = ? ORDER BY qsl.sent_at DESC`, [id]
+        );
+
+        res.json({
+            success: true,
+            message: 'Quote send logged successfully',
+            quote: updatedQuote[0],
+            sendLog
+        });
+    } catch (error) {
+        await connection.rollback();
+        console.error('Log quote send error:', error);
+        res.status(500).json({ success: false, message: 'Failed to log quote send' });
+    } finally {
+        connection.release();
+    }
+};
+
+// GET /api/quotes/:id/send-log
+// Returns all send log entries for this quote, joined with users
+exports.getQuoteSendLog = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const [sendLog] = await db.query(
+            `SELECT qsl.*, u.name AS sent_by_name
+             FROM quote_send_log qsl
+             LEFT JOIN users u ON qsl.sent_by = u.id
+             WHERE qsl.quote_id = ?
+             ORDER BY qsl.sent_at DESC`,
+            [id]
+        );
+        res.json({ success: true, sendLog });
+    } catch (error) {
+        console.error('Get send log error:', error);
+        res.status(500).json({ success: false, message: 'Failed to retrieve send log' });
+    }
+};

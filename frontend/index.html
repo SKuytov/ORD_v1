@@ -71,6 +71,7 @@
             <div id="navTabs" class="tabs hidden">
                 <button class="tab active" data-tab="ordersTab" data-i18n="nav.orders">Orders</button>
                 <button class="tab" data-tab="quotesTab" data-i18n="nav.quotes">Quotes</button>
+                <button class="tab" id="procurementTabButton" data-tab="procurementTab" hidden>Procurement</button>
                 <button class="tab" data-tab="approvalsTab" id="approvalsTabButton" hidden style="position: relative;" data-i18n="nav.approvals">
                     Approvals
                     <span id="pendingApprovalBadge" class="badge-notification hidden"></span>
@@ -212,7 +213,25 @@
                         </div>
                     </div>
 
-                    <div id="ordersTable"></div>
+                    <div class="table-wrapper">
+                        <table id="ordersTable">
+                            <thead id="ordersTableHead">
+                                <tr class="text-gray-400 text-xs">
+                                    <th class="sticky" style="width:30px"></th>
+                                    <th>ID</th>
+                                    <th>Description</th>
+                                    <th>Building</th>
+                                    <th>Status</th>
+                                    <th>Priority</th>
+                                    <th>Supplier</th>
+                                    <th>Delivery</th>
+                                    <th>Exp. Delivery</th>
+                                    <th>Created</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ordersTableBody"></tbody>
+                        </table>
+                    </div>
                 </div>
 
                 <!-- Order Detail Panel -->
@@ -262,7 +281,25 @@
                         </div>
                     </div>
 
-                    <div id="approvalsTable"></div>
+                    <div class="table-wrapper">
+                        <table id="approvalsTable">
+                            <thead>
+                                <tr>
+                                    <th>Order #</th>
+                                    <th>Item</th>
+                                    <th>Building</th>
+                                    <th>Supplier</th>
+                                    <th>Est. Cost</th>
+                                    <th>Priority</th>
+                                    <th>Status</th>
+                                    <th>Requested By</th>
+                                    <th>Requested</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="approvalsTableBody"></tbody>
+                        </table>
+                    </div>
                 </div>
 
                 <!-- Approval Detail Panel -->
@@ -287,7 +324,22 @@
                             <button id="btnRefreshQuotes" class="btn btn-secondary btn-sm" data-i18n="quotes.refresh">Refresh</button>
                         </div>
                     </div>
-                    <div id="quotesTable"></div>
+                    <div class="table-wrapper">
+                        <table id="quotesTable">
+                            <thead>
+                                <tr>
+                                    <th>Quote #</th>
+                                    <th>Supplier</th>
+                                    <th>Status</th>
+                                    <th>Orders</th>
+                                    <th>Total</th>
+                                    <th>Created By</th>
+                                    <th>Date</th>
+                                </tr>
+                            </thead>
+                            <tbody id="quotesTableBody"></tbody>
+                        </table>
+                    </div>
                 </div>
 
                 <div id="quoteDetailPanel" class="side-panel hidden">
@@ -314,7 +366,21 @@
                             <h2 data-i18n="suppliers.title">Suppliers</h2>
                             <button id="btnNewSupplier" class="btn btn-primary btn-sm" data-i18n="suppliers.new">New Supplier</button>
                         </div>
-                        <div id="suppliersTable"></div>
+                        <div class="table-wrapper">
+                        <table id="suppliersTable">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Contact</th>
+                                    <th>Email</th>
+                                    <th>Phone</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
                     </div>
                     <div class="card" id="supplierFormCard" hidden>
                         <h2 id="supplierFormTitle" data-i18n="supplierForm.create">Create Supplier</h2>
@@ -372,7 +438,19 @@
                             <h2 data-i18n="buildings.title">Buildings</h2>
                             <button id="btnNewBuilding" class="btn btn-primary btn-sm" data-i18n="buildings.new">New Building</button>
                         </div>
-                        <div id="buildingsTable"></div>
+                        <div class="table-wrapper">
+                        <table id="buildingsTable">
+                            <thead>
+                                <tr>
+                                    <th>Code</th>
+                                    <th>Name</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
                     </div>
                     <div class="card" id="buildingFormCard" hidden>
                         <h2 id="buildingFormTitle" data-i18n="buildingForm.create">Create Building</h2>
@@ -419,7 +497,20 @@
                                 <option value="" data-i18n="costCenters.filter.building">All Buildings</option>
                             </select>
                         </div>
-                        <div id="costCentersTable"></div>
+                        <div class="table-wrapper">
+                        <table id="costCentersTable">
+                            <thead>
+                                <tr>
+                                    <th>Code</th>
+                                    <th>Name</th>
+                                    <th>Building</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
                     </div>
                     <div class="card" id="costCenterFormCard" hidden>
                         <h2 id="costCenterFormTitle" data-i18n="costCenterForm.create">Create Cost Center</h2>
@@ -468,7 +559,21 @@
                             <h2 data-i18n="users.title">Users</h2>
                             <button id="btnNewUser" class="btn btn-primary btn-sm" data-i18n="users.new">New User</button>
                         </div>
-                        <div id="usersTable"></div>
+                        <div class="table-wrapper">
+                        <table id="usersTable">
+                            <thead>
+                                <tr>
+                                    <th>Username</th>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Role</th>
+                                    <th>Building</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
                     </div>
                     <div class="card" id="userFormCard" hidden>
                         <h2 id="userFormTitle" data-i18n="userForm.create">Create User</h2>
@@ -524,8 +629,10 @@
     </div>
 </div>
 
-<!-- ⭐ v3.0: Procurement Workspace Container -->
-<div id="procurementWorkspaceContainer"></div>
+<!-- Procurement Tab (procurementTab) -->
+            <section id="procurementTab" class="tab-content hidden" style="padding:0">
+                <div id="procurementWorkspaceContainer" style="height:100%"></div>
+            </section>
 
 <!-- ⭐ Smart Quote Send Panel -->
 <div id="quoteSendPanel" class="quote-send-panel hidden"></div>

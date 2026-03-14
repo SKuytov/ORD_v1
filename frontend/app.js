@@ -475,6 +475,8 @@ function showDashboard() {
     if (buildingsTabButton) buildingsTabButton.hidden = true;
     if (costCentersTabButton) costCentersTabButton.hidden = true;
     if (approvalsTabButton) approvalsTabButton.hidden = true;
+    const procurementTabButton = document.getElementById('procurementTabButton');
+    if (procurementTabButton) procurementTabButton.hidden = true;
 
     if (currentUser.role === 'requester') {
         createOrderSection.classList.remove('hidden');
@@ -503,6 +505,8 @@ function showDashboard() {
             if (buildingsTabButton) buildingsTabButton.hidden = false;
             if (costCentersTabButton) costCentersTabButton.hidden = false;
         }
+        // Show procurement tab for admin and procurement roles
+        if (procurementTabButton) procurementTabButton.hidden = false;
         const orderActionsContainer = document.getElementById('orderActionsContainer');
         if (orderActionsContainer) orderActionsContainer.style.display = 'flex';
         if (orderActionsBar) orderActionsBar.style.display = 'none';
@@ -510,8 +514,6 @@ function showDashboard() {
         if (btnProcCreate) btnProcCreate.classList.remove('hidden');
     }
 
-    // Reset table so it's rebuilt with correct columns for this user's role
-    if (ordersTable) ordersTable.innerHTML = '';
     loadInitialData();
 }
 
@@ -709,40 +711,8 @@ function renderCostCenterRadios(buildingCode) {
 // =============== ORDERS TABLE ===============
 
 function renderOrdersTable() {
-    // Ensure table structure exists (ordersTable div starts empty)
-    if (!ordersTable.querySelector('table')) {
-        const isAdminInit = currentUser && (currentUser.role === 'admin' || currentUser.role === 'procurement' || currentUser.role === 'manager');
-        if (isAdminInit) {
-            ordersTable.innerHTML = `<table class="w-full text-left text-sm">
-                <thead><tr class="text-gray-400 text-xs border-b border-gray-700 select-none">
-                    <th class="px-3 py-2 w-8"></th>
-                    <th class="px-3 py-2">ID</th>
-                    <th class="px-3 py-2">Description</th>
-                    <th class="px-3 py-2">Building</th>
-                    <th class="px-3 py-2">Status</th>
-                    <th class="px-3 py-2">Priority</th>
-                    <th class="px-3 py-2">Supplier</th>
-                    <th class="px-3 py-2">Delivery</th>
-                    <th class="px-3 py-2">Exp. Delivery</th>
-                    <th class="px-3 py-2">Created</th>
-                </tr></thead>
-                <tbody></tbody>
-            </table>`;
-        } else {
-            ordersTable.innerHTML = `<table class="w-full text-left text-sm">
-                <thead><tr class="text-gray-400 text-xs border-b border-gray-700">
-                    <th class="px-3 py-2">ID</th>
-                    <th class="px-3 py-2">Description</th>
-                    <th class="px-3 py-2">Status</th>
-                    <th class="px-3 py-2">Priority</th>
-                    <th class="px-3 py-2">Delivery</th>
-                    <th class="px-3 py-2">Created</th>
-                </tr></thead>
-                <tbody></tbody>
-            </table>`;
-        }
-    }
-    const tbody = ordersTable.querySelector('tbody');
+    const tbody = document.getElementById('ordersTableBody');
+    if (!tbody) return;
     const totalOrders = filteredOrders.length;
     const totalPages = Math.max(1, Math.ceil(totalOrders / ORDERS_PER_PAGE));
     if (currentPage > totalPages) currentPage = totalPages;
@@ -752,6 +722,14 @@ function renderOrdersTable() {
     const pageOrders = filteredOrders.slice(start, end);
 
     const isAdmin = currentUser && (currentUser.role === 'admin' || currentUser.role === 'procurement' || currentUser.role === 'manager');
+
+    // Update thead to show/hide admin-only columns
+    const thead = document.getElementById('ordersTableHead');
+    if (thead) {
+        thead.innerHTML = isAdmin
+            ? `<tr><th></th><th>ID</th><th>Description</th><th>Building</th><th>Status</th><th>Priority</th><th>Supplier</th><th>Delivery</th><th>Exp. Delivery</th><th>Created</th></tr>`
+            : `<tr><th>ID</th><th>Description</th><th>Status</th><th>Priority</th><th>Delivery</th><th>Created</th></tr>`;
+    }
 
     if (viewMode === 'grouped') {
         renderGroupedView(pageOrders, tbody, isAdmin);
@@ -1435,7 +1413,12 @@ function switchTab(tabId) {
     if (tabButton) tabButton.classList.add('active');
     currentTab = tabId;
     if (tabId === 'quotesTab') loadQuotes();
-    if (tabId === 'approvalsTab') loadApprovals();
+    if (tabId === 'approvalsTab' && typeof loadApprovals === 'function') loadApprovals();
+    if (tabId === 'suppliersTab') renderSuppliersTable();
+    if (tabId === 'buildingsTab') renderBuildingsTable();
+    if (tabId === 'costCentersTab') renderCostCentersTable();
+    if (tabId === 'usersTab') renderUsersTable();
+    if (tabId === 'procurementTab' && typeof initProcurementDashboard === 'function') initProcurementDashboard();
 }
 
 // =============== SUPPLIERS ===============

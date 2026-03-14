@@ -11,6 +11,7 @@ const orderRoutes = require('./routes/orders');
 const orderAssignmentRoutes = require('./routes/orderAssignments');
 const supplierRoutes = require('./routes/suppliers');
 const quoteRoutes = require('./routes/quotes');
+const quoteEmailRoutes = require('./routes/quoteEmail'); // ⭐ Smart Quote Send
 const userRoutes = require('./routes/users');
 const buildingRoutes = require('./routes/buildings');
 const costCenterRoutes = require('./routes/costCenters');
@@ -43,6 +44,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/order-assignments', orderAssignmentRoutes); // ⭐ Assignment system
 app.use('/api/suppliers', supplierRoutes);
+app.use('/api/quotes', quoteEmailRoutes); // ⭐ Smart Quote Send (must be before quoteRoutes)
 app.use('/api/quotes', quoteRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/buildings', buildingRoutes);
@@ -58,7 +60,7 @@ app.get('/api/health', (req, res) => {
         status: 'OK',
         timestamp: new Date().toISOString(),
         environment: process.env.NODE_ENV,
-        version: '2.5.1' // Phase 5: Enhanced Requester Experience
+        version: '2.6.0' // Phase 6: Smart Quote Send
     });
 });
 
@@ -78,10 +80,10 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`PartPulse Orders Server v2.5.1 running on port ${PORT}`);
+    console.log(`PartPulse Orders Server v2.6.0 running on port ${PORT}`);
     console.log(`Environment: ${process.env.NODE_ENV}`);
     console.log(`Frontend URL: ${process.env.FRONTEND_URL}`);
-    console.log(`Features: Smart Autocomplete + Document Management + Approvals + Procurement`);
+    console.log(`Features: Smart Quote Send + Smart Autocomplete + Document Management + Approvals + Procurement`);
 });
 
 module.exports = app;

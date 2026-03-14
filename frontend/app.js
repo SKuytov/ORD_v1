@@ -510,6 +510,8 @@ function showDashboard() {
         if (btnProcCreate) btnProcCreate.classList.remove('hidden');
     }
 
+    // Reset table so it's rebuilt with correct columns for this user's role
+    if (ordersTable) ordersTable.innerHTML = '';
     loadInitialData();
 }
 
@@ -707,6 +709,39 @@ function renderCostCenterRadios(buildingCode) {
 // =============== ORDERS TABLE ===============
 
 function renderOrdersTable() {
+    // Ensure table structure exists (ordersTable div starts empty)
+    if (!ordersTable.querySelector('table')) {
+        const isAdminInit = currentUser && (currentUser.role === 'admin' || currentUser.role === 'procurement' || currentUser.role === 'manager');
+        if (isAdminInit) {
+            ordersTable.innerHTML = `<table class="w-full text-left text-sm">
+                <thead><tr class="text-gray-400 text-xs border-b border-gray-700 select-none">
+                    <th class="px-3 py-2 w-8"></th>
+                    <th class="px-3 py-2">ID</th>
+                    <th class="px-3 py-2">Description</th>
+                    <th class="px-3 py-2">Building</th>
+                    <th class="px-3 py-2">Status</th>
+                    <th class="px-3 py-2">Priority</th>
+                    <th class="px-3 py-2">Supplier</th>
+                    <th class="px-3 py-2">Delivery</th>
+                    <th class="px-3 py-2">Exp. Delivery</th>
+                    <th class="px-3 py-2">Created</th>
+                </tr></thead>
+                <tbody></tbody>
+            </table>`;
+        } else {
+            ordersTable.innerHTML = `<table class="w-full text-left text-sm">
+                <thead><tr class="text-gray-400 text-xs border-b border-gray-700">
+                    <th class="px-3 py-2">ID</th>
+                    <th class="px-3 py-2">Description</th>
+                    <th class="px-3 py-2">Status</th>
+                    <th class="px-3 py-2">Priority</th>
+                    <th class="px-3 py-2">Delivery</th>
+                    <th class="px-3 py-2">Created</th>
+                </tr></thead>
+                <tbody></tbody>
+            </table>`;
+        }
+    }
     const tbody = ordersTable.querySelector('tbody');
     const totalOrders = filteredOrders.length;
     const totalPages = Math.max(1, Math.ceil(totalOrders / ORDERS_PER_PAGE));

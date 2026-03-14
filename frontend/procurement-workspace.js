@@ -629,361 +629,663 @@ async function loadAndRenderLifecycle(quoteId) {
         const res = await pwApiGet(`/procurement/lifecycle/quote/${quoteId}`);
         if (!res.success) { showLifecycleError(res.message || 'Failed to load lifecycle'); return; }
         PW.currentLifecycle = res.lifecycle;
-        const { quote, items, responses, purchase_orders, invoices, sendLog } = res.lifecycle;
-        const subtitle = document.getElementById('lcPanelSubtitle');
-        if (subtitle) subtitle.textContent = `${quote.quote_number} • ${quote.supplier_name} • ${items.length} item(s)`;
-        const body = document.getElementById('lifecyclePanelBody');
-        if (body) body.innerHTML = renderLifecycleContent(quote, items, responses, purchase_orders, invoices, sendLog);
-        bindLifecycleEvents(quoteId, quote, items, responses, purchase_orders, invoices);
-    } catch (err) {
-        console.error('loadAndRenderLifecycle error:', err);
-        showLifecycleError('Network error loading lifecycle');
-    }
+        renderLifecyclePanel(res.lifecycle);
+    } catch (err) { console.error('loadAndRenderLifecycle error:', err); showLifecycleError('Network error loading lifecycle'); }
 }
 
 function showLifecycleError(msg) {
     const body = document.getElementById('lifecyclePanelBody');
-    if (body) body.innerHTML = `<div style="padding:2rem;text-align:center;color:#ef4444;">⚠ ${escHtml(msg)}</div>`;
+    if (body) body.innerHTML = `<div style="padding:2rem;text-align:center;"><div style="font-size:3rem;">⚠️</div><p style="color:#ef4444;margin-top:1rem;">${escHtml(msg)}</p><button class="btn btn-secondary" style="margin-top:1rem;" onclick="loadAndRenderLifecycle(PW.currentQuoteId)">↺ Retry</button></div>`;
 }
 
-function renderLifecycleContent(quote, items, responses, purchase_orders, invoices, sendLog) {
-    const po = purchase_orders && purchase_orders.length ? purchase_orders[0] : null;
+// ============================================================
+// C. LIFECYCLE PANEL RENDERING
+// ============================================================
+
+function renderLifecyclePanel(lc) {
+    const body = document.getElementById('lifecyclePanelBody');
+    const subtitle = document.getElementById('lcPanelSubtitle');
+    if (!body || !lc) return;
+
+    if (subtitle) {
+        subtitle.textContent = `Quote #${lc.quote?.quote_number || lc.quote?.id || '?'} · ${lc.quote?.supplier_name || ''}`.trim().replace(/·\s*$/, '');
+    }
+
+    const currentStage = determineCurrentStage(lc.quote, lc.responses, lc.purchase_orders, lc.invoices);
+
+    body.innerHTML = `
+        ${renderStageNav(currentStage)}
+        <div id="lcStageContent" class="lc-stage-content">
+            ${renderStageContent(currentStage, lc)}
+        </div>
+    `;
+
+    bindStageNavEvents(lc);
+}
+
+function determineCurrentStage(quote, responses, pos, invoices) {
+    if (invoices && invoices.length > 0) return 5;
+    if (pos && pos.length > 0) return 4;
+    const status = quote?.status || '';
+    if (status === 'Approved' || status === 'Under Approval') return 3;
+    if (responses && responses.length > 0) return 2;
+    return 1;
+}
+
+function stageClass(stageNum, currentStage) {
+    if (stageNum < currentStage) return 'stage-done';
+    if (stageNum === currentStage) return 'stage-active';
+    return 'stage-pending';
+}
+
+function stageIcon(stageNum, currentStage) {
+    if (stageNum < currentStage) return '✓';
+    const icons = { 1: '📋', 2: '📩', 3: '✅', 4: '📦', 5: '💰' };
+    return icons[stageNum] || stageNum;
+}
+
+function renderStageNav(currentStage) {
+    const stages = [
+        { num: 1, label: 'Quote' },
+        { num: 2, label: 'Response' },
+        { num: 3, label: 'Approval' },
+        { num: 4, label: 'PO' },
+        { num: 5, label: 'Invoice' }
+    ];
     return `
-        ${renderStage1(quote, items)}
-        ${renderStage2(quote, responses, sendLog)}
-        ${renderStage3(quote, items)}
-        ${renderStage4(po, quote)}
-        ${renderStage5(po, invoices)}
+        <div class="lc-stage-nav">
+            ${stages.map(s => `
+                <button class="lc-stage-btn ${stageClass(s.num, currentStage)}" data-stage="${s.num}">
+                    <span class="lc-stage-icon">${stageIcon(s.num, currentStage)}</span>
+                    <span class="lc-stage-label">${s.label}</span>
+                </button>
+            `).join('<span class="lc-stage-connector"></span>')}
+        </div>
     `;
 }
 
-// ============================================================
-// STAGE 1: Quote Overview
-// ============================================================
-function renderStage1(quote, items) {
-    const isActive = ['Draft', 'Sent to Supplier', 'Received'].includes(quote.status);
-    const isDone = ['Under Approval', 'Approved', 'Rejected'].includes(quote.status) || (quote.status && !['Draft', 'Sent to Supplier', 'Received'].includes(quote.status));
-    const cls = isDone ? 'stage-done' : isActive ? 'stage-active' : 'stage-pending';
-    const icon = isDone ? '✅' : '📋';
+function renderStageContent(stage, lc) {
+    switch (stage) {
+        case 1: return renderStage1(lc.quote, lc.items);
+        case 2: return renderStage2(lc.quote, lc.responses, lc.items);
+        case 3: return renderStage3(lc.quote, lc.approval);
+        case 4: return renderStage4(lc.quote, lc.purchase_orders);
+        case 5: return renderStage5(lc.quote, lc.purchase_orders, lc.invoices);
+        default: return renderStage1(lc.quote, lc.items);
+    }
+}
 
-    const itemRows = items.map(item => `
-        <tr>
-            <td>${escHtml(item.item_description)}</td>
-            <td>${escHtml(item.part_number || '—')}</td>
-            <td>${item.quantity || 1}</td>
-            <td>${item.unit_price ? pwFmtPrice(item.unit_price, item.currency) : '<span class="pw-muted">Pending</span>'}</td>
-            <td>${item.total_price ? pwFmtPrice(item.total_price, item.currency) : '<span class="pw-muted">Pending</span>'}</td>
-            <td>${escHtml(item.building || '—')}</td>
-            <td>${pwFmtDate(item.date_needed)}</td>
-            <td>${item.files && item.files.length ? item.files.map(f => `<a href="${f.path}" target="_blank" class="pw-pdf-badge" style="display:inline-flex;align-items:center;gap:0.25rem;padding:0.15rem 0.4rem;background:#1e3a5f;border-radius:0.25rem;font-size:0.7rem;color:#60a5fa;text-decoration:none;">📄 ${escHtml(f.name)}</a>`).join(' ') : '<span class="pw-muted">—</span>'}</td>
-        </tr>`).join('');
-
-    return `<div class="lifecycle-stage ${cls}" id="stage1"><div class="stage-header">${icon}<div class="stage-title-area"><div class="stage-title">📋 Quote Overview</div><div class="stage-meta">${escHtml(quote.quote_number)} • ${pwStatusBadge(quote.status, 'quote')} • ${pwFmtDate(quote.created_at)}</div></div></div><div class="stage-body"><div class="pw-meta-grid"><div class="pw-meta-item"><span class="pw-detail-label">Supplier</span><span class="pw-detail-value">${escHtml(quote.supplier_name)}</span></div><div class="pw-meta-item"><span class="pw-detail-label">Total</span><span class="pw-detail-value" style="color:#10b981;font-weight:600;">${quote.total_amount ? pwFmtPrice(quote.total_amount, quote.currency) : 'Pending'}</span></div><div class="pw-meta-item"><span class="pw-detail-label">Valid Until</span><span class="pw-detail-value">${pwFmtDate(quote.valid_until)}</span></div><div class="pw-meta-item"><span class="pw-detail-label">Items</span><span class="pw-detail-value">${items.length}</span></div>${quote.notes ? `<div class="pw-meta-item pw-meta-full"><span class="pw-detail-label">Notes</span><span class="pw-detail-value">${escHtml(quote.notes)}</span></div>` : ''}</div><div class="pw-subsection-title" style="margin-top:1rem;">Quote Items</div><div class="pw-table-wrapper"><table class="pw-table"><thead><tr><th>Description</th><th>Part #</th><th>Qty</th><th>Unit Price</th><th>Total</th><th>Building</th><th>Date Needed</th><th>Files</th></tr></thead><tbody>${itemRows}</tbody></table></div></div></div>`;
+function bindStageNavEvents(lc) {
+    document.querySelectorAll('#lifecyclePanelBody .lc-stage-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const stage = parseInt(btn.dataset.stage);
+            const content = document.getElementById('lcStageContent');
+            if (content) content.innerHTML = renderStageContent(stage, lc);
+            document.querySelectorAll('#lifecyclePanelBody .lc-stage-btn').forEach(b => b.classList.remove('stage-active-nav'));
+            btn.classList.add('stage-active-nav');
+            // Re-bind stage events after content change
+            const eventBinders = {
+                1: () => {},
+                2: () => bindStage2Events(lc.quote, lc.items),
+                3: () => bindStage3Events(lc.quote),
+                4: () => bindStage4Events(lc.quote, lc.purchase_orders),
+                5: () => bindStage5Events(lc.quote, lc.purchase_orders, lc.invoices)
+            };
+            if (eventBinders[stage]) eventBinders[stage]();
+        });
+    });
+    // Bind events for initial stage
+    const currentStage = determineCurrentStage(lc.quote, lc.responses, lc.purchase_orders, lc.invoices);
+    const initBinders = {
+        2: () => bindStage2Events(lc.quote, lc.items),
+        3: () => bindStage3Events(lc.quote),
+        4: () => bindStage4Events(lc.quote, lc.purchase_orders),
+        5: () => bindStage5Events(lc.quote, lc.purchase_orders, lc.invoices)
+    };
+    if (initBinders[currentStage]) initBinders[currentStage]();
 }
 
 // ============================================================
-// STAGE 2: Supplier Interaction
+// STAGE 1: Quote Details
 // ============================================================
-function renderStage2(quote, responses, sendLog) {
-    const hasResponse = responses && responses.length > 0;
-    const isActive = quote.status === 'Sent to Supplier' || quote.status === 'Received';
-    const isDone = hasResponse || ['Under Approval', 'Approved'].includes(quote.status);
-    const cls = isDone ? 'stage-done' : isActive ? 'stage-active' : 'stage-pending';
-    const icon = isDone ? '✅' : '📧';
-    const canAddResponse = ['Draft', 'Sent to Supplier', 'Received'].includes(quote.status);
+function renderStage1(quote, items) {
+    if (!quote) return '<div class="lc-empty">No quote data</div>';
+    let itemsHtml = '';
+    if (items && items.length) {
+        itemsHtml = `
+            <div class="lc-section">
+                <div class="lc-section-title">📋 Quote Items (${items.length})</div>
+                <div class="pw-table-wrapper">
+                    <table class="pw-table">
+                        <thead><tr><th>Order #</th><th>Description</th><th>Qty</th><th>Unit Price</th><th>Total</th><th>Availability</th></tr></thead>
+                        <tbody>${items.map(item => `
+                            <tr>
+                                <td>#${item.order_id || '—'}</td>
+                                <td title="${escHtml(item.item_description)}">${escHtml((item.item_description || '').substring(0, 40))}${(item.item_description || '').length > 40 ? '…' : ''}</td>
+                                <td>${item.quantity || 1}</td>
+                                <td>${pwFmtPrice(item.unit_price, quote.currency)}</td>
+                                <td>${pwFmtPrice((item.unit_price || 0) * (item.quantity || 1), quote.currency)}</td>
+                                <td>${pwStatusBadge(item.availability_status || 'unknown', 'availability')}</td>
+                            </tr>`).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>`;
+    }
+    return `
+        <div class="lc-stage-panel">
+            <div class="lc-stage-header"><h4>📋 Quote Details</h4>${pwStatusBadge(quote.status, 'quote')}</div>
+            <div class="lc-detail-grid">
+                <div class="lc-detail-item"><div class="lc-detail-label">Quote Number</div><div class="lc-detail-value" style="font-weight:600;">${escHtml(quote.quote_number || '—')}</div></div>
+                <div class="lc-detail-item"><div class="lc-detail-label">Supplier</div><div class="lc-detail-value">${escHtml(quote.supplier_name || '—')}</div></div>
+                <div class="lc-detail-item"><div class="lc-detail-label">Created</div><div class="lc-detail-value">${pwFmtDate(quote.created_at)}</div></div>
+                <div class="lc-detail-item"><div class="lc-detail-label">Valid Until</div><div class="lc-detail-value">${pwFmtDate(quote.valid_until)}</div></div>
+                <div class="lc-detail-item"><div class="lc-detail-label">Currency</div><div class="lc-detail-value">${escHtml(quote.currency || 'EUR')}</div></div>
+                <div class="lc-detail-item"><div class="lc-detail-label">Total Value</div><div class="lc-detail-value" style="color:#06b6d4;font-weight:600;">${pwFmtPrice(quote.total_value, quote.currency)}</div></div>
+            </div>
+            ${quote.notes ? `<div class="lc-section"><div class="lc-section-title">Notes</div><div class="lc-notes-box">${escHtml(quote.notes)}</div></div>` : ''}
+            ${itemsHtml}
+        </div>`;
+}
 
-    const sendLogHtml = sendLog && sendLog.length
-        ? `<div class="pw-subsection-title" style="margin-top:1rem;">Send History</div><div style="font-size:0.8rem;">${sendLog.map(l => `<div style="display:flex;gap:0.5rem;align-items:center;padding:0.25rem 0;border-bottom:1px solid rgba(148,163,184,0.1);"><span style="color:#64748b;">${pwFmtDateTime(l.sent_at)}</span><span>${escHtml(l.recipient_email || '')}</span><span style="color:#94a3b8;">— ${escHtml(l.sent_by_name || '')}</span></div>`).join('')}</div>`
-        : '';
+// ============================================================
+// STAGE 2: Supplier Response
+// ============================================================
+function renderStage2(quote, responses, items) {
+    const noResponseHtml = `
+        <div class="lc-stage-panel">
+            <div class="lc-stage-header"><h4>📩 Supplier Response</h4><span class="pw-badge badge-gray">Awaiting Response</span></div>
+            <div class="lc-empty-state">
+                <div style="font-size:3rem;">📬</div>
+                <p>No supplier response yet.</p>
+                <p style="color:#94a3b8;font-size:0.875rem;">Quote sent to ${escHtml(quote?.supplier_name || 'supplier')} on ${pwFmtDate(quote?.sent_at || quote?.created_at)}.</p>
+            </div>
+            <div class="lc-action-bar">
+                <div class="pw-form-group" style="flex:1;min-width:200px;">
+                    <label class="pw-label">Upload Supplier Response PDF</label>
+                    <input type="file" id="responseFileInput" accept=".pdf" class="pw-form-control">
+                </div>
+                <div class="pw-form-group">
+                    <label class="pw-label">Response Status</label>
+                    <select id="responseStatusSelect" class="pw-form-control">
+                        <option value="accepted">Accepted</option>
+                        <option value="countered">Countered (with changes)</option>
+                        <option value="rejected">Rejected</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary" id="btnUploadResponse" style="align-self:flex-end;">📤 Upload Response</button>
+            </div>
+        </div>`;
 
-    const existingResponses = (responses || []).map(r => `<div class="pw-response-card" style="margin-bottom:0.75rem;" data-response-id="${r.id}"><div class="pw-response-header"><span>${escHtml(r.item_description || 'All items')}</span>${pwStatusBadge(r.status, 'response')}${pwStatusBadge(r.availability, 'availability')}<span class="pw-muted">${pwFmtDateTime(r.responded_at)}</span><button class="btn btn-secondary btn-sm pw-edit-response-btn" style="margin-left:auto;padding:0.2rem 0.6rem;font-size:0.75rem;" data-response-id="${r.id}">✏️ Edit</button></div><div class="pw-response-details">${r.unit_price ? `<div><span class="pw-detail-label">Unit Price:</span> <strong>${pwFmtPrice(r.unit_price, r.currency)}</strong></div>` : ''}${r.total_price ? `<div><span class="pw-detail-label">Total:</span> <strong>${pwFmtPrice(r.total_price, r.currency)}</strong></div>` : ''}${r.promised_delivery_date ? `<div><span class="pw-detail-label">Promised Delivery:</span> ${pwFmtDate(r.promised_delivery_date)}</div>` : ''}${r.lead_time_days ? `<div><span class="pw-detail-label">Lead Time:</span> ${r.lead_time_days} days</div>` : ''}${r.has_alternative ? `<div style="margin-top:0.5rem;padding:0.5rem;background:#1e293b;border-radius:0.375rem;border-left:3px solid #f59e0b;"><strong>Alternative:</strong> ${escHtml(r.alternative_description || '')} ${r.alternative_unit_price ? '— ' + pwFmtPrice(r.alternative_unit_price, r.currency) : ''}</div>` : ''}${r.supplier_notes ? `<div><span class="pw-detail-label">Supplier Notes:</span> ${escHtml(r.supplier_notes)}</div>` : ''}${r.internal_notes ? `<div><span class="pw-detail-label">Internal Notes:</span> ${escHtml(r.internal_notes)}</div>` : ''}${r.response_document_id ? `<div style="margin-top:0.4rem;"><a class="pw-pdf-badge" href="/api/documents/${r.response_document_id}/download" target="_blank" style="display:inline-flex;align-items:center;gap:0.3rem;padding:0.2rem 0.6rem;background:#1e3a5f;border-radius:0.375rem;font-size:0.75rem;color:#60a5fa;text-decoration:none;">📄 PDF</a></div>` : ''}<div style="font-size:0.75rem;color:#64748b;margin-top:0.3rem;">Recorded by ${escHtml(r.recorded_by_name || '—')}</div><div id="pw-edit-form-${r.id}" class="hidden" style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px solid rgba(148,163,184,0.2);"></div></div></div>`).join('');
+    if (!responses || !responses.length) return noResponseHtml;
 
-    const addResponseForm = canAddResponse ? `<div class="pw-subsection-title" style="margin-top:1rem;">Record Supplier Response</div><div class="pw-form-row"><div class="pw-form-group"><label class="pw-label">Unit Price</label><input type="number" id="respUnitPrice" class="pw-form-control" step="0.01" placeholder="0.00"></div><div class="pw-form-group"><label class="pw-label">Total Price</label><input type="number" id="respTotalPrice" class="pw-form-control" step="0.01" placeholder="0.00"></div><div class="pw-form-group"><label class="pw-label">Currency</label><select id="respCurrency" class="pw-form-control"><option value="EUR">EUR</option><option value="BGN">BGN</option><option value="USD">USD</option><option value="GBP">GBP</option></select></div></div><div class="pw-form-row"><div class="pw-form-group"><label class="pw-label">Promised Delivery</label><input type="date" id="respDeliveryDate" class="pw-form-control"></div><div class="pw-form-group"><label class="pw-label">Lead Time (days)</label><input type="number" id="respLeadTime" class="pw-form-control" placeholder="e.g. 14"></div><div class="pw-form-group"><label class="pw-label">Availability</label><select id="respAvailability" class="pw-form-control"><option value="available">Available</option><option value="in_stock">In Stock</option><option value="on_order">On Order</option><option value="partial">Partial</option><option value="unavailable">Unavailable</option></select></div></div><div class="pw-form-group"><label class="pw-label">Supplier Notes</label><textarea id="respSupplierNotes" class="pw-form-control" rows="2" placeholder="Notes from supplier…"></textarea></div><div class="pw-form-group"><label class="pw-label">Internal Notes</label><textarea id="respInternalNotes" class="pw-form-control" rows="2" placeholder="Internal notes…"></textarea></div><div style="display:flex;gap:0.5rem;align-items:center;"><button class="btn btn-primary" id="btnRecordResponse">💾 Save Response</button><label style="cursor:pointer;display:flex;align-items:center;gap:0.4rem;font-size:0.85rem;"><input type="checkbox" id="respHasAlternative"> Has Alternative</label></div><div id="respAlternativeArea" class="hidden" style="margin-top:0.75rem;padding:0.75rem;background:#0f172a;border-radius:6px;border-left:3px solid #f59e0b;"><div class="pw-form-row"><div class="pw-form-group"><label class="pw-label">Alternative Description</label><input type="text" id="respAltDesc" class="pw-form-control" placeholder="Alternative product…"></div><div class="pw-form-group"><label class="pw-label">Alternative Unit Price</label><input type="number" id="respAltPrice" class="pw-form-control" step="0.01"></div></div></div>` : '';
+    const resp = responses[0];
+    return `
+        <div class="lc-stage-panel">
+            <div class="lc-stage-header"><h4>📩 Supplier Response</h4>${pwStatusBadge(resp.status, 'response')}</div>
+            <div class="lc-detail-grid">
+                <div class="lc-detail-item"><div class="lc-detail-label">Response Date</div><div class="lc-detail-value">${pwFmtDate(resp.response_date || resp.created_at)}</div></div>
+                <div class="lc-detail-item"><div class="lc-detail-label">Status</div><div class="lc-detail-value">${pwStatusBadge(resp.status, 'response')}</div></div>
+                <div class="lc-detail-item"><div class="lc-detail-label">Valid Until</div><div class="lc-detail-value">${pwFmtDate(resp.valid_until)}</div></div>
+                <div class="lc-detail-item"><div class="lc-detail-label">Total Price</div><div class="lc-detail-value" style="color:#06b6d4;font-weight:600;">${pwFmtPrice(resp.total_price, quote?.currency)}</div></div>
+            </div>
+            ${resp.notes ? `<div class="lc-section"><div class="lc-section-title">Notes</div><div class="lc-notes-box">${escHtml(resp.notes)}</div></div>` : ''}
+            ${resp.pdf_path ? `<div class="lc-section"><div class="lc-section-title">Attached PDF</div><a href="/api/procurement/response-pdf/${resp.id}" target="_blank" class="btn btn-secondary btn-sm">📄 Download Response PDF</a></div>` : ''}
+            ${resp.status === 'accepted' ? `
+                <div class="lc-action-bar">
+                    <button class="btn btn-primary" id="btnInitiateApproval">→ Submit for Approval</button>
+                </div>` : `
+                <div class="lc-action-bar">
+                    <div class="pw-form-group" style="flex:1;min-width:200px;">
+                        <label class="pw-label">Upload New Response</label>
+                        <input type="file" id="responseFileInput" accept=".pdf" class="pw-form-control">
+                    </div>
+                    <div class="pw-form-group">
+                        <label class="pw-label">Response Status</label>
+                        <select id="responseStatusSelect" class="pw-form-control">
+                            <option value="accepted">Accepted</option>
+                            <option value="countered">Countered (with changes)</option>
+                            <option value="rejected">Rejected</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-primary" id="btnUploadResponse" style="align-self:flex-end;">📤 Upload Response</button>
+                </div>`}
+        </div>`;
+}
 
-    return `<div class="lifecycle-stage ${cls}" id="stage2"><div class="stage-header">${icon}<div class="stage-title-area"><div class="stage-title">📧 Supplier Interaction</div><div class="stage-meta">${hasResponse ? `${responses.length} response(s) recorded` : 'Awaiting supplier response'}</div></div></div><div class="stage-body">${sendLogHtml}${existingResponses ? `<div class="pw-subsection-title" style="margin-top:${sendLogHtml ? '1rem' : '0'};">Responses Received</div>${existingResponses}` : ''}${addResponseForm}</div></div>`;
+async function pwUploadResponsePdf(file, responseId, orderIds) {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (responseId) formData.append('response_id', responseId);
+    if (orderIds && orderIds.length) formData.append('order_ids', JSON.stringify(orderIds));
+    const token = localStorage.getItem('authToken') || (typeof authToken !== 'undefined' ? authToken : '');
+    const res = await fetch('/api/procurement/upload-response-pdf', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token },
+        body: formData
+    });
+    return res.json();
+}
+
+function bindStage2Events(quote, items) {
+    const btnUpload = document.getElementById('btnUploadResponse');
+    if (btnUpload) {
+        btnUpload.addEventListener('click', async () => {
+            const fileInput = document.getElementById('responseFileInput');
+            const statusSelect = document.getElementById('responseStatusSelect');
+            const file = fileInput?.files?.[0];
+            if (!file) { showToast('Please select a PDF file', 'warning'); return; }
+            btnUpload.disabled = true;
+            btnUpload.innerHTML = pwSpinner() + ' Uploading…';
+            try {
+                const orderIds = items ? items.map(i => i.order_id).filter(Boolean) : [];
+                const uploadResult = await pwUploadResponsePdf(file, null, orderIds);
+                if (!uploadResult.success) { showToast('Upload failed: ' + (uploadResult.message || 'Unknown error'), 'error'); btnUpload.disabled = false; btnUpload.textContent = '📤 Upload Response'; return; }
+                const status = statusSelect?.value || 'accepted';
+                const body = {
+                    quote_id: PW.currentQuoteId,
+                    status,
+                    pdf_path: uploadResult.path || uploadResult.filename,
+                    response_date: new Date().toISOString().split('T')[0]
+                };
+                const res = await pwApiPost('/procurement/supplier-response', body);
+                if (res.success) {
+                    showToast('Supplier response saved', 'success');
+                    await loadAndRenderLifecycle(PW.currentQuoteId);
+                } else {
+                    showToast('Failed to save response: ' + (res.message || ''), 'error');
+                    btnUpload.disabled = false;
+                    btnUpload.textContent = '📤 Upload Response';
+                }
+            } catch (err) {
+                console.error('bindStage2Events upload error:', err);
+                showToast('Upload error', 'error');
+                btnUpload.disabled = false;
+                btnUpload.textContent = '📤 Upload Response';
+            }
+        });
+    }
+    const btnInitApproval = document.getElementById('btnInitiateApproval');
+    if (btnInitApproval) {
+        btnInitApproval.addEventListener('click', async () => {
+            btnInitApproval.disabled = true;
+            btnInitApproval.innerHTML = pwSpinner() + ' Submitting…';
+            try {
+                const res = await pwApiPost('/procurement/initiate-approval', { quote_id: PW.currentQuoteId });
+                if (res.success) {
+                    showToast('Submitted for approval', 'success');
+                    await loadAndRenderLifecycle(PW.currentQuoteId);
+                } else {
+                    showToast('Failed: ' + (res.message || ''), 'error');
+                    btnInitApproval.disabled = false;
+                    btnInitApproval.textContent = '→ Submit for Approval';
+                }
+            } catch (err) {
+                console.error('btnInitiateApproval error:', err);
+                showToast('Network error', 'error');
+                btnInitApproval.disabled = false;
+                btnInitApproval.textContent = '→ Submit for Approval';
+            }
+        });
+    }
 }
 
 // ============================================================
 // STAGE 3: Approval
 // ============================================================
-function renderStage3(quote, items) {
-    const isApproved = quote.status === 'Approved';
-    const isUnderApproval = quote.status === 'Under Approval';
-    const isRejected = quote.status === 'Rejected';
-    const canSubmit = ['Draft', 'Received'].includes(quote.status);
-    const isDone = isApproved;
-    const cls = isDone ? 'stage-done' : isUnderApproval ? 'stage-active' : isRejected ? 'stage-error' : 'stage-pending';
-    const icon = isDone ? '✅' : isRejected ? '❌' : '🔄';
+function renderStage3(quote, approval) {
+    const status = quote?.status || '';
+    if (!approval && status !== 'Under Approval' && status !== 'Approved' && status !== 'Rejected') {
+        return `
+            <div class="lc-stage-panel">
+                <div class="lc-stage-header"><h4>✅ Approval</h4><span class="pw-badge badge-gray">Pending</span></div>
+                <div class="lc-empty-state"><div style="font-size:3rem;">📋</div><p>Not yet submitted for approval.</p></div>
+            </div>`;
+    }
+    const approvalBadge = status === 'Approved' ? '<span class="pw-badge badge-green">Approved</span>' :
+        status === 'Rejected' ? '<span class="pw-badge badge-red">Rejected</span>' :
+        '<span class="pw-badge badge-yellow">Under Review</span>';
+    return `
+        <div class="lc-stage-panel">
+            <div class="lc-stage-header"><h4>✅ Approval</h4>${approvalBadge}</div>
+            <div class="lc-detail-grid">
+                ${approval ? `
+                    <div class="lc-detail-item"><div class="lc-detail-label">Approver</div><div class="lc-detail-value">${escHtml(approval.approver_name || approval.approved_by || '—')}</div></div>
+                    <div class="lc-detail-item"><div class="lc-detail-label">Decision</div><div class="lc-detail-value">${escHtml(approval.decision || status || '—')}</div></div>
+                    <div class="lc-detail-item"><div class="lc-detail-label">Date</div><div class="lc-detail-value">${pwFmtDate(approval.decided_at || approval.created_at)}</div></div>
+                ` : `<div class="lc-detail-item"><div class="lc-detail-label">Status</div><div class="lc-detail-value">Awaiting decision…</div></div>`}
+            </div>
+            ${approval?.notes ? `<div class="lc-section"><div class="lc-section-title">Approval Notes</div><div class="lc-notes-box">${escHtml(approval.notes)}</div></div>` : ''}
+            ${status === 'Approved' ? `
+                <div class="lc-action-bar">
+                    <button class="btn btn-primary" id="btnCreatePO">📦 Create Purchase Order</button>
+                </div>` : (status === 'Under Approval' ? `
+                <div class="lc-action-bar">
+                    <button class="btn btn-success" id="btnApproveQuote">✓ Approve</button>
+                    <button class="btn btn-danger" id="btnRejectQuote">✕ Reject</button>
+                </div>` : '')}
+        </div>`;
+}
 
-    const submitButton = canSubmit ? `<button class="btn btn-primary" id="btnSubmitApproval" style="margin-top:1rem;">📋 Submit for Approval</button>` : '';
-    const statusMessage = isUnderApproval
-        ? `<div style="padding:0.75rem;background:#1e3a5f;border-radius:6px;border-left:3px solid #3b82f6;"><strong>🔄 Under Review</strong> — Awaiting manager approval.</div>`
-        : isApproved
-            ? `<div style="padding:0.75rem;background:#064e3b;border-radius:6px;border-left:3px solid #10b981;"><strong>✅ Approved</strong> — Quote has been approved.</div>`
-            : isRejected
-                ? `<div style="padding:0.75rem;background:#450a0a;border-radius:6px;border-left:3px solid #ef4444;"><strong>❌ Rejected</strong> — Quote was rejected.</div>`
-                : `<div style="color:#94a3b8;font-size:0.9rem;">Quote must be submitted for manager approval before a PO can be created.</div>`;
-
-    return `<div class="lifecycle-stage ${cls}" id="stage3"><div class="stage-header">${icon}<div class="stage-title-area"><div class="stage-title">✅ Approval</div><div class="stage-meta">${isApproved ? 'Approved' : isUnderApproval ? 'Under Review' : isRejected ? 'Rejected' : 'Pending'}</div></div></div><div class="stage-body">${statusMessage}${submitButton}</div></div>`;
+function bindStage3Events(quote) {
+    const btnCreate = document.getElementById('btnCreatePO');
+    if (btnCreate) {
+        btnCreate.addEventListener('click', async () => {
+            btnCreate.disabled = true;
+            btnCreate.innerHTML = pwSpinner() + ' Creating PO…';
+            try {
+                const res = await pwApiPost('/procurement/create-po', { quote_id: PW.currentQuoteId });
+                if (res.success) {
+                    showToast('Purchase Order ' + (res.poNumber || '') + ' created', 'success');
+                    await loadAndRenderLifecycle(PW.currentQuoteId);
+                } else {
+                    showToast('Failed to create PO: ' + (res.message || ''), 'error');
+                    btnCreate.disabled = false;
+                    btnCreate.textContent = '📦 Create Purchase Order';
+                }
+            } catch (err) {
+                console.error('btnCreatePO error:', err);
+                showToast('Network error', 'error');
+                btnCreate.disabled = false;
+                btnCreate.textContent = '📦 Create Purchase Order';
+            }
+        });
+    }
+    const btnApprove = document.getElementById('btnApproveQuote');
+    if (btnApprove) {
+        btnApprove.addEventListener('click', async () => {
+            btnApprove.disabled = true;
+            try {
+                const res = await pwApiPost('/procurement/approve-quote', { quote_id: PW.currentQuoteId, decision: 'approved' });
+                if (res.success) { showToast('Quote approved', 'success'); await loadAndRenderLifecycle(PW.currentQuoteId); }
+                else { showToast('Error: ' + (res.message || ''), 'error'); btnApprove.disabled = false; }
+            } catch (err) { showToast('Network error', 'error'); btnApprove.disabled = false; }
+        });
+    }
+    const btnReject = document.getElementById('btnRejectQuote');
+    if (btnReject) {
+        btnReject.addEventListener('click', async () => {
+            btnReject.disabled = true;
+            try {
+                const res = await pwApiPost('/procurement/approve-quote', { quote_id: PW.currentQuoteId, decision: 'rejected' });
+                if (res.success) { showToast('Quote rejected', 'info'); await loadAndRenderLifecycle(PW.currentQuoteId); }
+                else { showToast('Error: ' + (res.message || ''), 'error'); btnReject.disabled = false; }
+            } catch (err) { showToast('Network error', 'error'); btnReject.disabled = false; }
+        });
+    }
 }
 
 // ============================================================
 // STAGE 4: Purchase Order
 // ============================================================
-function renderStage4(po, quote) {
-    const hasPO = !!po;
-    const canCreatePO = quote.status === 'Approved' && !hasPO;
-    const isDone = hasPO && (po.status === 'delivered' || po.status === 'confirmed');
-    const cls = isDone ? 'stage-done' : hasPO ? 'stage-active' : 'stage-pending';
-    const icon = isDone ? '✅' : hasPO ? '📦' : '⏳';
-
-    let poDetails = '';
-    if (hasPO) {
-        poDetails = `<div class="pw-meta-grid"><div class="pw-meta-item"><span class="pw-detail-label">PO Number</span><span class="pw-detail-value" style="font-weight:600;color:#06b6d4;">${escHtml(po.po_number)}</span></div><div class="pw-meta-item"><span class="pw-detail-label">Status</span>${pwStatusBadge(po.status, 'po')}</div><div class="pw-meta-item"><span class="pw-detail-label">Total</span><span class="pw-detail-value">${pwFmtPrice(po.total_amount, po.currency)}</span></div><div class="pw-meta-item"><span class="pw-detail-label">Expected Delivery</span><span class="pw-detail-value">${pwFmtDate(po.expected_delivery_date)}</span></div>${po.actual_delivery_date ? `<div class="pw-meta-item"><span class="pw-detail-label">Actual Delivery</span><span class="pw-detail-value">${pwFmtDate(po.actual_delivery_date)}</span></div>` : ''}</div>`;
-        if (!['delivered', 'cancelled'].includes(po.status)) {
-            poDetails += `<div style="margin-top:1rem;"><div class="pw-subsection-title">Update PO Status</div><div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.5rem;">${po.status === 'draft' ? `<button class="btn btn-primary btn-sm pw-po-status-btn" data-status="sent">📤 Mark as Sent</button>` : ''}${po.status === 'sent' ? `<button class="btn btn-primary btn-sm pw-po-status-btn" data-status="confirmed">✅ Confirm PO</button>` : ''}${po.status !== 'delivered' && po.status !== 'cancelled' ? `<button class="btn btn-success btn-sm pw-po-status-btn" data-status="delivered">🚚 Mark Delivered</button>` : ''}<button class="btn btn-secondary btn-sm pw-po-status-btn" data-status="cancelled">❌ Cancel PO</button></div>${(po.status === 'confirmed' || po.status === 'sent') ? `<div style="margin-top:0.5rem;"><label class="pw-label">Actual Delivery Date</label><input type="date" id="poActualDelivery" class="pw-form-control" style="max-width:200px;margin-top:0.25rem;"></div>` : ''}</div>`;
-        }
+function renderStage4(quote, pos) {
+    if (!pos || !pos.length) {
+        return `
+            <div class="lc-stage-panel">
+                <div class="lc-stage-header"><h4>📦 Purchase Order</h4><span class="pw-badge badge-gray">Not Created</span></div>
+                <div class="lc-empty-state"><div style="font-size:3rem;">📦</div><p>No purchase order yet.</p></div>
+                ${quote?.status === 'Approved' ? `<div class="lc-action-bar"><button class="btn btn-primary" id="btnCreatePO">📦 Create Purchase Order</button></div>` : ''}
+            </div>`;
     }
-
-    const createPOForm = canCreatePO ? `<div class="pw-subsection-title" style="margin-top:${hasPO ? '1rem' : '0'};">Create Purchase Order</div><div class="pw-form-row"><div class="pw-form-group"><label class="pw-label">Currency</label><select id="poCurrency" class="pw-form-control"><option value="EUR">EUR</option><option value="BGN">BGN</option><option value="USD">USD</option><option value="GBP">GBP</option></select></div><div class="pw-form-group"><label class="pw-label">Expected Delivery</label><input type="date" id="poExpectedDelivery" class="pw-form-control"></div></div><div class="pw-form-group"><label class="pw-label">Delivery Address</label><input type="text" id="poDeliveryAddress" class="pw-form-control" placeholder="Delivery address…"></div><div class="pw-form-group"><label class="pw-label">Payment Terms</label><input type="text" id="poPaymentTerms" class="pw-form-control" placeholder="e.g. Net 30"></div><div class="pw-form-group"><label class="pw-label">Notes</label><textarea id="poNotes" class="pw-form-control" rows="2" placeholder="PO notes…"></textarea></div><button class="btn btn-primary" id="btnCreatePO">📦 Create Purchase Order</button>` : '';
-
-    return `<div class="lifecycle-stage ${cls}" id="stage4"><div class="stage-header">${icon}<div class="stage-title-area"><div class="stage-title">📦 Purchase Order</div><div class="stage-meta">${hasPO ? `PO ${po.po_number}` : 'No PO yet'}</div></div></div><div class="stage-body po-panel">${poDetails}${createPOForm}${!hasPO && !canCreatePO ? `<p class="pw-muted">Quote must be approved before creating a PO.</p>` : ''}</div></div>`;
+    const po = pos[0];
+    return `
+        <div class="lc-stage-panel">
+            <div class="lc-stage-header"><h4>📦 Purchase Order</h4>${pwStatusBadge(po.status, 'po')}</div>
+            <div class="lc-detail-grid">
+                <div class="lc-detail-item"><div class="lc-detail-label">PO Number</div><div class="lc-detail-value" style="font-weight:600;">${escHtml(po.po_number || '—')}</div></div>
+                <div class="lc-detail-item"><div class="lc-detail-label">Status</div><div class="lc-detail-value">${pwStatusBadge(po.status, 'po')}</div></div>
+                <div class="lc-detail-item"><div class="lc-detail-label">Created</div><div class="lc-detail-value">${pwFmtDate(po.created_at)}</div></div>
+                <div class="lc-detail-item"><div class="lc-detail-label">Expected Delivery</div><div class="lc-detail-value">${pwFmtDate(po.expected_delivery_date)}</div></div>
+                <div class="lc-detail-item"><div class="lc-detail-label">Total Amount</div><div class="lc-detail-value" style="color:#06b6d4;font-weight:600;">${pwFmtPrice(po.total_amount, quote?.currency)}</div></div>
+            </div>
+            ${po.notes ? `<div class="lc-section"><div class="lc-section-title">Notes</div><div class="lc-notes-box">${escHtml(po.notes)}</div></div>` : ''}
+            <div class="lc-action-bar">
+                ${po.status !== 'sent' && po.status !== 'confirmed' ? `<button class="btn btn-primary" id="btnSendPO">📧 Send PO to Supplier</button>` : ''}
+                ${po.status === 'sent' || po.status === 'confirmed' ? `<button class="btn btn-secondary" id="btnMarkDelivered">✓ Mark as Delivered</button>` : ''}
+            </div>
+        </div>`;
 }
 
-// ============================================================
-// STAGE 5: Invoice & Accounting
-// ============================================================
-function renderStage5(po, invoices) {
-    const hasInvoices = invoices && invoices.length > 0;
-    const canAddInvoice = po && po.status !== 'cancelled';
-    const isDone = hasInvoices && invoices.some(i => i.status === 'paid' || i.status === 'booked');
-    const cls = isDone ? 'stage-done' : hasInvoices ? 'stage-active' : 'stage-pending';
-    const icon = isDone ? '✅' : '🧾';
-
-    const invoiceRows = hasInvoices ? invoices.map(inv => `<div class="pw-invoice-card" data-invoice-id="${inv.id}"><div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;"><span style="font-weight:600;">${escHtml(inv.invoice_number || 'N/A')}</span>${pwStatusBadge(inv.status, 'invoice')}<span class="pw-muted">${pwFmtDateTime(inv.received_at)}</span><button class="btn btn-secondary btn-sm pw-invoice-status-btn" style="margin-left:auto;padding:0.15rem 0.5rem;font-size:0.75rem;" data-invoice-id="${inv.id}">📤 Update Status</button></div><div class="pw-meta-grid" style="margin-top:0.5rem;"><div class="pw-meta-item"><span class="pw-detail-label">Amount</span><span>${pwFmtPrice(inv.amount, inv.currency)}</span></div><div class="pw-meta-item"><span class="pw-detail-label">VAT</span><span>${pwFmtPrice(inv.vat_amount, inv.currency)}</span></div><div class="pw-meta-item"><span class="pw-detail-label">Total</span><span style="font-weight:600;color:#10b981;">${pwFmtPrice(inv.total_amount, inv.currency)}</span></div><div class="pw-meta-item"><span class="pw-detail-label">Due</span><span>${pwFmtDate(inv.due_date)}</span></div></div>${inv.accounting_notes ? `<div style="font-size:0.8rem;color:#94a3b8;margin-top:0.3rem;">Accounting: ${escHtml(inv.accounting_notes)}</div>` : ''}${inv.booking_reference ? `<div style="font-size:0.8rem;color:#94a3b8;">Booking ref: ${escHtml(inv.booking_reference)}</div>` : ''}<div id="inv-status-form-${inv.id}" class="hidden" style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px solid rgba(148,163,184,0.2);"></div></div>`).join('') : '';
-
-    return `<div class="lifecycle-stage ${cls}" id="stage5"><div class="stage-header">${icon}<div class="stage-title-area"><div class="stage-title">🧾 Invoice &amp; Accounting</div><div class="stage-meta">${invoices && invoices.length ? `${invoices.length} invoice(s)` : 'No invoices yet'}</div></div></div><div class="stage-body invoice-panel">${invoiceRows}${canAddInvoice ? `<div class="pw-subsection-title" style="margin-top:1rem;">Record New Invoice</div><div class="pw-form-row"><div class="pw-form-group"><label class="pw-label">Supplier Invoice #</label><input type="text" id="invNumber" class="pw-form-control" placeholder="Supplier's invoice number"></div><div class="pw-form-group"><label class="pw-label">Invoice Date</label><input type="date" id="invDate" class="pw-form-control"></div><div class="pw-form-group"><label class="pw-label">Due Date</label><input type="date" id="invDueDate" class="pw-form-control"></div></div><div class="pw-form-row"><div class="pw-form-group"><label class="pw-label">Amount (excl. VAT)</label><input type="number" id="invAmount" class="pw-form-control" step="0.01" placeholder="0.00"></div><div class="pw-form-group"><label class="pw-label">VAT Amount</label><input type="number" id="invVat" class="pw-form-control" step="0.01" placeholder="0.00"></div><div class="pw-form-group"><label class="pw-label">Total</label><input type="number" id="invTotal" class="pw-form-control" step="0.01" placeholder="0.00"></div><div class="pw-form-group"><label class="pw-label">Currency</label><select id="invCurrency" class="pw-form-control"><option value="EUR">EUR</option><option value="BGN">BGN</option><option value="USD">USD</option><option value="GBP">GBP</option></select></div></div><div class="pw-form-group"><label class="pw-label">Notes</label><textarea id="invNotes" class="pw-form-control" rows="2" placeholder="Invoice notes…"></textarea></div><button class="btn btn-primary" id="btnRecordInvoice">🧾 Record Invoice</button>` : `<p class="pw-muted">No purchase order linked yet.</p>`}</div></div>`;
-}
-
-// ============================================================
-// C. LIFECYCLE PANEL EVENT BINDINGS
-// ============================================================
-function bindLifecycleEvents(quoteId, quote, items, responses, purchase_orders, invoices) {
-    const po = purchase_orders && purchase_orders.length ? purchase_orders[0] : null;
-
-    // --- Stage 2: Record Response ---
-    const btnRecordResp = document.getElementById('btnRecordResponse');
-    if (btnRecordResp) {
-        btnRecordResp.addEventListener('click', async () => {
-            const unitPrice = parseFloat(document.getElementById('respUnitPrice')?.value) || null;
-            const totalPrice = parseFloat(document.getElementById('respTotalPrice')?.value) || null;
-            const currency = document.getElementById('respCurrency')?.value || 'EUR';
-            const deliveryDate = document.getElementById('respDeliveryDate')?.value || null;
-            const leadTime = parseInt(document.getElementById('respLeadTime')?.value) || null;
-            const availability = document.getElementById('respAvailability')?.value || 'available';
-            const supplierNotes = document.getElementById('respSupplierNotes')?.value || null;
-            const internalNotes = document.getElementById('respInternalNotes')?.value || null;
-            const hasAlt = document.getElementById('respHasAlternative')?.checked || false;
-            const altDesc = document.getElementById('respAltDesc')?.value || null;
-            const altPrice = parseFloat(document.getElementById('respAltPrice')?.value) || null;
-
-            const payload = {
-                unit_price: unitPrice, total_price: totalPrice, currency,
-                promised_delivery_date: deliveryDate, lead_time_days: leadTime,
-                availability, supplier_notes: supplierNotes, internal_notes: internalNotes,
-                has_alternative: hasAlt, alternative_description: altDesc, alternative_unit_price: altPrice,
-                status: 'pending'
-            };
-
+function bindStage4Events(quote, pos) {
+    const btnSend = document.getElementById('btnSendPO');
+    if (btnSend && pos && pos.length) {
+        btnSend.addEventListener('click', async () => {
+            btnSend.disabled = true;
+            btnSend.innerHTML = pwSpinner() + ' Sending…';
             try {
-                btnRecordResp.disabled = true; btnRecordResp.textContent = 'Saving…';
-                const res = await pwApiPost(`/procurement/quotes/${quoteId}/responses`, payload);
+                const res = await pwApiPost(`/procurement/send-po/${pos[0].id}`, {});
                 if (res.success) {
-                    showToast('Response recorded', 'success');
-                    await loadAndRenderLifecycle(quoteId);
+                    showToast('PO sent to supplier', 'success');
+                    await loadAndRenderLifecycle(PW.currentQuoteId);
                 } else {
-                    showToast(res.message || 'Failed to save response', 'error');
-                    btnRecordResp.disabled = false; btnRecordResp.textContent = '💾 Save Response';
+                    showToast('Failed to send PO: ' + (res.message || ''), 'error');
+                    btnSend.disabled = false;
+                    btnSend.textContent = '📧 Send PO to Supplier';
                 }
             } catch (err) {
-                console.error('btnRecordResponse error:', err);
+                console.error('btnSendPO error:', err);
                 showToast('Network error', 'error');
-                btnRecordResp.disabled = false; btnRecordResp.textContent = '💾 Save Response';
+                btnSend.disabled = false;
+                btnSend.textContent = '📧 Send PO to Supplier';
             }
         });
     }
-
-    // Alternative toggle
-    const altCheck = document.getElementById('respHasAlternative');
-    if (altCheck) {
-        altCheck.addEventListener('change', () => {
-            const area = document.getElementById('respAlternativeArea');
-            if (area) area.classList.toggle('hidden', !altCheck.checked);
-        });
-    }
-
-    // Edit response buttons
-    document.querySelectorAll('#lifecyclePanelBody .pw-edit-response-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const rid = btn.dataset.responseId;
-            const formDiv = document.getElementById(`pw-edit-form-${rid}`);
-            if (!formDiv) return;
-            if (!formDiv.classList.contains('hidden')) { formDiv.classList.add('hidden'); return; }
-            const resp = responses.find(r => String(r.id) === String(rid));
-            if (!resp) return;
-            formDiv.classList.remove('hidden');
-            formDiv.innerHTML = `<div class="pw-form-row"><div class="pw-form-group"><label class="pw-label">Unit Price</label><input type="number" id="editRespUP_${rid}" class="pw-form-control" step="0.01" value="${resp.unit_price || ''}"></div><div class="pw-form-group"><label class="pw-label">Total Price</label><input type="number" id="editRespTP_${rid}" class="pw-form-control" step="0.01" value="${resp.total_price || ''}"></div><div class="pw-form-group"><label class="pw-label">Status</label><select id="editRespStatus_${rid}" class="pw-form-control"><option value="pending" ${resp.status === 'pending' ? 'selected' : ''}>Pending</option><option value="accepted" ${resp.status === 'accepted' ? 'selected' : ''}>Accepted</option><option value="rejected" ${resp.status === 'rejected' ? 'selected' : ''}>Rejected</option><option value="negotiating" ${resp.status === 'negotiating' ? 'selected' : ''}>Negotiating</option></select></div></div><div class="pw-form-group"><label class="pw-label">Internal Notes</label><textarea id="editRespNotes_${rid}" class="pw-form-control" rows="2">${escHtml(resp.internal_notes || '')}</textarea></div><button class="btn btn-primary btn-sm" id="btnSaveEditResp_${rid}">💾 Update</button>`;
-            document.getElementById(`btnSaveEditResp_${rid}`).addEventListener('click', async () => {
-                const payload = {
-                    unit_price: parseFloat(document.getElementById(`editRespUP_${rid}`)?.value) || null,
-                    total_price: parseFloat(document.getElementById(`editRespTP_${rid}`)?.value) || null,
-                    status: document.getElementById(`editRespStatus_${rid}`)?.value,
-                    internal_notes: document.getElementById(`editRespNotes_${rid}`)?.value || null
-                };
-                try {
-                    const res = await pwApiPut(`/procurement/quotes/responses/${rid}`, payload);
-                    if (res.success) { showToast('Response updated', 'success'); await loadAndRenderLifecycle(quoteId); }
-                    else showToast(res.message || 'Update failed', 'error');
-                } catch (err) { showToast('Network error', 'error'); }
-            });
-        });
-    });
-
-    // --- Stage 3: Submit for Approval ---
-    const btnSubmitApproval = document.getElementById('btnSubmitApproval');
-    if (btnSubmitApproval) {
-        btnSubmitApproval.addEventListener('click', () => {
-            if (typeof openSubmitForApprovalDialog === 'function') {
-                openSubmitForApprovalDialog(quoteId);
-            } else {
-                alert('Approval submission module not loaded.');
-            }
-        });
-    }
-
-    // --- Stage 4: Create PO ---
-    const btnCreatePO = document.getElementById('btnCreatePO');
-    if (btnCreatePO) {
-        btnCreatePO.addEventListener('click', async () => {
-            const currency = document.getElementById('poCurrency')?.value || 'EUR';
-            const expectedDelivery = document.getElementById('poExpectedDelivery')?.value || null;
-            const deliveryAddress = document.getElementById('poDeliveryAddress')?.value || null;
-            const paymentTerms = document.getElementById('poPaymentTerms')?.value || null;
-            const notes = document.getElementById('poNotes')?.value || null;
-            const payload = {
-                quote_id: quoteId,
-                supplier_id: PW.currentLifecycle?.quote?.supplier_id,
-                currency, expected_delivery_date: expectedDelivery,
-                delivery_address: deliveryAddress, payment_terms: paymentTerms, notes
-            };
+    const btnDelivered = document.getElementById('btnMarkDelivered');
+    if (btnDelivered && pos && pos.length) {
+        btnDelivered.addEventListener('click', async () => {
+            btnDelivered.disabled = true;
             try {
-                btnCreatePO.disabled = true; btnCreatePO.textContent = 'Creating…';
-                const res = await pwApiPost('/procurement/purchase-orders', payload);
+                const res = await pwApiPut(`/procurement/po/${pos[0].id}/status`, { status: 'delivered' });
                 if (res.success) {
-                    showToast(`PO ${res.poNumber} created`, 'success');
-                    await loadAndRenderLifecycle(quoteId);
+                    showToast('PO marked as delivered', 'success');
+                    await loadAndRenderLifecycle(PW.currentQuoteId);
                 } else {
-                    showToast(res.message || 'Failed to create PO', 'error');
-                    btnCreatePO.disabled = false; btnCreatePO.textContent = '📦 Create Purchase Order';
+                    showToast('Failed: ' + (res.message || ''), 'error');
+                    btnDelivered.disabled = false;
+                }
+            } catch (err) {
+                console.error('btnMarkDelivered error:', err);
+                showToast('Network error', 'error');
+                btnDelivered.disabled = false;
+            }
+        });
+    }
+    // Also bind btnCreatePO if it exists in stage 4
+    const btnCreate = document.getElementById('btnCreatePO');
+    if (btnCreate) {
+        btnCreate.addEventListener('click', async () => {
+            btnCreate.disabled = true;
+            btnCreate.innerHTML = pwSpinner() + ' Creating PO…';
+            try {
+                const res = await pwApiPost('/procurement/create-po', { quote_id: PW.currentQuoteId });
+                if (res.success) {
+                    showToast('Purchase Order ' + (res.poNumber || '') + ' created', 'success');
+                    await loadAndRenderLifecycle(PW.currentQuoteId);
+                } else {
+                    showToast('Failed: ' + (res.message || ''), 'error');
+                    btnCreate.disabled = false;
+                    btnCreate.textContent = '📦 Create Purchase Order';
                 }
             } catch (err) {
                 console.error('btnCreatePO error:', err);
                 showToast('Network error', 'error');
-                btnCreatePO.disabled = false; btnCreatePO.textContent = '📦 Create Purchase Order';
+                btnCreate.disabled = false;
+                btnCreate.textContent = '📦 Create Purchase Order';
             }
         });
     }
-
-    // PO Status Update buttons
-    document.querySelectorAll('#lifecyclePanelBody .pw-po-status-btn').forEach(btn => {
-        btn.addEventListener('click', async () => {
-            if (!po) return;
-            const newStatus = btn.dataset.status;
-            const actualDelivery = newStatus === 'delivered' ? document.getElementById('poActualDelivery')?.value || null : null;
-            try {
-                const res = await pwApiPut(`/procurement/purchase-orders/${po.id}`, { status: newStatus, actual_delivery_date: actualDelivery });
-                if (res.success) {
-                    showToast(`PO status updated to ${newStatus}`, 'success');
-                    await loadAndRenderLifecycle(quoteId);
-                } else showToast(res.message || 'Update failed', 'error');
-            } catch (err) { showToast('Network error', 'error'); }
-        });
-    });
-
-    // --- Stage 5: Invoice ---
-    const btnRecordInvoice = document.getElementById('btnRecordInvoice');
-    if (btnRecordInvoice) {
-        btnRecordInvoice.addEventListener('click', async () => {
-            const payload = {
-                po_id: po ? po.id : null,
-                quote_id: quoteId,
-                supplier_id: PW.currentLifecycle?.quote?.supplier_id,
-                invoice_number: document.getElementById('invNumber')?.value || null,
-                invoice_date: document.getElementById('invDate')?.value || null,
-                due_date: document.getElementById('invDueDate')?.value || null,
-                amount: parseFloat(document.getElementById('invAmount')?.value) || 0,
-                vat_amount: parseFloat(document.getElementById('invVat')?.value) || 0,
-                total_amount: parseFloat(document.getElementById('invTotal')?.value) || 0,
-                currency: document.getElementById('invCurrency')?.value || 'EUR',
-                notes: document.getElementById('invNotes')?.value || null
-            };
-            try {
-                btnRecordInvoice.disabled = true; btnRecordInvoice.textContent = 'Recording…';
-                const res = await pwApiPost('/procurement/invoices', payload);
-                if (res.success) {
-                    showToast('Invoice recorded', 'success');
-                    await loadAndRenderLifecycle(quoteId);
-                } else {
-                    showToast(res.message || 'Failed to record invoice', 'error');
-                    btnRecordInvoice.disabled = false; btnRecordInvoice.textContent = '🧾 Record Invoice';
-                }
-            } catch (err) {
-                console.error('btnRecordInvoice error:', err);
-                showToast('Network error', 'error');
-                btnRecordInvoice.disabled = false; btnRecordInvoice.textContent = '🧾 Record Invoice';
-            }
-        });
-    }
-
-    // Invoice status update buttons
-    document.querySelectorAll('#lifecyclePanelBody .pw-invoice-status-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const invId = btn.dataset.invoiceId;
-            const formDiv = document.getElementById(`inv-status-form-${invId}`);
-            if (!formDiv) return;
-            if (!formDiv.classList.contains('hidden')) { formDiv.classList.add('hidden'); return; }
-            formDiv.classList.remove('hidden');
-            formDiv.innerHTML = `<div class="pw-form-row"><div class="pw-form-group"><label class="pw-label">New Status</label><select id="invStatusSel_${invId}" class="pw-form-control"><option value="received">Received</option><option value="verified">Verified</option><option value="sent_to_accounting">Sent to Accounting</option><option value="booked">Booked</option><option value="paid">Paid</option><option value="disputed">Disputed</option></select></div></div><div class="pw-form-group"><label class="pw-label">Accounting Notes</label><textarea id="invAccNotes_${invId}" class="pw-form-control" rows="2" placeholder="Notes for accounting…"></textarea></div><div class="pw-form-group"><label class="pw-label">Booking Reference</label><input type="text" id="invBookRef_${invId}" class="pw-form-control" placeholder="e.g. ACC-2024-001"></div><button class="btn btn-primary btn-sm" id="btnSaveInvStatus_${invId}">💾 Save</button>`;
-            document.getElementById(`btnSaveInvStatus_${invId}`).addEventListener('click', async () => {
-                const payload = {
-                    status: document.getElementById(`invStatusSel_${invId}`)?.value,
-                    accounting_notes: document.getElementById(`invAccNotes_${invId}`)?.value || null,
-                    booking_reference: document.getElementById(`invBookRef_${invId}`)?.value || null
-                };
-                try {
-                    const res = await pwApiPut(`/procurement/invoices/${invId}`, payload);
-                    if (res.success) { showToast('Invoice updated', 'success'); await loadAndRenderLifecycle(quoteId); }
-                    else showToast(res.message || 'Update failed', 'error');
-                } catch (err) { showToast('Network error', 'error'); }
-            });
-        });
-    });
 }
 
 // ============================================================
-// EXPORTS (attach to window for global access)
+// STAGE 5: Invoice
 // ============================================================
-window.openEnhancedCreateQuoteModal = openEnhancedCreateQuoteModal;
-window.openEnhancedQuoteModal = openEnhancedQuoteModal;
-window.closeEnhancedQuoteModal = closeEnhancedQuoteModal;
-window.openQuoteLifecyclePanel = openQuoteLifecyclePanel;
-window.closeLifecyclePanel = closeLifecyclePanel;
-window.renderLifecycleBadge = renderLifecycleBadge;
-window.getAISuggestionsForOrders = getAISuggestionsForOrders;
-window.showToast = showToast;
+function renderStage5(quote, pos, invoices) {
+    const po = pos && pos.length ? pos[0] : null;
+    if (!invoices || !invoices.length) {
+        return `
+            <div class="lc-stage-panel">
+                <div class="lc-stage-header"><h4>💰 Invoice</h4><span class="pw-badge badge-gray">No Invoice</span></div>
+                <div class="lc-empty-state"><div style="font-size:3rem;">🧾</div><p>No invoice received yet.</p></div>
+                <div class="lc-action-bar">
+                    <div class="pw-form-group" style="flex:1;min-width:200px;">
+                        <label class="pw-label">Upload Invoice PDF</label>
+                        <input type="file" id="invoiceFileInput" accept=".pdf" class="pw-form-control">
+                    </div>
+                    <div class="pw-form-group">
+                        <label class="pw-label">Invoice Number</label>
+                        <input type="text" id="invoiceNumberInput" class="pw-form-control" placeholder="INV-2024-001">
+                    </div>
+                    <div class="pw-form-group">
+                        <label class="pw-label">Invoice Amount</label>
+                        <input type="number" id="invoiceAmountInput" class="pw-form-control" placeholder="0.00" step="0.01">
+                    </div>
+                    <button class="btn btn-primary" id="btnUploadInvoice" style="align-self:flex-end;">📤 Upload Invoice</button>
+                </div>
+            </div>`;
+    }
+    const inv = invoices[0];
+    return `
+        <div class="lc-stage-panel">
+            <div class="lc-stage-header"><h4>💰 Invoice</h4>${pwStatusBadge(inv.status, 'invoice')}</div>
+            <div class="lc-detail-grid">
+                <div class="lc-detail-item"><div class="lc-detail-label">Invoice Number</div><div class="lc-detail-value" style="font-weight:600;">${escHtml(inv.invoice_number || '—')}</div></div>
+                <div class="lc-detail-item"><div class="lc-detail-label">Status</div><div class="lc-detail-value">${pwStatusBadge(inv.status, 'invoice')}</div></div>
+                <div class="lc-detail-item"><div class="lc-detail-label">Invoice Date</div><div class="lc-detail-value">${pwFmtDate(inv.invoice_date || inv.created_at)}</div></div>
+                <div class="lc-detail-item"><div class="lc-detail-label">Due Date</div><div class="lc-detail-value">${pwFmtDate(inv.due_date)}</div></div>
+                <div class="lc-detail-item"><div class="lc-detail-label">Amount</div><div class="lc-detail-value" style="color:#06b6d4;font-weight:600;">${pwFmtPrice(inv.amount || inv.total_amount, quote?.currency)}</div></div>
+            </div>
+            ${inv.notes ? `<div class="lc-section"><div class="lc-section-title">Notes</div><div class="lc-notes-box">${escHtml(inv.notes)}</div></div>` : ''}
+            ${inv.pdf_path ? `<div class="lc-section"><a href="/api/procurement/invoice-pdf/${inv.id}" target="_blank" class="btn btn-secondary btn-sm">📄 Download Invoice PDF</a></div>` : ''}
+            <div class="lc-action-bar">
+                ${inv.status === 'received' ? `<button class="btn btn-primary" id="btnVerifyInvoice">✓ Verify Invoice</button>` : ''}
+                ${inv.status === 'verified' ? `<button class="btn btn-primary" id="btnSendToAccounting">→ Send to Accounting</button>` : ''}
+                ${inv.status === 'sent_to_accounting' ? `<button class="btn btn-primary" id="btnMarkPaid">✓ Mark as Paid</button>` : ''}
+            </div>
+        </div>`;
+}
+
+function bindStage5Events(quote, pos, invoices) {
+    const inv = invoices && invoices.length ? invoices[0] : null;
+    const btnUploadInv = document.getElementById('btnUploadInvoice');
+    if (btnUploadInv) {
+        btnUploadInv.addEventListener('click', async () => {
+            const fileInput = document.getElementById('invoiceFileInput');
+            const invNum = document.getElementById('invoiceNumberInput')?.value?.trim();
+            const invAmt = document.getElementById('invoiceAmountInput')?.value;
+            const file = fileInput?.files?.[0];
+            if (!file) { showToast('Please select an invoice PDF', 'warning'); return; }
+            btnUploadInv.disabled = true;
+            btnUploadInv.innerHTML = pwSpinner() + ' Uploading…';
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                const token = localStorage.getItem('authToken') || (typeof authToken !== 'undefined' ? authToken : '');
+                const uploadRes = await fetch('/api/procurement/upload-invoice-pdf', {
+                    method: 'POST', headers: { 'Authorization': 'Bearer ' + token }, body: formData
+                }).then(r => r.json());
+                if (!uploadRes.success) { showToast('Upload failed: ' + (uploadRes.message || ''), 'error'); btnUploadInv.disabled = false; btnUploadInv.textContent = '📤 Upload Invoice'; return; }
+                const po = pos && pos.length ? pos[0] : null;
+                const body = {
+                    po_id: po?.id,
+                    quote_id: PW.currentQuoteId,
+                    invoice_number: invNum,
+                    amount: invAmt ? parseFloat(invAmt) : null,
+                    pdf_path: uploadRes.path || uploadRes.filename,
+                    invoice_date: new Date().toISOString().split('T')[0]
+                };
+                const res = await pwApiPost('/procurement/invoice', body);
+                if (res.success) {
+                    showToast('Invoice uploaded successfully', 'success');
+                    await loadAndRenderLifecycle(PW.currentQuoteId);
+                } else {
+                    showToast('Failed: ' + (res.message || ''), 'error');
+                    btnUploadInv.disabled = false;
+                    btnUploadInv.textContent = '📤 Upload Invoice';
+                }
+            } catch (err) {
+                console.error('btnUploadInvoice error:', err);
+                showToast('Upload error', 'error');
+                btnUploadInv.disabled = false;
+                btnUploadInv.textContent = '📤 Upload Invoice';
+            }
+        });
+    }
+    const btnVerify = document.getElementById('btnVerifyInvoice');
+    if (btnVerify && inv) {
+        btnVerify.addEventListener('click', async () => {
+            btnVerify.disabled = true;
+            try {
+                const res = await pwApiPut(`/procurement/invoice/${inv.id}/status`, { status: 'verified' });
+                if (res.success) { showToast('Invoice verified', 'success'); await loadAndRenderLifecycle(PW.currentQuoteId); }
+                else { showToast('Error: ' + (res.message || ''), 'error'); btnVerify.disabled = false; }
+            } catch (err) { showToast('Network error', 'error'); btnVerify.disabled = false; }
+        });
+    }
+    const btnAccounting = document.getElementById('btnSendToAccounting');
+    if (btnAccounting && inv) {
+        btnAccounting.addEventListener('click', async () => {
+            btnAccounting.disabled = true;
+            btnAccounting.innerHTML = pwSpinner() + ' Sending…';
+            try {
+                const res = await pwApiPost(`/procurement/invoice/${inv.id}/send-to-accounting`, {});
+                if (res.success) { showToast('Sent to accounting', 'success'); await loadAndRenderLifecycle(PW.currentQuoteId); }
+                else { showToast('Error: ' + (res.message || ''), 'error'); btnAccounting.disabled = false; btnAccounting.textContent = '→ Send to Accounting'; }
+            } catch (err) { showToast('Network error', 'error'); btnAccounting.disabled = false; btnAccounting.textContent = '→ Send to Accounting'; }
+        });
+    }
+    const btnPaid = document.getElementById('btnMarkPaid');
+    if (btnPaid && inv) {
+        btnPaid.addEventListener('click', async () => {
+            btnPaid.disabled = true;
+            try {
+                const res = await pwApiPut(`/procurement/invoice/${inv.id}/status`, { status: 'paid' });
+                if (res.success) { showToast('Invoice marked as paid', 'success'); await loadAndRenderLifecycle(PW.currentQuoteId); }
+                else { showToast('Error: ' + (res.message || ''), 'error'); btnPaid.disabled = false; }
+            } catch (err) { showToast('Network error', 'error'); btnPaid.disabled = false; }
+        });
+    }
+}
 
 // ============================================================
-// INIT
+// QUOTE LIST RENDERING (used by main app.js)
+// ============================================================
+function renderQuoteRow(q) {
+    return `
+        <tr class="quote-row" data-id="${q.id}">
+            <td style="font-weight:600;color:#06b6d4;">${escHtml(q.quote_number || '—')}</td>
+            <td>${escHtml(q.supplier_name || '—')}</td>
+            <td>${pwFmtDate(q.created_at)}</td>
+            <td>${pwFmtDate(q.valid_until)}</td>
+            <td>${pwStatusBadge(q.status, 'quote')}</td>
+            <td>${pwFmtPrice(q.total_value, q.currency)}</td>
+            <td>
+                <button class="btn btn-secondary btn-sm btn-open-lifecycle" data-id="${q.id}">🚀 Open</button>
+            </td>
+        </tr>`;
+}
+
+async function loadQuotes() {
+    const tbody = document.getElementById('quotesTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:2rem;">${pwSpinner()}</td></tr>`;
+    try {
+        const res = await pwApiGet('/quotes');
+        if (!res.success || !res.quotes || !res.quotes.length) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:2rem;">No quotes found.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = res.quotes.map(renderQuoteRow).join('');
+        tbody.querySelectorAll('.btn-open-lifecycle').forEach(btn => {
+            btn.addEventListener('click', () => openQuoteLifecyclePanel(parseInt(btn.dataset.id)));
+        });
+    } catch (err) {
+        console.error('loadQuotes error:', err);
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#ef4444;padding:2rem;">Error loading quotes.</td></tr>';
+    }
+}
+
+// ============================================================
+// GLOBAL KEYBOARD / CLICK HANDLERS
 // ============================================================
 document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {

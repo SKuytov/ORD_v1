@@ -1,0 +1,266 @@
+/* Phase 2: Procurement Workflow & Collaboration Styles */
+
+/* ====== ROLE CHIPS ====== */
+.phase2-role-chip {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: capitalize;
+    white-space: nowrap;
+}
+
+/* ====== SUPER ADMIN CROWN ====== */
+.super-admin-crown {
+    color: #eab308;
+    font-size: 1.1em;
+    margin-right: 2px;
+}
+
+/* ====== CLAIM BADGE ====== */
+.phase2-claim-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* ====== TABLES ====== */
+.phase2-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.phase2-table th,
+.phase2-table td {
+    padding: 0.6rem 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.phase2-table th {
+    font-weight: 600;
+    color: #94a3b8;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.phase2-table tbody tr:hover {
+    background: rgba(148, 163, 184, 0.05);
+}
+
+/* ====== PROCUREMENT BOARD ====== */
+.phase2-proc-board {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+}
+
+@media (max-width: 900px) {
+    .phase2-proc-board {
+        grid-template-columns: 1fr;
+    }
+}
+
+.phase2-panel {
+    background: var(--card-bg, #1e293b);
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.phase2-panel-header {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+    background: rgba(148, 163, 184, 0.05);
+}
+
+.phase2-panel-header h3 {
+    margin: 0;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.phase2-panel-body {
+    padding: 0.75rem;
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+.phase2-count-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    height: 24px;
+    padding: 0 6px;
+    border-radius: 12px;
+    background: #3b82f6;
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+/* ====== ORDER CARDS ====== */
+.phase2-order-card {
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    border-radius: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.15);
+    background: rgba(148, 163, 184, 0.03);
+    transition: background 0.15s;
+}
+
+.phase2-order-card:hover {
+    background: rgba(148, 163, 184, 0.08);
+}
+
+.phase2-order-card-mini {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+    font-size: 0.85rem;
+}
+
+.phase2-order-card-mini:last-child {
+    border-bottom: none;
+}
+
+/* ====== SUPPLIER GROUP (Accordion) ====== */
+.phase2-supplier-group {
+    margin-bottom: 0.75rem;
+    border: 1px solid rgba(148, 163, 184, 0.15);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.phase2-supplier-group-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    background: rgba(148, 163, 184, 0.05);
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.phase2-supplier-group-header:hover {
+    background: rgba(148, 163, 184, 0.1);
+}
+
+.phase2-supplier-group-orders {
+    padding: 0.25rem 0;
+}
+
+.phase2-supplier-group-orders.hidden {
+    display: none;
+}
+
+/* ====== SUPPLIER SELECT IN BOARD ====== */
+.phase2-supplier-select {
+    background: var(--input-bg, #0f172a);
+    color: var(--text-primary, #e2e8f0);
+    border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+/* ====== CAD SECTION ====== */
+.phase2-cad-section {
+    margin-top: 1rem;
+    padding: 1rem;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 8px;
+}
+
+/* ====== PRIORITY BADGES (from existing, but reusable) ====== */
+.priority-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.priority-urgent { background: #ef4444; color: #fff; }
+.priority-high { background: #f59e0b; color: #000; }
+.priority-normal { background: #3b82f6; color: #fff; }
+.priority-low { background: #6b7280; color: #fff; }
+
+/* ====== MODAL ENHANCEMENTS ====== */
+.modal-overlay {
+    animation: fadeIn 0.15s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* ====== TAB CONTENT FOR NEW TABS ====== */
+#procBoardTab,
+#rfqHistoryTab,
+#cadTasksTab,
+#systemSettingsTab {
+    padding: 0;
+}
+
+#procBoardTab .card,
+#rfqHistoryTab .card,
+#cadTasksTab .card,
+#systemSettingsTab .card {
+    margin: 0;
+}
+
+/* ====== LIGHT THEME OVERRIDES ====== */
+body.light-theme .phase2-panel {
+    background: #fff;
+    border-color: #e2e8f0;
+}
+
+body.light-theme .phase2-panel-header {
+    background: #f8fafc;
+    border-color: #e2e8f0;
+}
+
+body.light-theme .phase2-order-card {
+    border-color: #e2e8f0;
+    background: #f8fafc;
+}
+
+body.light-theme .phase2-order-card:hover {
+    background: #f1f5f9;
+}
+
+body.light-theme .phase2-supplier-group {
+    border-color: #e2e8f0;
+}
+
+body.light-theme .phase2-supplier-group-header {
+    background: #f8fafc;
+}
+
+body.light-theme .phase2-supplier-select {
+    background: #fff;
+    color: #1e293b;
+    border-color: #e2e8f0;
+}
+
+body.light-theme .phase2-table th {
+    color: #64748b;
+}
+
+body.light-theme .phase2-table td {
+    border-color: #e2e8f0;
+}

@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/userController');
-const { authenticateToken, authorizeRoles } = require('../middleware/auth');
+const { authenticateToken, authorizeRoles, requireSuperAdmin } = require('../middleware/auth');
 
 // Admin-only user management
 router.get('/',
@@ -16,6 +16,13 @@ router.post('/',
     userController.createUser
 );
 
+// Generate invite link (MUST be before /:id routes)
+router.post('/invite',
+    authenticateToken,
+    requireSuperAdmin,
+    userController.generateInvite
+);
+
 router.put('/:id',
     authenticateToken,
     authorizeRoles('admin'),
@@ -26,6 +33,29 @@ router.post('/:id/reset-password',
     authenticateToken,
     authorizeRoles('admin'),
     userController.resetPassword
+);
+
+// === Super Admin only routes ===
+
+// Update user roles (multi-role)
+router.post('/:id/roles',
+    authenticateToken,
+    requireSuperAdmin,
+    userController.updateUserRoles
+);
+
+// Deactivate user
+router.post('/:id/deactivate',
+    authenticateToken,
+    requireSuperAdmin,
+    userController.deactivateUser
+);
+
+// Activate user
+router.post('/:id/activate',
+    authenticateToken,
+    requireSuperAdmin,
+    userController.activateUser
 );
 
 module.exports = router;

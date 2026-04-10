@@ -1,1 +1,121 @@
-Ly8gYmFja2VuZC9zZXJ2ZXIuanMKY29uc3QgZXhwcmVzcyA9IHJlcXVpcmUoJ2V4cHJlc3MnKTsKY29uc3QgY29ycyA9IHJlcXVpcmUoJ2NvcnMnKTsKY29uc3QgaGVsbWV0ID0gcmVxdWlyZSgnaGVsbWV0Jyk7CmNvbnN0IGNvbXByZXNzaW9uID0gcmVxdWlyZSgnY29tcHJlc3Npb24nKTsKY29uc3QgcGF0aCA9IHJlcXVpcmUoJ3BhdGgnKTsKcmVxdWlyZSgnZG90ZW52JykuY29uZmlnKCk7Cgpjb25zdCBhdXRoUm91dGVzID0gcmVxdWlyZSgnLi9yb3V0ZXMvYXV0aCcpOwpjb25zdCBvcmRlclJvdXRlcyA9IHJlcXVpcmUoJy4vcm91dGVzL29yZGVycycpOwpjb25zdCBvcmRlckFzc2lnbm1lbnRSb3V0ZXMgPSByZXF1aXJlKCcuL3JvdXRlcy9vcmRlckFzc2lnbm1lbnRzJyk7CmNvbnN0IHN1cHBsaWVyUm91dGVzID0gcmVxdWlyZSgnLi9yb3V0ZXMvc3VwcGxpZXJzJyk7CmNvbnN0IHF1b3RlUm91dGVzID0gcmVxdWlyZSgnLi9yb3V0ZXMvcXVvdGVzJyk7CmNvbnN0IHF1b3RlRW1haWxSb3V0ZXMgPSByZXF1aXJlKCcuL3JvdXRlcy9xdW90ZUVtYWlsJyk7IC8vIOKtkCBTbWFydCBRdW90ZSBTZW5kCmNvbnN0IHVzZXJSb3V0ZXMgPSByZXF1aXJlKCcuL3JvdXRlcy91c2VycycpOwpjb25zdCBidWlsZGluZ1JvdXRlcyA9IHJlcXVpcmUoJy4vcm91dGVzL2J1aWxkaW5ncycpOwpjb25zdCBjb3N0Q2VudGVyUm91dGVzID0gcmVxdWlyZSgnLi9yb3V0ZXMvY29zdENlbnRlcnMnKTsKY29uc3QgZG9jdW1lbnRzUm91dGVzID0gcmVxdWlyZSgnLi9yb3V0ZXMvZG9jdW1lbnRzJyk7CmNvbnN0IGFwcHJvdmFsc1JvdXRlcyA9IHJlcXVpcmUoJy4vcm91dGVzL2FwcHJvdmFscycpOwpjb25zdCBhdXRvY29tcGxldGVSb3V0ZXMgPSByZXF1aXJlKCcuL3JvdXRlcy9hdXRvY29tcGxldGUnKTsKY29uc3QgdGVzdFJvdXRlcyA9IHJlcXVpcmUoJy4vcm91dGVzL3Rlc3QnKTsKY29uc3QgcHJvY3VyZW1lbnRSb3V0ZXMgPSByZXF1aXJlKCcuL3JvdXRlcy9wcm9jdXJlbWVudCcpOyAvLyDirZAgdjMuMCBQcm9jdXJlbWVudCBMaWZlY3ljbGUKCmNvbnN0IGFwcCA9IGV4cHJlc3MoKTsKY29uc3QgUE9SVCA9IHByb2Nlc3MuZW52LlBPUlQgfHwgMzAwMDsKCi8vIFNlY3VyaXR5IG1pZGRsZXdhcmUKYXBwLnVzZShoZWxtZXQoeyBjb250ZW50U2VjdXJpdHlQb2xpY3k6IGZhbHNlIH0pKTsKYXBwLnVzZShjb3JzKHsKICAgIG9yaWdpbjogcHJvY2Vzcy5lbnYuRlJPTlRFTkRfVVJMIHx8ICcqJywKICAgIGNyZWRlbnRpYWxzOiB0cnVlCn0pKTsKCi8vIEJvZHkgcGFyc2luZyBtaWRkbGV3YXJlCmFwcC51c2UoZXhwcmVzcy5qc29uKCkpOwphcHAudXNlKGV4cHJlc3MudXJsZW5jb2RlZCh7IGV4dGVuZGVkOiB0cnVlIH0pKTsKYXBwLnVzZShjb21wcmVzc2lvbigpKTsKCi8vIFN0YXRpYyBmaWxlcyAtIHVwbG9hZHMgc2VydmVkIHdpdGggb3JpZ2luYWwgbmFtZXMKYXBwLnVzZSgnL3VwbG9hZHMnLCBleHByZXNzLnN0YXRpYyhwYXRoLmpvaW4oX19kaXJuYW1lLCAndXBsb2FkcycpKSk7CmFwcC51c2UoZXhwcmVzcy5zdGF0aWMocGF0aC5qb2luKF9fZGlybmFtZSwgJy4uL2Zyb250ZW5kJykpKTsKCi8vIEFQSSBSb3V0ZXMKYXBwLnVzZSgnL2FwaS9hdXRoJywgYXV0aFJvdXRlcyk7CmFwcC51c2UoJy9hcGkvb3JkZXJzJywgb3JkZXJSb3V0ZXMpOwphcHAudXNlKCcvYXBpL29yZGVyLWFzc2lnbm1lbnRzJywgb3JkZXJBc3NpZ25tZW50Um91dGVzKTsgLy8g4q2QIEFzc2lnbm1lbnQgc3lzdGVtCmFwcC51c2UoJy9hcGkvc3VwcGxpZXJzJywgc3VwcGxpZXJSb3V0ZXMpOwphcHAudXNlKCcvYXBpL3F1b3RlcycsIHF1b3RlRW1haWxSb3V0ZXMpOyAvLyDirZAgU21hcnQgUXVvdGUgU2VuZCAobXVzdCBiZSBiZWZvcmUgcXVvdGVSb3V0ZXMpCmFwcC51c2UoJy9hcGkvcXVvdGVzJywgcXVvdGVSb3V0ZXMpOwphcHAudXNlKCcvYXBpL3VzZXJzJywgdXNlclJvdXRlcyk7CmFwcC51c2UoJy9hcGkvYnVpbGRpbmdzJywgYnVpbGRpbmdSb3V0ZXMpOwphcHAudXNlKCcvYXBpL2Nvc3QtY2VudGVycycsIGNvc3RDZW50ZXJSb3V0ZXMpOwphcHAudXNlKCcvYXBpL2RvY3VtZW50cycsIGRvY3VtZW50c1JvdXRlcyk7CmFwcC51c2UoJy9hcGkvYXBwcm92YWxzJywgYXBwcm92YWxzUm91dGVzKTsKYXBwLnVzZSgnL2FwaS9hdXRvY29tcGxldGUnLCBhdXRvY29tcGxldGVSb3V0ZXMpOyAvLyDirZAgSW50ZWxsaWdlbnQgYXV0b2NvbXBsZXRlCmFwcC51c2UoJy9hcGkvdGVzdCcsIHRlc3RSb3V0ZXMpOwphcHAudXNlKCcvYXBpL3Byb2N1cmVtZW50JywgcHJvY3VyZW1lbnRSb3V0ZXMpOyAvLyDirZAgdjMuMCBQcm9jdXJlbWVudCBMaWZlY3ljbGUKCi8vIEhlYWx0aCBjaGVjawphcHAuZ2V0KCcvYXBpL2hlYWx0aCcsIChyZXEsIHJlcykgPT4gewogICAgcmVzLmpzb24oewogICAgICAgIHN0YXR1czogJ09LJywKICAgICAgICB0aW1lc3RhbXA6IG5ldyBEYXRlKCkudG9JU09TdHJpbmcoKSwKICAgICAgICBlbnZpcm9ubWVudDogcHJvY2Vzcy5lbnYuTk9ERV9FTlYsCiAgICAgICAgdmVyc2lvbjogJzMuMC4wJyAvLyB2My4wOiBQcm9jdXJlbWVudCBMaWZlY3ljbGUKICAgIH0pOwp9KTsKCi8vIFNlcnZlIGZyb250ZW5kCmFwcC5nZXQoJyonLCAocmVxLCByZXMpID0+IHsKICAgIHJlcy5zZW5kRmlsZShwYXRoLmpvaW4oX19kaXJuYW1lLCAnLi4vZnJvbnRlbmQvaW5kZXguaHRtbCcpKTsKfSk7CgovLyBFcnJvciBoYW5kbGluZwphcHAudXNlKChlcnIsIHJlcSwgcmVzLCBuZXh0KSA9PiB7CiAgICBjb25zb2xlLmVycm9yKCdFcnJvcjonLCBlcnIpOwogICAgcmVzLnN0YXR1cyhlcnIuc3RhdHVzIHx8IDUwMCkuanNvbih7CiAgICAgICAgc3VjY2VzczogZmFsc2UsCiAgICAgICAgbWVzc2FnZTogZXJyLm1lc3NhZ2UgfHwgJ0ludGVybmFsIHNlcnZlciBlcnJvcicsCiAgICAgICAgLi4uKHByb2Nlc3MuZW52Lk5PREVfRU5WID09PSAnZGV2ZWxvcG1lbnQnICYmIHsgc3RhY2s6IGVyci5zdGFjayB9KQogICAgfSk7Cn0pOwoKYXBwLmxpc3RlbihQT1JULCAoKSA9PiB7CiAgICBjb25zb2xlLmxvZyhgUGFydFB1bHNlIE9yZGVycyBTZXJ2ZXIgdjMuMC4wIHJ1bm5pbmcgb24gcG9ydCAke1BPUlR9YCk7CiAgICBjb25zb2xlLmxvZyhgRW52aXJvbm1lbnQ6ICR7cHJvY2Vzcy5lbnYuTk9ERV9FTlZ9YCk7CiAgICBjb25zb2xlLmxvZyhgRnJvbnRlbmQgVVJMOiAke3Byb2Nlc3MuZW52LkZST05URU5EX1VSTH1gKTsKICAgIGNvbnNvbGUubG9nKGBGZWF0dXJlczogUHJvY3VyZW1lbnQgTGlmZWN5Y2xlICsgU21hcnQgUXVvdGUgU2VuZCArIFNtYXJ0IEF1dG9jb21wbGV0ZSArIERvY3VtZW50IE1hbmFnZW1lbnQgKyBBcHByb3ZhbHNgKTsKfSk7Cgptb2R1bGUuZXhwb3J0cyA9IGFwcDsK
+// backend/server.js
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const compression = require('compression');
+const path = require('path');
+require('dotenv').config();
+
+const authRoutes = require('./routes/auth');
+const orderRoutes = require('./routes/orders');
+const orderAssignmentRoutes = require('./routes/orderAssignments');
+const supplierRoutes = require('./routes/suppliers');
+const quoteRoutes = require('./routes/quotes');
+const quoteEmailRoutes = require('./routes/quoteEmail'); // ⭐ Smart Quote Send
+const userRoutes = require('./routes/users');
+const buildingRoutes = require('./routes/buildings');
+const costCenterRoutes = require('./routes/costCenters');
+const documentsRoutes = require('./routes/documents');
+const approvalsRoutes = require('./routes/approvals');
+const autocompleteRoutes = require('./routes/autocomplete');
+const testRoutes = require('./routes/test');
+const procurementRoutes = require('./routes/procurement'); // ⭐ v3.0 Procurement Lifecycle
+const analyticsRoutes = require('./routes/analytics');
+const templateRoutes = require('./routes/templates');
+const notificationsRoutes = require('./routes/notifications');
+const auditLogRoutes = require('./routes/auditLog');
+const partsCatalogRoutes = require('./routes/partsCatalog');
+const supplierScorecardRoutes = require('./routes/supplierScorecard');
+const duplicateDetectionRoutes = require('./routes/duplicateDetection');
+const savedFiltersRoutes = require('./routes/savedFilters');
+const equipmentRoutes = require('./routes/equipment');
+const commentsRoutes = require('./routes/comments');
+
+// Phase 2 routes
+const claimRoutes = require('./routes/claims');
+const rfqRoutes = require('./routes/rfq');
+const cadRoutes = require('./routes/cad');
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Security middleware
+app.use(helmet({ contentSecurityPolicy: false }));
+app.use(cors({
+    origin: process.env.FRONTEND_URL || '*',
+    credentials: true
+}));
+
+// Body parsing middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(compression());
+
+// Static files - uploads served with original names
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use(express.static(path.join(__dirname, '../frontend')));
+
+// API Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/order-assignments', orderAssignmentRoutes); // ⭐ Assignment system
+app.use('/api/suppliers', supplierRoutes);
+app.use('/api/quotes', quoteEmailRoutes); // ⭐ Smart Quote Send (must be before quoteRoutes)
+app.use('/api/quotes', quoteRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/buildings', buildingRoutes);
+app.use('/api/cost-centers', costCenterRoutes);
+app.use('/api/documents', documentsRoutes);
+app.use('/api/approvals', approvalsRoutes);
+app.use('/api/autocomplete', autocompleteRoutes); // ⭐ Intelligent autocomplete
+app.use('/api/test', testRoutes);
+app.use('/api/procurement', procurementRoutes); // ⭐ v3.0 Procurement Lifecycle
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/templates', templateRoutes);
+app.use('/api/notifications', notificationsRoutes);
+app.use('/api/audit-log', auditLogRoutes);
+app.use('/api/parts-catalog', partsCatalogRoutes);
+app.use('/api/supplier-scorecard', supplierScorecardRoutes);
+app.use('/api/duplicate-check', duplicateDetectionRoutes);
+app.use('/api/saved-filters', savedFiltersRoutes);
+app.use('/api/equipment', equipmentRoutes);
+app.use('/api/comments', commentsRoutes);
+
+// Phase 2: Order Claiming, RFQ, CAD Workflow
+app.use('/api/orders', claimRoutes);
+app.use('/api/procurement', rfqRoutes);
+app.use('/api/cad', cadRoutes);
+
+// Health check
+app.get('/api/health', (req, res) => {
+    res.json({
+        status: 'OK',
+        timestamp: new Date().toISOString(),
+        environment: process.env.NODE_ENV,
+        version: '3.1.0' // v3.1: Phase 1+2 World-Class Upgrade
+    });
+});
+
+// Serve frontend
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../frontend/index.html'));
+});
+
+// Error handling
+app.use((err, req, res, next) => {
+    console.error('Error:', err);
+    res.status(err.status || 500).json({
+        success: false,
+        message: err.message || 'Internal server error',
+        ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+    });
+});
+
+app.listen(PORT, () => {
+    console.log(`PartPulse Orders Server v3.1.0 running on port ${PORT}`);
+    console.log(`Environment: ${process.env.NODE_ENV}`);
+    console.log(`Frontend URL: ${process.env.FRONTEND_URL}`);
+    console.log(`Features: Procurement Lifecycle + Smart Quote Send + Smart Autocomplete + Document Management + Approvals + Phase 2 (Super Admin, User Mgmt, Order Claiming, RFQ, CAD Workflow)`);
+});
+
+module.exports = app;

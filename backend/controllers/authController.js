@@ -38,17 +38,33 @@ exports.login = async (req, res) => {
             });
         }
 
-        // Generate JWT token
+        // Parse roles JSON
+        let roles = [];
+        if (user.roles) {
+            try {
+                roles = typeof user.roles === 'string' ? JSON.parse(user.roles) : user.roles;
+            } catch (e) {
+                roles = [];
+            }
+        }
+
+        // Generate JWT token with extended fields
         const token = jwt.sign(
-            { 
+            {
                 id: user.id,
                 username: user.username,
+                name: user.name,
                 role: user.role,
-                building: user.building
+                roles: roles,
+                building: user.building,
+                is_super_admin: !!user.is_super_admin
             },
             process.env.JWT_SECRET,
             { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
         );
+
+        // Update last_login_at
+        await db.query('UPDATE users SET last_login_at = NOW() WHERE id = ?', [user.id]).catch(() => {});
 
         res.json({
             success: true,
@@ -59,7 +75,9 @@ exports.login = async (req, res) => {
                 name: user.name,
                 email: user.email,
                 role: user.role,
-                building: user.building
+                roles: roles,
+                building: user.building,
+                is_super_admin: !!user.is_super_admin
             }
         });
 
@@ -75,7 +93,7 @@ exports.login = async (req, res) => {
 exports.verify = async (req, res) => {
     try {
         const [users] = await db.query(
-            'SELECT id, username, name, email, role, building FROM users WHERE id = ?',
+            'SELECT id, username, name, email, role, roles, building, is_super_admin FROM users WHERE id = ?',
             [req.user.id]
         );
 
@@ -86,9 +104,30 @@ exports.verify = async (req, res) => {
             });
         }
 
+        const user = users[0];
+
+        // Parse roles JSON
+        let roles = [];
+        if (user.roles) {
+            try {
+                roles = typeof user.roles === 'string' ? JSON.parse(user.roles) : user.roles;
+            } catch (e) {
+                roles = [];
+            }
+        }
+
         res.json({
             success: true,
-            user: users[0]
+            user: {
+                id: user.id,
+                username: user.username,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                roles: roles,
+                building: user.building,
+                is_super_admin: !!user.is_super_admin
+            }
         });
 
     } catch (error) {

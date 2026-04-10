@@ -1,189 +1,22 @@
 // frontend/approvals.js - Manager Approval Interface
+// NOTE: approvalsState, loadApprovals, renderApprovalsTable, updateApprovalBadge
+// are defined in app.js. This file only provides the detail panel + approve/reject logic.
 
-let approvalsState = [];
-let filteredApprovals = [];
-let selectedApprovalId = null;
+var selectedApprovalId = null;
 
-// Filter state for approvals
-let approvalFilterState = {
-    status: 'pending', // Default to showing pending approvals
-    search: '',
-    priority: ''
-};
+// DOM references for approval detail (scripts load after DOM)
+var approvalDetailPanel = document.getElementById('approvalDetailPanel');
+var approvalDetailBody = document.getElementById('approvalDetailBody');
 
-// DOM Elements
-const approvalsTable = document.getElementById('approvalsTable');
-const approvalDetailPanel = document.getElementById('approvalDetailPanel');
-const approvalDetailBody = document.getElementById('approvalDetailBody');
-const btnCloseApprovalDetail = document.getElementById('btnCloseApprovalDetail');
-const approvalStatusFilter = document.getElementById('approvalStatusFilter');
-const approvalPriorityFilter = document.getElementById('approvalPriorityFilter');
-const approvalSearchInput = document.getElementById('approvalSearch');
-const btnClearApprovalFilters = document.getElementById('btnClearApprovalFilters');
-const pendingApprovalBadge = document.getElementById('pendingApprovalBadge');
-
-// Initialize approvals when DOM is ready
-function initApprovals() {
-    if (!approvalDetailPanel) {
-        console.warn('Approval detail panel not found in DOM');
-        return;
-    }
-
-    // Setup event listeners
-    if (btnCloseApprovalDetail) {
-        btnCloseApprovalDetail.addEventListener('click', () => {
-            approvalDetailPanel.classList.add('hidden');
+// Close button listener
+(function() {
+    var btn = document.getElementById('btnCloseApprovalDetail');
+    if (btn) {
+        btn.addEventListener('click', function() {
+            if (approvalDetailPanel) approvalDetailPanel.classList.add('hidden');
         });
     }
-
-    if (approvalStatusFilter) {
-        approvalStatusFilter.addEventListener('change', () => {
-            approvalFilterState.status = approvalStatusFilter.value;
-            applyApprovalFilters();
-        });
-    }
-
-    if (approvalPriorityFilter) {
-        approvalPriorityFilter.addEventListener('change', () => {
-            approvalFilterState.priority = approvalPriorityFilter.value;
-            applyApprovalFilters();
-        });
-    }
-
-    if (approvalSearchInput) {
-        approvalSearchInput.addEventListener('input', () => {
-            approvalFilterState.search = approvalSearchInput.value.trim();
-            applyApprovalFilters();
-        });
-    }
-
-    if (btnClearApprovalFilters) {
-        btnClearApprovalFilters.addEventListener('click', clearApprovalFilters);
-    }
-
-    console.log('Approvals module initialized');
-}
-
-// Load approvals from API
-async function loadApprovals() {
-    try {
-        const params = {};
-        if (approvalFilterState.status) {
-            params.status = approvalFilterState.status;
-        }
-
-        const res = await apiGet('/approvals', params);
-        if (res.success) {
-            approvalsState = res.approvals;
-            filteredApprovals = approvalsState;
-            applyApprovalFilters();
-            updatePendingBadge();
-        }
-    } catch (err) {
-        console.error('loadApprovals error:', err);
-        const _tbody = document.getElementById('approvalsTableBody');
-        if (_tbody) _tbody.innerHTML = '<tr><td colspan="10" class="text-center text-red-400 py-4">Failed to load approvals.</td></tr>';
-    }
-}
-
-// Update pending approval count badge
-async function updatePendingBadge() {
-    try {
-        const res = await apiGet('/approvals/pending-count');
-        if (res.success && pendingApprovalBadge) {
-            if (res.count > 0) {
-                pendingApprovalBadge.textContent = res.count;
-                pendingApprovalBadge.classList.remove('hidden');
-            } else {
-                pendingApprovalBadge.classList.add('hidden');
-            }
-        }
-    } catch (err) {
-        console.error('Error updating pending badge:', err);
-    }
-}
-
-// Apply filters to approvals
-function applyApprovalFilters() {
-    filteredApprovals = approvalsState.filter(approval => {
-        // Status filter
-        if (approvalFilterState.status && approval.status !== approvalFilterState.status) {
-            return false;
-        }
-
-        // Priority filter
-        if (approvalFilterState.priority && approval.priority !== approvalFilterState.priority) {
-            return false;
-        }
-
-        // Search filter
-        if (approvalFilterState.search) {
-            const term = approvalFilterState.search.toLowerCase();
-            const searchFields = [
-                approval.item_description || '',
-                approval.building || '',
-                approval.cost_center_code || '',
-                approval.supplier_name || '',
-                approval.requested_by_name || '',
-                approval.comments || ''
-            ].join(' ').toLowerCase();
-
-            if (!searchFields.includes(term)) return false;
-        }
-
-        return true;
-    });
-
-    renderApprovalsTable();
-}
-
-// Clear approval filters
-function clearApprovalFilters() {
-    approvalFilterState = { status: 'pending', search: '', priority: '' };
-    if (approvalStatusFilter) approvalStatusFilter.value = 'pending';
-    if (approvalPriorityFilter) approvalPriorityFilter.value = '';
-    if (approvalSearchInput) approvalSearchInput.value = '';
-    applyApprovalFilters();
-}
-
-// Render approvals table
-function renderApprovalsTable() {
-    const tbody = document.getElementById('approvalsTableBody');
-    if (!tbody) return;
-
-    if (!filteredApprovals.length) {
-        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-gray-400 py-8">No approvals found.</td></tr>';
-        return;
-    }
-
-    let html = '';
-    for (const approval of filteredApprovals) {
-        const statusClass = `approval-status-${approval.status}`;
-        const priorityClass = `priority-${(approval.priority || 'Normal').toLowerCase()}`;
-
-        html += `<tr data-id="${approval.id}">`;
-        html += `<td>#${approval.order_id}</td>`;
-        html += `<td title="${escapeHtml(approval.item_description)}">${escapeHtml(approval.item_description.substring(0, 40))}${approval.item_description.length > 40 ? '…' : ''}</td>`;
-        html += `<td>${approval.building}</td>`;
-        html += `<td>${approval.supplier_name || '-'}</td>`;
-        html += `<td class="text-right">${approval.estimated_cost ? fmtPrice(approval.estimated_cost) : '-'}</td>`;
-        html += `<td><span class="priority-pill ${priorityClass}">${approval.priority || 'Normal'}</span></td>`;
-        html += `<td><span class="approval-badge ${statusClass}">${capitalizeFirst(approval.status)}</span></td>`;
-        html += `<td>${approval.requested_by_name}</td>`;
-        html += `<td>${formatDateTime(approval.requested_at)}</td>`;
-        html += `<td><button class="btn btn-secondary btn-sm btn-view-approval" data-id="${approval.id}">Review</button></td>`;
-        html += '</tr>';
-    }
-
-    tbody.innerHTML = html;
-
-    // Attach event listeners to review buttons
-    document.querySelectorAll('.btn-view-approval').forEach(btn => {
-        btn.addEventListener('click', () => {
-            openApprovalDetail(parseInt(btn.dataset.id, 10));
-        });
-    });
-}
+})();
 
 // Open approval detail panel
 async function openApprovalDetail(approvalId) {
@@ -376,9 +209,5 @@ function capitalizeFirst(str) {
     return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-// Initialize when DOM is ready
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initApprovals);
-} else {
-    initApprovals();
-}
+// No separate init needed - event listeners for approval filters
+// are already set up in app.js setupApprovalFilters IIFE

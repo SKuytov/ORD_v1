@@ -584,18 +584,20 @@ function showDashboard() {
     if (ordersTabEl) ordersTabEl.classList.remove('hidden');
     currentTab = 'ordersTab';
 
-    loadBuildings();
-    loadCostCenters();
-    // ⭐ FIX: Only load suppliers for admin and procurement roles
-    if (currentUser.role === 'admin' || currentUser.role === 'procurement') {
-        loadSuppliers().then(() => { populateSupplierFilter(); });
-    }
-    loadOrders();
-    if (currentUser.role !== 'requester') { loadQuotes(); }
-    if (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'procurement') {
-        updateApprovalBadge();
-    }
-    if (currentUser.role === 'admin') { loadUsers(); }
+    // Load critical data first (buildings + cost centers needed for forms)
+    Promise.all([loadBuildings(), loadCostCenters()]).then(() => {
+        // Then load orders (the main content)
+        loadOrders();
+        // Non-critical data loads after
+        if (currentUser.role === 'admin' || currentUser.role === 'procurement') {
+            loadSuppliers().then(() => { populateSupplierFilter(); });
+        }
+        if (currentUser.role !== 'requester') { loadQuotes(); }
+        if (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'procurement') {
+            updateApprovalBadge();
+        }
+        if (currentUser.role === 'admin') { loadUsers(); }
+    });
 }
 
 // API helpers
@@ -853,7 +855,7 @@ async function handleCreateOrder(e) {
                     reject(new Error(data.message));
                     return;
                 }
-                alert('Order created successfully!');
+                showToast('Order created successfully!', 'success');
                 createOrderForm.reset();
                 if (currentUser.role === 'requester') {
                     buildingSelect.value = currentUser.building;
@@ -1283,7 +1285,20 @@ function attachOrderEventListeners(canSelectOrders) {
     }
 
     document.querySelectorAll('.btn-view-order').forEach(btn => {
-        btn.addEventListener('click', () => openOrderDetail(parseInt(btn.dataset.id, 10)));
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openOrderDetail(parseInt(btn.dataset.id, 10));
+        });
+    });
+
+    // Row click to open detail (skip if clicking checkbox or button)
+    document.querySelectorAll('#ordersTable tr[data-id]').forEach(row => {
+        row.style.cursor = 'pointer';
+        row.addEventListener('click', (e) => {
+            if (e.target.closest('input[type="checkbox"]') || e.target.closest('button')) return;
+            const id = parseInt(row.dataset.id, 10);
+            if (id) openOrderDetail(id);
+        });
     });
 }
 
@@ -1450,8 +1465,8 @@ function renderOrderDetail(o) {
                 total_price: parseFloat(document.getElementById('detailTotalPrice').value || 0) || null
             };
             const res = await apiPut(`/orders/${o.id}`, payload);
-            if (res.success) { alert('Order updated'); loadOrders(); openOrderDetail(o.id); }
-            else { alert('Failed to update order: ' + (res.message || 'Unknown error')); }
+            if (res.success) { showToast('Order updated', 'success'); loadOrders(); openOrderDetail(o.id); }
+            else { showToast('Failed to update: ' + (res.message || 'Unknown error'), 'error'); }
         });
     }
 }
@@ -1532,7 +1547,7 @@ function renderQuoteDetail(q) {
     document.getElementById('btnSaveQuote').addEventListener('click', async () => {
         const payload = { status: document.getElementById('quoteStatus').value, notes: document.getElementById('quoteNotes').value };
         const res = await apiPut(`/quotes/${q.id}`, payload);
-        if (res.success) { alert('Quote updated'); loadQuotes(); } else { alert('Failed to update quote'); }
+        if (res.success) { showToast('Quote updated', 'success'); loadQuotes(); } else { showToast('Failed to update quote', 'error'); }
     });
 }
 
@@ -2034,6 +2049,7 @@ async function updateApprovalBadge() {
 window.showToast = showToast;
 window.loadApprovals = loadApprovals;
 window.updateApprovalBadge = updateApprovalBadge;
+window.loadOrders = loadOrders;
 window.apiGet = apiGet;
 window.apiPut = apiPut;
 window.apiPost = apiPost;

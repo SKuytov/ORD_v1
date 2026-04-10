@@ -3,20 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PartPulse Order Management v3.1.0</title>
+    <title>PartPulse Orders v3.1.0</title>
     <link rel="stylesheet" href="styles.css">
     <!-- File Upload Enhancement Styles -->
     <link rel="stylesheet" href="css/order-form-enhanced.css">
     <link rel="stylesheet" href="documents.css">
     <link rel="stylesheet" href="approvals.css">
     <link rel="stylesheet" href="brand-training.css">
-    <!-- ⭐ NEW: Intelligent Autocomplete -->
-    <link rel="stylesheet" href="css/intelligent-autocomplete.css">
-    <!-- ⭐ NEW: Procurement Workspace -->
-    <link rel="stylesheet" href="procurement-workspace.css">
-    <!-- ⭐ NEW: Quote Send -->
+    <!-- Smart Quote Send Panel -->
     <link rel="stylesheet" href="quote-send.css">
+    <!-- Analytics Module -->
+    <link rel="stylesheet" href="analytics.css">
+    <!-- Intelligent Autocomplete -->
+    <link rel="stylesheet" href="css/intelligent-autocomplete.css">
+    <!-- Procurement Workspace -->
+    <link rel="stylesheet" href="procurement-workspace.css">
+    <!-- World-Class Upgrade Styles -->
+    <link rel="stylesheet" href="css/world-class-upgrade.css">
+    <link rel="stylesheet" href="css/upgrade.css">
+    <!-- Phase 2: Procurement Workflow Styles -->
+    <link rel="stylesheet" href="css/phase2.css">
+    <style>
+        #dashboardScreen.hidden { display: none !important; }
+    </style>
     <script src="upload-progress.js"></script>
+    <script src="analytics-cache.js"></script>
+    <script src="analytics-charts.js"></script>
+    <script src="analytics-insights.js"></script>
+    <script src="analytics-forecasting.js"></script>
+    <script src="analytics-export.js"></script>
+    <script src="analytics.js"></script>
+    <!-- World-Class Upgrade Scripts -->
+    <script src="toast.js"></script>
+    <script src="global-search.js"></script>
+    <script src="notifications.js"></script>
+    <script src="keyboard-shortcuts.js"></script>
+    <script src="export-manager.js"></script>
+    <script src="advanced-filters.js"></script>
+    <script src="dashboard-widgets.js"></script>
+
 </head>
 <body>
 <div id="app">
@@ -50,37 +75,168 @@
     <div id="dashboardScreen" class="screen hidden">
         <header>
             <div class="container header-row">
-                <div>
-                    <h1>PartPulse Orders v3.1.0</h1>
+                <div style="display:flex;align-items:center;gap:0.75rem;">
+                    <h1>PartPulse Orders</h1>
                     <div id="userRole" class="badge-role"></div>
                 </div>
-                <div class="user-info">
-                    <span id="userName"></span>
-                    <!-- Language Selector in Header -->
-                    <select id="languageSelector" class="form-control" style="width: auto; margin: 0 0.5rem; font-size: 0.85rem;">
-                        <option value="bg">🇧🇬 BG</option>
-                        <option value="en">🇬🇧 EN</option>
+                <div class="header-actions">
+                    <!-- Global Search Trigger -->
+                    <button id="globalSearchTrigger" class="global-search-trigger">
+                        <span class="nav-icon">🔍</span>
+                        <span>Search...</span>
+                        <span class="search-shortcut">Ctrl+K</span>
+                    </button>
+                    <!-- Notification Bell -->
+                    <div style="position:relative;">
+                        <button id="notificationBell" class="notification-bell" title="Notifications">
+                            🔔
+                            <span id="bellBadge" class="bell-badge hidden">0</span>
+                        </button>
+                        <div id="notificationDropdown" class="notification-dropdown hidden">
+                            <div class="notification-dropdown-header">
+                                <h4>Notifications</h4>
+                                <button id="markAllRead" class="btn-link btn-sm">Mark all read</button>
+                            </div>
+                            <div id="notificationDropdownBody" class="notification-dropdown-body">
+                                <div class="notification-empty">No notifications</div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Dark Mode Toggle -->
+                    <button id="darkModeToggle" class="btn-icon" title="Toggle Theme" style="font-size:1.1rem;cursor:pointer;">🌙</button>
+                    <span id="userName" style="font-size:0.88rem;"></span>
+                    <select id="languageSelector" class="form-control" style="width: auto; font-size: 0.8rem; padding: 0.25rem 0.4rem;">
+                        <option value="bg">BG</option>
+                        <option value="en">EN</option>
                     </select>
-                    <button id="logoutBtn" class="btn btn-secondary" data-i18n="nav.logout">Logout</button>
+                    <button id="logoutBtn" class="btn btn-secondary btn-sm" data-i18n="nav.logout">Logout</button>
                 </div>
             </div>
         </header>
 
-        <div class="container">
-            <!-- Tabs for admin/procurement -->
-            <div id="navTabs" class="tabs hidden">
+        <div class="app-layout">
+            <!-- Sidebar Navigation (Desktop) -->
+            <nav id="sidebarNav" class="sidebar-nav hidden">
+                <div class="nav-section-label">Main</div>
+                <button class="nav-item active" data-tab="ordersTab">
+                    <span class="nav-icon">📦</span>
+                    <span data-i18n="nav.orders">Orders</span>
+                </button>
+                <button class="nav-item" data-tab="quotesTab">
+                    <span class="nav-icon">📄</span>
+                    <span data-i18n="nav.quotes">Quotes</span>
+                </button>
+                <button class="nav-item" data-tab="approvalsTab" id="sidebarApprovalsBtn" hidden>
+                    <span class="nav-icon">✅</span>
+                    <span data-i18n="nav.approvals">Approvals</span>
+                    <span id="sidebarApprovalBadge" class="nav-badge hidden">0</span>
+                </button>
+                <button class="nav-item" data-tab="suppliersTab">
+                    <span class="nav-icon">🏢</span>
+                    <span data-i18n="nav.suppliers">Suppliers</span>
+                </button>
+
+                <button class="nav-item" data-tab="templatesTab" id="sidebarTemplatesBtn">
+                    <span class="nav-icon">📋</span>
+                    <span>Templates</span>
+                </button>
+                <button class="nav-item" data-tab="partsCatalogTab" id="sidebarPartsCatalogBtn">
+                    <span class="nav-icon">🔧</span>
+                    <span>Parts Catalog</span>
+                </button>
+
+                <div class="nav-divider"></div>
+                <div class="nav-section-label">Procurement</div>
+                <button class="nav-item" data-tab="procurementTab" id="sidebarProcurementBtn" hidden>
+                    <span class="nav-icon">🛒</span>
+                    <span>Procurement</span>
+                </button>
+                <button class="nav-item" data-tab="procBoardTab" id="sidebarProcBoardBtn" hidden>
+                    <span class="nav-icon">📌</span>
+                    <span>Procurement Board</span>
+                </button>
+                <button class="nav-item" data-tab="rfqHistoryTab" id="sidebarRfqHistoryBtn" hidden>
+                    <span class="nav-icon">📨</span>
+                    <span>RFQ History</span>
+                </button>
+                <button class="nav-item" data-tab="cadTasksTab" id="sidebarCadTasksBtn" hidden>
+                    <span class="nav-icon">📐</span>
+                    <span>CAD Tasks</span>
+                </button>
+
+                <div class="nav-divider"></div>
+                <div class="nav-section-label">Analytics</div>
+                <button class="nav-item" data-tab="supplierScorecardTab" id="sidebarScorecardBtn" hidden>
+                    <span class="nav-icon">⭐</span>
+                    <span>Supplier Scorecard</span>
+                </button>
+                <button class="nav-item" data-tab="analyticsTab" id="sidebarAnalyticsBtn" hidden>
+                    <span class="nav-icon">📈</span>
+                    <span data-i18n="nav.analytics">Analytics</span>
+                </button>
+
+                <div class="nav-divider" id="sidebarAdminDivider" hidden></div>
+                <div class="nav-section-label" id="sidebarAdminLabel" hidden>Admin</div>
+                <button class="nav-item" data-tab="buildingsTab" id="sidebarBuildingsBtn" hidden>
+                    <span class="nav-icon">🏗</span>
+                    <span data-i18n="nav.buildings">Buildings</span>
+                </button>
+                <button class="nav-item" data-tab="costCentersTab" id="sidebarCostCentersBtn" hidden>
+                    <span class="nav-icon">💰</span>
+                    <span data-i18n="nav.costCenters">Cost Centers</span>
+                </button>
+                <button class="nav-item" data-tab="usersTab" id="sidebarUsersBtn" hidden>
+                    <span class="nav-icon">👥</span>
+                    <span data-i18n="nav.users">Users</span>
+                </button>
+                <button class="nav-item" data-tab="auditLogTab" id="sidebarAuditLogBtn" hidden>
+                    <span class="nav-icon">📝</span>
+                    <span>Audit Log</span>
+                </button>
+                <button class="nav-item" data-tab="systemSettingsTab" id="sidebarSystemSettingsBtn" hidden>
+                    <span class="nav-icon">⚙️</span>
+                    <span>System Settings</span>
+                </button>
+            </nav>
+
+            <!-- Mobile Bottom Navigation -->
+            <nav class="mobile-bottom-nav" id="mobileBottomNav">
+                <div class="mobile-nav-items">
+                    <button class="mobile-nav-item active" data-tab="ordersTab">
+                        <span class="nav-icon">📦</span><span>Orders</span>
+                    </button>
+                    <button class="mobile-nav-item" data-tab="quotesTab">
+                        <span class="nav-icon">📄</span><span>Quotes</span>
+                    </button>
+                    <button class="mobile-nav-item" data-tab="approvalsTab" id="mobileApprovalsBtn" hidden>
+                        <span class="nav-icon">✅</span><span>Approvals</span>
+                    </button>
+                    <button class="mobile-nav-item" data-tab="analyticsTab" id="mobileAnalyticsBtn" hidden>
+                        <span class="nav-icon">📈</span><span>Analytics</span>
+                    </button>
+                    <button class="mobile-nav-item" data-tab="suppliersTab">
+                        <span class="nav-icon">🏢</span><span>More</span>
+                    </button>
+                </div>
+            </nav>
+
+            <!-- Main Content Area -->
+            <div class="main-content">
+
+            <!-- Legacy tabs (hidden, replaced by sidebar) -->
+            <div id="navTabs" class="tabs hidden" style="display:none !important;">
                 <button class="tab active" data-tab="ordersTab" data-i18n="nav.orders">Orders</button>
                 <button class="tab" data-tab="quotesTab" data-i18n="nav.quotes">Quotes</button>
-                <button class="tab" data-tab="approvalsTab" id="approvalsTabButton" hidden style="position: relative;" data-i18n="nav.approvals">
-                    Approvals
+                <button class="tab" data-tab="approvalsTab" id="approvalsTabButton" hidden data-i18n="nav.approvals">Approvals
                     <span id="pendingApprovalBadge" class="badge-notification hidden"></span>
                 </button>
                 <button class="tab" data-tab="suppliersTab" data-i18n="nav.suppliers">Suppliers</button>
                 <button class="tab" data-tab="buildingsTab" id="buildingsTabButton" hidden data-i18n="nav.buildings">Buildings</button>
                 <button class="tab" data-tab="costCentersTab" id="costCentersTabButton" hidden data-i18n="nav.costCenters">Cost Centers</button>
                 <button class="tab" data-tab="usersTab" id="usersTabButton" hidden data-i18n="nav.users">Users</button>
+                <button class="tab" data-tab="analyticsTab" id="analyticsTabButton" hidden data-i18n="nav.analytics">Analytics</button>
                 <button class="tab" id="procurementTabButton" data-tab="procurementTab" hidden>Procurement</button>
-                <button id="btnProcurementCreateOrder" class="btn btn-primary" style="margin-left:auto;" hidden>➕ Create Order</button>
+                <button id="btnProcurementCreateOrder" class="btn btn-primary" style="margin-left: auto;" hidden>➕ Create Order</button>
             </div>
 
             <!-- Requester: Create Order -->
@@ -151,6 +307,9 @@
                 </form>
             </section>
 
+            <!-- Dashboard Summary Cards -->
+            <div id="dashboardSummary"></div>
+
             <!-- Orders Tab -->
             <section id="ordersTab" class="tab-content active">
                <div class="card">
@@ -158,58 +317,100 @@
                         <h2 data-i18n="orders.title">Orders</h2>
                         <div class="order-actions" id="orderActionsContainer">
                             <div class="view-mode-toggle">
-                                <button id="btnViewFlat" class="btn-view-mode active" data-i18n="orders.view.flat" title="Flat list view">☰</button>
-                                <button id="btnViewGrouped" class="btn-view-mode" data-i18n="orders.view.grouped" title="Group by status">⊞</button>
+                                <button id="btnViewFlat" class="btn-view-mode active" title="Flat list view">☰</button>
+                                <button id="btnViewGrouped" class="btn-view-mode" title="Group by status">⊞</button>
                             </div>
+                            <!-- Table Density Toggle -->
+                            <div class="density-toggle">
+                                <button class="btn-density" data-density="compact" title="Compact">S</button>
+                                <button class="btn-density active" data-density="comfortable" title="Comfortable">M</button>
+                                <button class="btn-density" data-density="spacious" title="Spacious">L</button>
+                            </div>
+                            <!-- Export Dropdown -->
+                            <div class="export-dropdown">
+                                <button id="btnExport" class="btn btn-secondary btn-sm">Export ▾</button>
+                                <div id="exportMenu" class="export-dropdown-menu hidden">
+                                    <button class="export-option" id="exportCSV">📊 Export CSV</button>
+                                    <button class="export-option" id="exportPDF">📄 Export PDF</button>
+                                </div>
+                            </div>
+                            <button id="btnProcurementCreateOrder2" class="btn btn-primary btn-sm" hidden>➕ New Order</button>
                             <div id="orderActionsBar" class="order-actions-inner" hidden>
                                 <span id="selectedCount" class="badge-muted">0 <span data-i18n="orders.selected">selected</span></span>
-                                <button id="btnCreateQuote" class="btn btn-primary btn-sm" data-i18n="orders.actions.createQuote">Create Quote from Selected</button>
+                                <button id="btnCreateQuote" class="btn btn-primary btn-sm" data-i18n="orders.actions.createQuote">Create Quote</button>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Smart Filters (visible to all roles) -->
+                    <!-- Saved Filter Presets -->
+                    <div id="savedFiltersRow" class="saved-filters-row"></div>
+
+                    <!-- Smart Filters -->
                     <div class="filters-container">
                         <!-- Quick Filter Chips -->
-                        <div class="quick-filters filters-bar" style="display: flex; align-items: center; flex-wrap: wrap;">
-                            <button class="quick-filter-chip" data-filter="late" data-i18n="orders.quickFilter.late">⚠ Late</button>
-                            <button class="quick-filter-chip" data-filter="due7" data-i18n="orders.quickFilter.due7">🕒 Due in 7d</button>
-                            <button class="quick-filter-chip" data-filter="due14" data-i18n="orders.quickFilter.due14">📅 Due in 14d</button>
-                            <button class="quick-filter-chip" data-filter="new" data-i18n="orders.quickFilter.new">🆕 New</button>
-                            <button class="quick-filter-chip" data-filter="ordered" data-i18n="orders.quickFilter.ordered">📦 Ordered</button>
-                            <button class="quick-filter-chip" data-filter="transit" data-i18n="orders.quickFilter.transit">🚚 In Transit</button>
+                        <div class="quick-filters filters-bar" style="display: flex; align-items: center; flex-wrap: wrap; gap: 0.35rem;">
+                            <button class="quick-filter-chip" data-filter="late">⚠ Late</button>
+                            <button class="quick-filter-chip" data-filter="due7">🕒 Due 7d</button>
+                            <button class="quick-filter-chip" data-filter="due14">📅 Due 14d</button>
+                            <button class="quick-filter-chip" data-filter="new">🆕 New</button>
+                            <button class="quick-filter-chip" data-filter="ordered">📦 Ordered</button>
+                            <button class="quick-filter-chip" data-filter="transit">🚚 In Transit</button>
+                            <button class="quick-filter-chip" data-filter="myorders">👤 My Orders</button>
+                            <button class="quick-filter-chip" data-filter="today">📌 Today</button>
                         </div>
 
                         <!-- Detailed Filters -->
                         <div class="filters-grid">
-                            <input type="text" id="filterSearch" class="form-control form-control-sm" data-i18n="orders.search">
+                            <input type="text" id="filterSearch" class="form-control form-control-sm" placeholder="🔍 Search orders...">
                             <select id="filterStatus" class="form-control form-control-sm">
-                                <option value="" data-i18n="orders.filter.status">Status: All</option>
+                                <option value="">Status: All</option>
                             </select>
                             <select id="filterBuilding" class="form-control form-control-sm">
-                                <option value="" data-i18n="orders.filter.building">Building: All</option>
+                                <option value="">Building: All</option>
                             </select>
                             <select id="filterPriority" class="form-control form-control-sm">
-                                <option value="" data-i18n="orders.filter.priority">Priority: All</option>
+                                <option value="">Priority: All</option>
                                 <option value="Low">Low</option>
-                                <option value="Normal" data-i18n="order.create.priority.normal">Normal</option>
+                                <option value="Normal">Normal</option>
                                 <option value="High">High</option>
-                                <option value="Urgent" data-i18n="order.create.priority.urgent">Urgent</option>
+                                <option value="Urgent">Urgent</option>
                             </select>
                             <select id="filterSupplier" class="form-control form-control-sm">
-                                <option value="" data-i18n="orders.filter.supplier">Supplier: All</option>
+                                <option value="">Supplier: All</option>
                             </select>
                             <select id="filterDelivery" class="form-control form-control-sm">
-                                <option value="" data-i18n="orders.filter.delivery">Delivery: All</option>
-                                <option value="late" data-i18n="orders.quickFilter.late">Late</option>
-                                <option value="due7" data-i18n="orders.quickFilter.due7">Due in 7 days</option>
-                                <option value="due14" data-i18n="orders.quickFilter.due14">Due in 14 days</option>
+                                <option value="">Delivery: All</option>
+                                <option value="late">Late</option>
+                                <option value="due7">Due in 7 days</option>
+                                <option value="due14">Due in 14 days</option>
                                 <option value="ontrack">On Track</option>
                             </select>
+                            <!-- Date Range Filters -->
+                            <div class="date-range-group">
+                                <label>From</label>
+                                <input type="date" id="filterDateFrom" class="form-control form-control-sm date-picker">
+                            </div>
+                            <div class="date-range-group">
+                                <label>To</label>
+                                <input type="date" id="filterDateTo" class="form-control form-control-sm date-picker">
+                            </div>
                         </div>
-                        <div class="filters-actions">
+                        <div class="filters-actions" style="display:flex;justify-content:space-between;align-items:center;">
+                            <button id="btnSaveFilter" class="btn-save-filter">💾 Save Filter</button>
                             <button id="btnClearFilters" class="btn-link btn-sm" data-i18n="orders.filter.clear">Clear All Filters</button>
                         </div>
+                    </div>
+
+                    <!-- Active Filter Chips -->
+                    <div id="activeFiltersBar" class="active-filters-bar hidden"></div>
+
+                    <!-- Bulk Actions Bar -->
+                    <div id="bulkActionsBar" class="bulk-actions-bar hidden">
+                        <span class="bulk-count" id="bulkCount">0 selected</span>
+                        <button class="bulk-btn" id="bulkExportCSV">Export CSV</button>
+                        <button class="bulk-btn" id="bulkCreateQuote">Create Quote</button>
+                        <button class="bulk-btn" id="bulkChangeStatus">Change Status</button>
+                        <button class="bulk-btn" onclick="selectedOrderIds.clear();updateSelectionUi();renderOrdersTable();">Deselect All</button>
                     </div>
 
                     <div id="ordersTable"></div>
@@ -282,7 +483,10 @@
                 <div class="card">
                     <div class="card-header-row">
                         <h2 data-i18n="quotes.title">Quotes</h2>
-                        <button id="btnRefreshQuotes" class="btn btn-secondary btn-sm" data-i18n="quotes.refresh">Refresh</button>
+                        <div style="display:flex;gap:0.5rem;">
+                            <button id="btnNewQuoteFromQuotesTab" class="btn btn-primary btn-sm">➕ New Quote</button>
+                            <button id="btnRefreshQuotes" class="btn btn-secondary btn-sm" data-i18n="quotes.refresh">Refresh</button>
+                        </div>
                     </div>
                     <div id="quotesTable"></div>
                 </div>
@@ -457,8 +661,88 @@
                 </div>
             </section>
 
+            <!-- Templates Tab -->
+            <section id="templatesTab" class="tab-content hidden">
+                <div class="card">
+                    <div class="card-header-row">
+                        <h2>Order Templates</h2>
+                        <button id="btnNewTemplate" class="btn btn-primary btn-sm">➕ New Template</button>
+                    </div>
+                    <div id="templatesGrid" class="templates-grid">
+                        <p class="text-muted">Loading templates...</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Parts Catalog Tab -->
+            <section id="partsCatalogTab" class="tab-content hidden">
+                <div class="card">
+                    <div class="card-header-row">
+                        <h2>Parts Catalog</h2>
+                        <div style="display:flex;gap:0.5rem;">
+                            <input type="text" id="partsCatalogSearch" class="form-control form-control-sm" placeholder="Search parts..." style="width:200px;">
+                            <button id="btnRefreshCatalog" class="btn btn-secondary btn-sm">Refresh</button>
+                        </div>
+                    </div>
+                    <div id="partsCatalogTable" class="table-wrapper">
+                        <p class="text-muted">Loading parts catalog...</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Supplier Scorecard Tab -->
+            <section id="supplierScorecardTab" class="tab-content hidden">
+                <div class="card">
+                    <div class="card-header-row">
+                        <h2>Supplier Scorecard</h2>
+                        <button id="btnRefreshScorecard" class="btn btn-secondary btn-sm">Refresh</button>
+                    </div>
+                    <div id="scorecardGrid" class="scorecard-grid">
+                        <p class="text-muted">Loading supplier scorecards...</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Audit Log Tab (admin only) -->
+            <section id="auditLogTab" class="tab-content hidden">
+                <div class="card">
+                    <div class="card-header-row">
+                        <h2>Audit Log</h2>
+                        <div style="display:flex;gap:0.5rem;">
+                            <input type="text" id="auditLogSearch" class="form-control form-control-sm" placeholder="Filter by order ID..." style="width:180px;">
+                            <select id="auditLogAction" class="form-control form-control-sm" style="width:160px;">
+                                <option value="">All Actions</option>
+                                <option value="created">Created</option>
+                                <option value="status_change">Status Change</option>
+                                <option value="field_edit">Field Edit</option>
+                                <option value="assignment">Assignment</option>
+                                <option value="approved">Approved</option>
+                                <option value="rejected">Rejected</option>
+                            </select>
+                            <button id="btnRefreshAuditLog" class="btn btn-secondary btn-sm">Refresh</button>
+                        </div>
+                    </div>
+                    <div id="auditLogTable" class="table-wrapper">
+                        <p class="text-muted">Loading audit log...</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Analytics Tab -->
+            <section id="analyticsTab" class="tab-content hidden">
+                <div id="analyticsTabContent">
+                    <!-- Rendered by analytics.js -->
+                </div>
+            </section>
+
             <!-- Users Tab (admin only) -->
             <section id="usersTab" class="tab-content hidden">
+                <!-- Phase 2: User Management (Super Admin) -->
+                <div class="card" id="userManagementCard" style="margin-bottom:1rem;display:none;">
+                    <div id="userManagementBody">
+                        <div style="padding:2rem;text-align:center;color:#94a3b8;">Loading user management...</div>
+                    </div>
+                </div>
                 <div class="grid-2">
                     <div class="card">
                         <div class="card-header-row">
@@ -518,120 +802,338 @@
                 </div>
             </section>
 
-            <!-- Procurement Tab -->
+            <!-- Procurement Tab (ORD_v1 original) -->
             <section id="procurementTab" class="tab-content hidden">
                 <div id="procurementDashboardContainer"></div>
             </section>
-        </div>
+
+            <!-- Phase 2: Procurement Board Tab -->
+            <section id="procBoardTab" class="tab-content hidden">
+                <div class="card">
+                    <div id="procBoardBody">
+                        <div style="padding:2rem;text-align:center;color:#94a3b8;">Loading procurement board...</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Phase 2: RFQ History Tab -->
+            <section id="rfqHistoryTab" class="tab-content hidden">
+                <div class="card">
+                    <div id="rfqHistoryBody">
+                        <div style="padding:2rem;text-align:center;color:#94a3b8;">Loading RFQ history...</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Phase 2: CAD Tasks Tab -->
+            <section id="cadTasksTab" class="tab-content hidden">
+                <div class="card">
+                    <div id="cadTasksBody">
+                        <div style="padding:2rem;text-align:center;color:#94a3b8;">Loading CAD tasks...</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Phase 2: System Settings Tab (Super Admin only) -->
+            <section id="systemSettingsTab" class="tab-content hidden">
+                <div class="card">
+                    <div id="systemSettingsBody">
+                        <div style="padding:2rem;text-align:center;color:#94a3b8;">Loading system settings...</div>
+                    </div>
+                </div>
+            </section>
+
+        </div><!-- /.main-content -->
+        </div><!-- /.app-layout -->
     </div>
 </div>
 
-<!-- Procurement Create Order Modal -->
+<!-- Smart Quote Send Panel -->
+<div id="quoteSendPanel" class="quote-send-panel hidden"></div>
+
+<!-- Toast Container -->
+<div id="toastContainer" class="toast-container"></div>
+
+<!-- ⭐ ENHANCEMENT #2: Procurement Create Order Modal (ENHANCED) -->
 <div id="procCreateOrderModal" class="modal-overlay hidden">
-    <div class="modal-card" style="width: 700px; max-width: 95%;">
+    <div class="modal-card" style="max-width: 580px;">
         <div class="modal-header">
-            <h3>Create New Order</h3>
-            <button id="btnCloseProcModal" class="btn-icon">✕</button>
+            <h3>➕ Create Order</h3>
+            <button class="btn-close" onclick="closeProcCreateOrderModal()">✕</button>
         </div>
         <div class="modal-body">
-            <form id="procCreateOrderForm" class="grid-2">
-                <div>
-                    <div class="form-group">
-                        <label for="procBuilding">Building</label>
-                        <select id="procBuilding" class="form-control" required>
-                            <option value="">Select Building</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Cost Center <span style="color:#ef4444;">*</span></label>
-                        <div id="procCostCenterRadios" class="radio-group">
-                            <span class="text-muted">Select a building first</span>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label for="procItemDescription">Item Description</label>
-                        <textarea id="procItemDescription" class="form-control" rows="3" required></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label for="procPartNumber">Part Number (optional)</label>
-                        <input type="text" id="procPartNumber" class="form-control">
-                    </div>
-                    <div class="form-group">
-                        <label for="procCategory">Category (optional)</label>
-                        <input type="text" id="procCategory" class="form-control">
+            <form id="procCreateOrderForm">
+                <div class="form-group">
+                    <label>Building *</label>
+                    <select id="procBuilding" class="form-control" required>
+                        <option value="">Select Building</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Cost Center *</label>
+                    <div id="procCostCenterRadios" class="radio-group">
+                        <span class="text-muted">Select a building first</span>
                     </div>
                 </div>
-                <div>
+                <div class="form-group">
+                    <label>Item Description *</label>
+                    <textarea id="procItemDescription" class="form-control" rows="2" required placeholder="Describe the item you need..."></textarea>
+                </div>
+                <div class="form-row">
                     <div class="form-group">
-                        <label for="procQuantity">Quantity</label>
+                        <label>Part Number</label>
+                        <input type="text" id="procPartNumber" class="form-control" placeholder="Optional">
+                    </div>
+                    <div class="form-group">
+                        <label>Category</label>
+                        <input type="text" id="procCategory" class="form-control" placeholder="Optional">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Quantity *</label>
                         <input type="number" id="procQuantity" class="form-control" min="1" required>
                     </div>
                     <div class="form-group">
-                        <label for="procDateNeeded">Date Needed</label>
-                        <input type="date" id="procDateNeeded" class="form-control date-picker">
+                        <label>Date Needed *</label>
+                        <input type="date" id="procDateNeeded" class="form-control date-picker" required>
                     </div>
-                    <div class="form-group">
-                        <label for="procPriority">Priority</label>
-                        <select id="procPriority" class="form-control">
-                            <option value="Normal">Normal</option>
-                            <option value="Low">Low</option>
-                            <option value="High">High</option>
-                            <option value="Urgent">Urgent</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="procNotes">Additional Notes</label>
-                        <textarea id="procNotes" class="form-control" rows="2"></textarea>
-                    </div>
-                    <div class="form-actions">
-                        <button type="submit" class="btn btn-primary">Submit Order</button>
-                        <button type="button" id="btnCancelProcModal" class="btn btn-secondary">Cancel</button>
-                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Priority</label>
+                    <select id="procPriority" class="form-control">
+                        <option value="Normal">Normal</option>
+                        <option value="High">High</option>
+                        <option value="Urgent">Urgent</option>
+                        <option value="Low">Low</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea id="procNotes" class="form-control" rows="2" placeholder="Additional information..."></textarea>
+                </div>
+                <!-- ⭐ NEW: File Upload -->
+                <div class="form-group">
+                    <label>Attach Files</label>
+                    <input type="file" id="procAttachments" name="procAttachments" multiple>
+                    <div id="proc-file-preview-container"></div>
+                    <div id="proc-upload-progress-container" style="display: none;"></div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeProcCreateOrderModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Order</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
 
-<!-- Toast Container -->
-<div id="toastContainer" class="toast-container"></div>
+<!-- ⭐ ENHANCEMENT #3: Create Quote Modal -->
+<div id="createQuoteModal" class="modal-overlay hidden">
+    <div class="modal-card" style="max-width: 520px;">
+        <div class="modal-header">
+            <h3>📋 Create Quote</h3>
+            <button class="btn-close" onclick="closeCreateQuoteModal()">✕</button>
+        </div>
+        <div class="modal-body">
+            <div class="text-muted" style="margin-bottom: 0.75rem;">
+              Creating quote for <strong id="cqOrderCount">0</strong> selected order(s)
+            </div>
+            <form id="createQuoteForm">
+                <div class="form-group">
+                    <label>Supplier *</label>
+                    <select id="cqSupplier" class="form-control" required></select>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Currency</label>
+                        <select id="cqCurrency" class="form-control">
+                            <option value="EUR">EUR</option>
+                            <option value="USD">USD</option>
+                            <option value="BGN">BGN</option>
+                            <option value="GBP">GBP</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Valid Until</label>
+                        <input type="date" id="cqValidUntil" class="form-control date-picker">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea id="cqNotes" class="form-control" rows="2" placeholder="Internal notes about this quote..."></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeCreateQuoteModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Quote</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
-<style>
-/* Toast styles */
-.toast-container {
-    position: fixed;
-    bottom: 1.5rem;
-    right: 1.5rem;
-    z-index: 9999;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    pointer-events: none;
-}
-.toast {
-    background: #1e293b;
-    border: 1px solid rgba(148,163,184,0.3);
-    border-radius: 8px;
-    padding: 0.75rem 1rem;
-    color: #f1f5f9;
-    font-size: 0.875rem;
-    min-width: 220px;
-    max-width: 360px;
-    opacity: 0;
-    transform: translateX(20px);
-    transition: opacity 0.3s ease, transform 0.3s ease;
-    pointer-events: auto;
-}
-.toast.toast-visible {
-    opacity: 1;
-    transform: translateX(0);
-}
-.toast.toast-success { border-left: 4px solid #22c55e; }
-.toast.toast-error   { border-left: 4px solid #ef4444; }
-.toast.toast-warning { border-left: 4px solid #f59e0b; }
-.toast.toast-info    { border-left: 4px solid #3b82f6; }
-</style>
+<!-- CSV Import Modal -->
+<div id="csvImportModal" class="modal-overlay hidden">
+    <div class="modal-card" style="max-width:700px;">
+        <div class="modal-header">
+            <h3>📤 Import Orders from CSV</h3>
+            <button class="btn-close" onclick="document.getElementById('csvImportModal').classList.add('hidden')">✕</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>Upload CSV File</label>
+                <input type="file" id="csvImportFile" accept=".csv" class="form-control">
+            </div>
+            <div id="csvImportPreview" class="hidden">
+                <h4 style="margin-bottom:0.5rem;">Column Mapping</h4>
+                <p class="text-muted" style="font-size:0.8rem;margin-bottom:0.75rem;">Map your CSV columns to order fields:</p>
+                <div id="csvColumnMapping" class="csv-column-mapper"></div>
+                <h4 style="margin:1rem 0 0.5rem;">Preview (first 5 rows)</h4>
+                <div id="csvPreviewTable" class="csv-preview-table table-wrapper"></div>
+                <div class="form-actions" style="margin-top:1rem;">
+                    <button type="button" class="btn btn-secondary" onclick="document.getElementById('csvImportModal').classList.add('hidden')">Cancel</button>
+                    <button type="button" id="btnImportCSV" class="btn btn-primary">Import Orders</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
+<!-- Template Create/Edit Modal -->
+<div id="templateModal" class="modal-overlay hidden">
+    <div class="modal-card" style="max-width:520px;">
+        <div class="modal-header">
+            <h3 id="templateModalTitle">Create Template</h3>
+            <button class="btn-close" onclick="document.getElementById('templateModal').classList.add('hidden')">✕</button>
+        </div>
+        <div class="modal-body">
+            <form id="templateForm">
+                <input type="hidden" id="templateId">
+                <div class="form-group">
+                    <label>Template Name *</label>
+                    <input type="text" id="templateName" class="form-control" required placeholder="e.g. Monthly Bearing Order">
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea id="templateDescription" class="form-control" rows="2" placeholder="Brief description of this template..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Building</label>
+                    <select id="templateBuilding" class="form-control">
+                        <option value="">Any Building</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Item Description *</label>
+                    <textarea id="templateItemDescription" class="form-control" rows="2" required></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Part Number</label>
+                        <input type="text" id="templatePartNumber" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label>Category</label>
+                        <input type="text" id="templateCategory" class="form-control">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Quantity</label>
+                        <input type="number" id="templateQuantity" class="form-control" min="1" value="1">
+                    </div>
+                    <div class="form-group">
+                        <label>Priority</label>
+                        <select id="templatePriority" class="form-control">
+                            <option value="Normal">Normal</option>
+                            <option value="Low">Low</option>
+                            <option value="High">High</option>
+                            <option value="Urgent">Urgent</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea id="templateNotes" class="form-control" rows="2"></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="document.getElementById('templateModal').classList.add('hidden')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Template</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Keyboard Shortcuts Modal -->
+<div id="shortcutsModal" class="modal-overlay hidden">
+    <div class="modal-card" style="max-width:480px;">
+        <div class="modal-header">
+            <h3>⌨️ Keyboard Shortcuts</h3>
+            <button class="btn-close" onclick="document.getElementById('shortcutsModal').classList.add('hidden')">✕</button>
+        </div>
+        <div class="modal-body">
+            <div class="shortcuts-grid">
+                <div class="shortcut-row"><kbd class="shortcut-key">?</kbd><span class="shortcut-desc">Show this help</span></div>
+                <div class="shortcut-row"><kbd class="shortcut-key">Ctrl+K</kbd><span class="shortcut-desc">Global search</span></div>
+                <div class="shortcut-row"><kbd class="shortcut-key">/</kbd><span class="shortcut-desc">Focus search</span></div>
+                <div class="shortcut-row"><kbd class="shortcut-key">N</kbd><span class="shortcut-desc">New order</span></div>
+                <div class="shortcut-row"><kbd class="shortcut-key">Esc</kbd><span class="shortcut-desc">Close modal/panel</span></div>
+                <div class="shortcut-row"><kbd class="shortcut-key">1-9</kbd><span class="shortcut-desc">Switch tabs</span></div>
+                <div class="shortcut-row"><kbd class="shortcut-key">D</kbd><span class="shortcut-desc">Toggle dark mode</span></div>
+                <div class="shortcut-row"><kbd class="shortcut-key">E</kbd><span class="shortcut-desc">Export CSV</span></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Global Search Overlay -->
+<div id="globalSearchOverlay" class="global-search-overlay hidden">
+    <div class="global-search-container">
+        <div class="global-search-header">
+            <span class="global-search-icon">🔍</span>
+            <input type="text" id="globalSearchInput" class="global-search-input" placeholder="Search orders, parts, suppliers..." autocomplete="off">
+            <kbd class="search-shortcut-hint">Esc</kbd>
+        </div>
+        <div id="globalSearchResults" class="global-search-results">
+            <div class="global-search-empty">Type to search...</div>
+        </div>
+    </div>
+</div>
+
+<!-- Print Label Template (hidden) -->
+<div id="printLabelTemplate" class="hidden" style="display:none;">
+    <div class="print-label">
+        <div class="print-label-header">
+            <strong>PartPulse</strong> — Part Label
+        </div>
+        <div class="print-label-body">
+            <div id="printLabelOrderNo"></div>
+            <div id="printLabelPartName"></div>
+            <div id="printLabelQty"></div>
+            <div id="printLabelDate"></div>
+            <div id="printLabelQR"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Analytics Drill-Down Modal -->
+<div id="analyticsDrillModal" class="analytics-drill-modal hidden">
+    <div class="analytics-drill-backdrop" id="analyticsDrillBackdrop"></div>
+    <div class="analytics-drill-content">
+        <div class="analytics-drill-header">
+            <h3 id="analyticsDrillTitle">Orders</h3>
+            <div class="analytics-drill-summary" id="analyticsDrillSummary"></div>
+            <button class="analytics-drill-close" id="analyticsDrillClose">&times;</button>
+        </div>
+        <div class="analytics-drill-body" id="analyticsDrillBody">
+            <div class="analytics-loading"><div class="spinner"></div><div>Loading...</div></div>
+        </div>
+    </div>
+</div>
+
+<!-- Chart.js CDN for Analytics -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <!-- ⭐ LOAD I18N FIRST -->
 <script src="i18n.js"></script>
 <script src="app.js"></script>
@@ -648,12 +1150,24 @@
 <script src="supplier-suggestions.js"></script>
 <!-- ⭐ Brand Training UI -->
 <script src="brand-training.js"></script>
+<!-- ⭐ Smart Quote Send Panel -->
+<script src="quote-send.js"></script>
 <!-- ⭐ NEW: Intelligent Autocomplete (Phase 5) -->
 <script src="js/intelligent-autocomplete.js"></script>
-<!-- ⭐ NEW: Quote Send -->
-<script src="quote-send.js"></script>
 <!-- ⭐ NEW: Procurement Workspace -->
 <script src="procurement-workspace.js"></script>
+<!-- Analytics Export Libraries -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+<!-- Analytics Module -->
+<script src="analytics.js"></script>
+<!-- QR Code Library -->
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<!-- World-Class Upgrade Module -->
+<script src="js/upgrade.js"></script>
+<!-- Phase 2: Procurement Workflow & Collaboration -->
+<script src="phase2.js"></script>
 
 <!-- ⭐ Language Selector Event Handlers -->
 <script>

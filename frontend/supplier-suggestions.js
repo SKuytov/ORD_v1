@@ -163,34 +163,7 @@ function getStarRating(confidence) {
     return html;
 }
 
-/**
- * Show toast notification
- */
-function showToast(message, type = 'info') {
-    const toast = document.createElement('div');
-    toast.className = `toast toast-${type}`;
-    toast.textContent = message;
-    toast.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6'};
-        color: white;
-        padding: 1rem 1.5rem;
-        border-radius: 8px;
-        box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3);
-        z-index: 9999;
-        animation: slideInRight 0.3s ease;
-        max-width: 400px;
-    `;
-
-    document.body.appendChild(toast);
-
-    setTimeout(() => {
-        toast.style.animation = 'slideOutRight 0.3s ease';
-        setTimeout(() => document.body.removeChild(toast), 300);
-    }, 3000);
-}
+// showToast is defined in app.js — no duplicate needed here
 
 // Add CSS animations
 if (!document.getElementById('suggestion-animations')) {

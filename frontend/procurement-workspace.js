@@ -41,38 +41,7 @@ const PW = {
 // TOAST NOTIFICATIONS
 // ============================================================
 
-/**
- * showToast — displays a dismissible toast at bottom-right
- * @param {string} message
- * @param {'success'|'error'|'info'|'warning'} type
- */
-function showToast(message, type = 'success') {
-    let container = document.getElementById('toastContainer');
-    if (!container) {
-        container = document.createElement('div');
-        container.id = 'toastContainer';
-        container.className = 'toast-container';
-        document.body.appendChild(container);
-    }
-    const colors = {
-        success: '#10b981',
-        error: '#ef4444',
-        info: '#06b6d4',
-        warning: '#f59e0b'
-    };
-    const icons = { success: '✓', error: '✕', info: 'ℹ', warning: '⚠' };
-    const toast = document.createElement('div');
-    toast.className = 'toast toast-' + type;
-    toast.style.borderLeftColor = colors[type] || colors.success;
-    toast.innerHTML = `<span class="toast-icon" style="color:${colors[type]}">${icons[type] || '✓'}</span><span class="toast-msg">${escHtml(message)}</span>`;
-    container.appendChild(toast);
-    requestAnimationFrame(() => toast.classList.add('toast-visible'));
-    setTimeout(() => {
-        toast.classList.remove('toast-visible');
-        toast.classList.add('toast-hiding');
-        setTimeout(() => toast.remove(), 350);
-    }, 3500);
-}
+// showToast is defined in app.js — no duplicate needed here
 
 // ============================================================
 // HTML ESCAPE UTILITY

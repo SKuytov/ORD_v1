@@ -34,6 +34,45 @@ async function auditLog({ eventType, handoverId, documentId, invoiceMetaId, orde
     );
 }
 
+async function buildOrderAccountingChecks(connection, orderId, lock = false) {
+    const [documents] = await connection.query(
+        `SELECT d.*, im.id AS invoice_meta_id, im.invoice_number, im.invoice_date,
+                im.due_date, im.amount_total, im.currency
+         FROM documents d
+         LEFT JOIN invoice_metadata im ON im.document_id = d.id
+         WHERE d.order_id = ?
+            OR EXISTS (
+                SELECT 1 FROM order_documents_link odl
+                WHERE odl.order_id = ? AND odl.document_id = d.id
+            )
+         ORDER BY d.id ASC${lock ? ' FOR UPDATE' : ''}`,
+        [orderId, orderId]
+    );
+    const hasDocument = types => documents.some(document => types.includes(document.document_type));
+    const invoices = documents.filter(document => document.document_type === 'invoice');
+    const invoiceForMetadata = invoices.find(invoice =>
+        Boolean(invoice.invoice_number) &&
+        Boolean(invoice.invoice_date) &&
+        Boolean(invoice.due_date) &&
+        Number(invoice.amount_total) > 0 &&
+        Boolean(invoice.currency)
+    ) || invoices[0] || null;
+
+    const checks = [
+        { key: 'purchase_order', ok: hasDocument(['purchase_order']) },
+        { key: 'delivery_document', ok: hasDocument(['delivery_note', 'signed_delivery_note']) },
+        { key: 'invoice', ok: invoices.length > 0 },
+        { key: 'invoice_metadata.invoice_number', ok: Boolean(invoiceForMetadata?.invoice_number) },
+        { key: 'invoice_metadata.invoice_date', ok: Boolean(invoiceForMetadata?.invoice_date) },
+        { key: 'invoice_metadata.due_date', ok: Boolean(invoiceForMetadata?.due_date) },
+        { key: 'invoice_metadata.amount_total', ok: Number(invoiceForMetadata?.amount_total) > 0 },
+        { key: 'invoice_metadata.currency', ok: Boolean(invoiceForMetadata?.currency) }
+    ];
+    return { checks, documents, requiredDocuments: documents.filter(document =>
+        ['purchase_order', 'delivery_note', 'signed_delivery_note', 'invoice'].includes(document.document_type)
+    ) };
+}
+
 // ─── Invoice Metadata ─────────────────────────────────────────────────────────
 
 // GET /api/accounting/invoice-meta/:documentId
@@ -258,6 +297,81 @@ exports.markInvoicePaid = async (req, res) => {
     } catch (err) {
         console.error('markInvoicePaid error:', err);
         publicError(res, err, 'Грешка при обработка');
+    }
+};
+
+// GET /api/orders/:orderId/accounting-preflight
+exports.getOrderAccountingPreflight = async (req, res) => {
+    const orderId = Number(req.params.orderId);
+    try {
+        const preflight = await withTransaction(db, async connection => {
+            const [[order]] = await connection.query('SELECT id FROM orders WHERE id = ? FOR UPDATE', [orderId]);
+            if (!order) throw new HttpError(404, 'Order not found');
+            return buildOrderAccountingChecks(connection, orderId);
+        });
+        res.json({ success: true, checks: preflight.checks });
+    } catch (error) {
+        console.error('getOrderAccountingPreflight error:', error);
+        publicError(res, error, 'Failed to check accounting handover requirements');
+    }
+};
+
+// POST /api/orders/:orderId/accounting-handover
+// The order determines every handover document. Deliberately ignore any client
+// document IDs so a caller cannot hand over documents from another order.
+exports.createOrderAccountingHandover = async (req, res) => {
+    const orderId = Number(req.params.orderId);
+    const notes = typeof req.body?.notes === 'string' ? req.body.notes.trim() : null;
+    try {
+        const result = await withTransaction(db, async connection => {
+            const [[order]] = await connection.query('SELECT id FROM orders WHERE id = ? FOR UPDATE', [orderId]);
+            if (!order) throw new HttpError(404, 'Order not found');
+            const preflight = await buildOrderAccountingChecks(connection, orderId, true);
+            const missing = preflight.checks.filter(check => !check.ok).map(check => check.key);
+            if (missing.length) {
+                const error = new HttpError(422, 'Required accounting documents or invoice metadata are missing');
+                error.missing = missing;
+                throw error;
+            }
+
+            const [handoverResult] = await connection.query(
+                'INSERT INTO accounting_handovers (sent_by, notes) VALUES (?, ?)',
+                [req.user.id, notes || null]
+            );
+            const handoverId = handoverResult.insertId;
+            const documentIds = [...new Set(preflight.requiredDocuments.map(document => document.id))];
+            await connection.query(
+                'INSERT INTO accounting_handover_documents (handover_id, document_id) VALUES ?',
+                [documentIds.map(documentId => [handoverId, documentId])]
+            );
+            await connection.query(
+                `UPDATE documents
+                 SET status = 'sent_to_accounting', processed_at = NOW(), processed_by = ?
+                 WHERE id IN (?)`,
+                [req.user.id, documentIds]
+            );
+            await auditLog({
+                eventType: 'handover_created',
+                handoverId,
+                orderId,
+                actorId: req.user.id,
+                actorName: req.user.name || req.user.username,
+                description: `Order #${orderId} handed over to accounting`,
+                meta: { documentIds }
+            }, connection);
+            const [[handover]] = await connection.query(
+                'SELECT id, status FROM accounting_handovers WHERE id = ?',
+                [handoverId]
+            );
+            return { handover, checks: preflight.checks };
+        });
+        res.json({ success: true, handover: result.handover, checks: result.checks });
+    } catch (error) {
+        if (error instanceof HttpError && error.missing) {
+            return res.status(422).json({ success: false, missing: error.missing });
+        }
+        console.error('createOrderAccountingHandover error:', error);
+        publicError(res, error, 'Failed to create accounting handover');
     }
 };
 

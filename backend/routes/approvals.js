@@ -34,7 +34,7 @@ router.get('/', authenticateToken, async (req, res) => {
                 a.*,
                 o.item_description,
                 o.building,
-                o.cost_center_code,
+                cc.code as cost_center_code,
                 s.name as supplier_name,
                 u_req.name as requested_by_name,
                 u_req.email as requested_by_email,
@@ -44,6 +44,7 @@ router.get('/', authenticateToken, async (req, res) => {
                 d.id as quote_document_id
             FROM approvals a
             INNER JOIN orders o ON a.order_id = o.id
+            LEFT JOIN cost_centers cc ON cc.id = o.cost_center_id
             LEFT JOIN suppliers s ON a.supplier_id = s.id
             LEFT JOIN users u_req ON a.requested_by = u_req.id
             LEFT JOIN users u_assigned ON a.assigned_to = u_assigned.id
@@ -150,8 +151,8 @@ router.get('/:id', authenticateToken, async (req, res) => {
                 o.part_number,
                 o.quantity,
                 o.building,
-                o.cost_center_code,
-                o.cost_center_name,
+                cc.code as cost_center_code,
+                cc.name as cost_center_name,
                 o.notes as order_notes,
                 s.name as supplier_name,
                 s.email as supplier_email,
@@ -164,6 +165,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
                 d.id as quote_document_id
             FROM approvals a
             INNER JOIN orders o ON a.order_id = o.id
+            LEFT JOIN cost_centers cc ON cc.id = o.cost_center_id
             LEFT JOIN suppliers s ON a.supplier_id = s.id
             LEFT JOIN users u_req ON a.requested_by = u_req.id
             LEFT JOIN users u_assigned ON a.assigned_to = u_assigned.id

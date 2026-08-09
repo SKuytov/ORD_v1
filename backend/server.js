@@ -53,9 +53,12 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(compression());
 
-// Static files - uploads served with original names
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-app.use(express.static(path.join(__dirname, '../frontend')));
+// Uploaded documents are NOT served statically. Invoices, quotes, delivery
+// notes and customs declarations are only reachable through the authenticated
+// streaming routes in routes/documents.js, which check the caller's role and
+// their relationship to the order. The matching Nginx `location /uploads`
+// alias must be removed too, or it will keep serving these files directly.
+app.use(express.static(path.join(__dirname, '../frontend'), { dotfiles: 'deny' }));
 
 // API Routes
 app.use('/api/auth', authRoutes);

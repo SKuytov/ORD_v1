@@ -8,7 +8,9 @@ const descriptionCorrectionController  = require('../controllers/descriptionCorr
 const accountingController = require('../controllers/accountingController');
 const db = require('../config/database');
 const { withTransaction } = require('../utils/withTransaction');
-const { validateOrderTransition } = require('../utils/orderLifecycle');
+const {
+    validateOrderTransition, allowedNextStatuses, TERMINAL_STATUSES, STATUSES
+} = require('../utils/orderLifecycle');
 const { authenticateToken, authorizeRoles } = require('../middleware/auth');
 const { enrichBuildingManager } = require('../middleware/buildingManagerMiddleware');
 const upload = require('../middleware/upload');
@@ -92,9 +94,54 @@ router.post('/auto-suggest-suppliers', authenticateToken, authorizeRoles('admin'
     }
 });
 
+// GET /api/orders/status-transitions — which moves are legal from where.
+// The status pickers in the UI were hard-coded and offered options that always
+// failed, so they now ask the server what is actually possible.
+router.get('/status-transitions', authenticateToken, (req, res) => {
+    const map = {};
+    for (const status of STATUSES) {
+        map[status] = allowedNextStatuses(status, { actorRole: req.user.role });
+    }
+    res.json({
+        success: true,
+        statuses: STATUSES,
+        transitions: map,
+        terminal: [...TERMINAL_STATUSES],
+        // Moving out of a terminal status is a reopen and needs a written reason.
+        reason_required_from: [...TERMINAL_STATUSES].filter(s => map[s].length > 0)
+    });
+});
+
+// GET /api/orders/:id/status-history — the status trail for one order.
+// Reopen reasons are written to orders_audit_log, but nothing read them back,
+// so a logged reason was invisible in the app. This joins the two tables so
+// the reason shows up next to the change it explains.
+router.get('/:id/status-history', authenticateToken, requireOrderAccess(), async (req, res) => {
+    try {
+        const orderId = parseInt(req.params.id, 10);
+        const [rows] = await db.query(
+            `SELECT h.id, h.old_value AS from_status, h.new_value AS to_status,
+                    h.changed_by, h.changed_at,
+                    (SELECT a.reason FROM orders_audit_log a
+                      WHERE a.order_id = h.order_id AND a.field_name = 'status'
+                        AND a.old_value <=> h.old_value AND a.new_value <=> h.new_value
+                        AND ABS(TIMESTAMPDIFF(SECOND, a.changed_at, h.changed_at)) <= 5
+                      ORDER BY a.id DESC LIMIT 1) AS reason
+               FROM order_history h
+              WHERE h.order_id = ? AND h.field_name = 'status'
+              ORDER BY h.changed_at ASC, h.id ASC`,
+            [orderId]
+        );
+        res.json({ success: true, history: rows });
+    } catch (err) {
+        console.error('status-history error:', err);
+        res.status(500).json({ success: false, message: 'Failed to load status history' });
+    }
+});
+
 // ⭐ POST /api/orders/bulk-status — update status for multiple orders at once
 router.post('/bulk-status', authenticateToken, authorizeRoles('admin', 'procurement'), requireBodyOrderAccess('order_ids'), async (req, res) => {
-    const { order_ids: rawOrderIds, status } = req.body || {};
+    const { order_ids: rawOrderIds, status, reason } = req.body || {};
     const orderIds = [...new Set((rawOrderIds || []).map(Number))];
     if (!orderIds.length || orderIds.length !== rawOrderIds?.length || !status) {
         return res.status(400).json({ success: false, message: 'order_ids and status required' });
@@ -131,12 +178,18 @@ router.post('/bulk-status', authenticateToken, authorizeRoles('admin', 'procurem
                     approvalApproved: order.approval_status === 'approved',
                     hasPurchaseOrder: Boolean(po),
                     actualDeliveryDate: po?.actual_delivery_date || null,
-                    hasDeliveryProof: Boolean(proof)
+                    hasDeliveryProof: Boolean(proof),
+                    // Reopening a Delivered or Cancelled order is admin-only and
+                    // needs a written reason; both are checked in the rules.
+                    actorRole: req.user.role,
+                    reason
                 });
                 if (!lifecycle.ok) {
                     const error = new Error(lifecycle.message);
                     error.status = 409;
                     error.offendingOrders = [order.id];
+                    error.requiresReason = lifecycle.requiresReason || false;
+                    error.requiresRole = lifecycle.requiresRole || null;
                     throw error;
                 }
             }
@@ -150,8 +203,9 @@ router.post('/bulk-status', authenticateToken, authorizeRoles('admin', 'procurem
                     );
                     await connection.query(
                         `INSERT INTO orders_audit_log (order_id, field_name, old_value, new_value, changed_by, reason)
-                         VALUES (?, 'status', ?, ?, ?, 'Bulk status update')`,
-                        [order.id, order.status, status, req.user.id]
+                         VALUES (?, 'status', ?, ?, ?, ?)`,
+                        [order.id, order.status, status, req.user.id,
+                            (reason && String(reason).trim()) || 'Bulk status update']
                     );
                 }
             }
@@ -163,7 +217,10 @@ router.post('/bulk-status', authenticateToken, authorizeRoles('admin', 'procurem
             return res.status(err.status).json({
                 success: false,
                 message: err.message,
-                ...(err.offendingOrders ? { offending_orders: err.offendingOrders } : {})
+                ...(err.offendingOrders ? { offending_orders: err.offendingOrders } : {}),
+                // Lets the UI prompt for a reason rather than just showing an error.
+                ...(err.requiresReason ? { requires_reason: true } : {}),
+                ...(err.requiresRole ? { requires_role: err.requiresRole } : {})
             });
         }
         console.error('bulk-status error:', err);
@@ -411,6 +468,17 @@ router.post('/:id/cancel', authenticateToken, requireOrderAccess(), authorizeRol
                 success: false,
                 message: `Cannot cancel an order with status "${order.status}". Only New, Pending or Quote Requested orders can be cancelled by the requester.`
             });
+        }
+
+        // The role check above only ever constrained requesters, so an admin
+        // could cancel an order that had already been delivered. The lifecycle
+        // rules forbid that, and now this route asks them.
+        const cancelCheck = validateOrderTransition(order.status, 'Cancelled', {
+            actorRole: user.role,
+            reason
+        });
+        if (!cancelCheck.ok) {
+            return res.status(409).json({ success: false, message: cancelCheck.message });
         }
 
         const previousStatus = order.status;

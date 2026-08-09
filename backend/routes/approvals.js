@@ -6,6 +6,7 @@ const pool = require('../config/database');
 const { withTransaction } = require('../utils/withTransaction');
 const { authenticateToken, authorizeRoles } = require('../middleware/auth');
 const email = require('../utils/emailService');
+const { applyStatusChange } = require('../utils/statusChange');
 
 class HttpError extends Error {
     constructor(status, message) { super(message); this.status = status; }
@@ -119,8 +120,25 @@ async function decideApproval(req, res, decision) {
             const [[approval]] = await connection.query('SELECT order_id,requested_by,estimated_cost,supplier_id FROM approvals WHERE id=?', [req.params.id]);
             await connection.query(`INSERT INTO approval_history (approval_id,action,performed_by,old_status,new_status,comments)
                 VALUES (?, ?, ?, 'pending', ?, ?)`, [req.params.id, decision, req.user.id, decision, comment || null]);
-            if (decision === 'approved') await connection.query("UPDATE orders SET approval_status='approved',approved_by=?,approved_at=NOW(),status='Approved' WHERE id=?", [req.user.id, approval.order_id]);
-            else await connection.query("UPDATE orders SET approval_status='rejected',status='On Hold' WHERE id=?", [approval.order_id]);
+            // The approval flag and the status move are separate concerns: the
+            // decision is always recorded, but the status only changes if the
+            // lifecycle permits it. Previously both were written blind, so
+            // approving a quote could drag an already-delivered order backwards.
+            if (decision === 'approved') {
+                await connection.query(
+                    "UPDATE orders SET approval_status='approved', approved_by=?, approved_at=NOW() WHERE id=?",
+                    [req.user.id, approval.order_id]
+                );
+                await applyStatusChange(connection, approval.order_id, 'Approved', req.user, {
+                    contextOverrides: { approvalApproved: true }
+                });
+            } else {
+                await connection.query(
+                    "UPDATE orders SET approval_status='rejected' WHERE id=?",
+                    [approval.order_id]
+                );
+                await applyStatusChange(connection, approval.order_id, 'On Hold', req.user);
+            }
             return approval;
         });
         notifyApprovalDecision(req.params.id, decision, comment).catch(error => console.error('[Approvals] decision notification failed:', error.message));

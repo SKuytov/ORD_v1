@@ -2,6 +2,7 @@
 
 const db = require('../config/database');
 const { withTransaction } = require('../utils/withTransaction');
+const { applyStatusChange, applyStatusChangeToMany } = require('../utils/statusChange');
 
 class HttpError extends Error {
     constructor(status, message) {
@@ -91,6 +92,9 @@ exports.createQuote = async (req, res) => {
 };
 
 exports.updateQuote = async (req, res) => {
+    // Orders that could not follow the quote's new status, reported back rather
+    // than silently ignored.
+    let skipped = [];
     try {
         await withTransaction(db, async connection => {
             const { id } = req.params;
@@ -120,10 +124,25 @@ exports.updateQuote = async (req, res) => {
                 }
                 await connection.query('UPDATE quotes SET total_amount=? WHERE id=?', [total, id]);
             }
-            if (status === 'Received') await connection.query("UPDATE orders SET status='Quote Received' WHERE quote_ref=? AND status='Quote Requested'", [id]);
-            if (status === 'Under Approval') await connection.query("UPDATE orders SET status='Quote Under Approval' WHERE quote_ref=? AND status='Quote Received'", [id]);
+            // These used to be sweeping UPDATEs with a status guard in the WHERE
+            // clause, which skipped the lifecycle rules entirely. Route them
+            // through the shared helper so the move is validated and recorded.
+            if (status === 'Received' || status === 'Under Approval') {
+                const nextStatus = status === 'Received' ? 'Quote Received' : 'Quote Under Approval';
+                const [linked] = await connection.query('SELECT id FROM orders WHERE quote_ref=?', [id]);
+                const outcome = await applyStatusChangeToMany(
+                    connection, linked.map(o => o.id), nextStatus, req.user
+                );
+                skipped = outcome.skipped;
+            }
         });
-        res.json({ success: true, message: 'Quote updated successfully' });
+        res.json({
+            success: true,
+            message: skipped.length
+                ? `Quote updated. ${skipped.length} linked order(s) kept their status.`
+                : 'Quote updated successfully',
+            ...(skipped.length ? { skipped } : {})
+        });
     } catch (error) { responseError(res, error, 'Failed to update quote'); }
 };
 
@@ -139,7 +158,14 @@ exports.addItemsToQuote = async (req, res) => {
                 const [[order]] = await connection.query('SELECT id, quantity FROM orders WHERE id=? FOR UPDATE', [orderId]);
                 if (!order) throw new HttpError(404, 'One or more orders were not found');
                 await connection.query('INSERT INTO quote_items (quote_id, order_id, quantity) VALUES (?, ?, ?)', [id, order.id, order.quantity]);
-                await connection.query("UPDATE orders SET status='Quote Requested', supplier_id=?, quote_ref=? WHERE id=?", [quote.supplier_id, id, order.id]);
+                // The supplier and quote reference are set in the same statement
+                // as the status, so the order satisfies the "needs a supplier"
+                // prerequisite by the time it is checked.
+                await applyStatusChange(connection, order.id, 'Quote Requested', req.user, {
+                    contextOverrides: { hasSupplier: Boolean(quote.supplier_id) },
+                    extraSet: 'supplier_id = ?, quote_ref = ?',
+                    extraParams: [quote.supplier_id, id]
+                });
             }
         });
         res.json({ success: true, message: 'Items added to quote' });
@@ -153,7 +179,12 @@ exports.removeItemFromQuote = async (req, res) => {
             const [[item]] = await connection.query('SELECT order_id FROM quote_items WHERE id=? AND quote_id=? FOR UPDATE', [itemId, id]);
             if (!item) throw new HttpError(404, 'Quote item not found');
             await connection.query('DELETE FROM quote_items WHERE id=? AND quote_id=?', [itemId, id]);
-            await connection.query("UPDATE orders SET status='New', supplier_id=NULL, quote_ref=NULL WHERE id=? AND quote_ref=?", [item.order_id, id]);
+            // Taking an order off a quote resets it. The rules now contain a
+            // route back to New for exactly this; they previously did not, and
+            // this line ran anyway because it skipped validation.
+            await applyStatusChange(connection, item.order_id, 'New', req.user, {
+                extraSet: 'supplier_id = NULL, quote_ref = NULL'
+            });
             await connection.query(`UPDATE quotes SET total_amount=(SELECT COALESCE(SUM(total_price),0) FROM quote_items WHERE quote_id=?) WHERE id=?`, [id, id]);
         });
         res.json({ success: true, message: 'Item removed from quote' });
@@ -161,17 +192,31 @@ exports.removeItemFromQuote = async (req, res) => {
 };
 
 exports.approveQuote = async (req, res) => {
+    let skipped = [];
     try {
         await withTransaction(db, async connection => {
             const { id } = req.params;
             const [quote] = await connection.query("UPDATE quotes SET status='Approved' WHERE id=? AND status <> 'Approved'", [id]);
             if (!quote.affectedRows) throw new HttpError(404, 'Quote not found');
-            const [orders] = await connection.query('SELECT id, status FROM orders WHERE quote_ref=? FOR UPDATE', [id]);
-            await connection.query("UPDATE orders SET status='Approved' WHERE quote_ref=?", [id]);
-            for (const order of orders) await connection.query(`INSERT INTO order_history (order_id, changed_by, field_name, old_value, new_value)
-                VALUES (?, ?, 'status', ?, 'Approved')`, [order.id, req.user.name || req.user.username || 'system', order.status]);
+            const [orders] = await connection.query('SELECT id FROM orders WHERE quote_ref=?', [id]);
+            // Previously this moved every order on the quote to Approved with no
+            // regard for where it already was, so an order that had been
+            // delivered or cancelled was dragged backwards. Orders that cannot
+            // legally move are left alone and reported.
+            const outcome = await applyStatusChangeToMany(
+                connection, orders.map(o => o.id), 'Approved', req.user,
+                // The quote has just been approved in this same transaction.
+                { contextOverrides: { quoteApproved: true, approvalApproved: true } }
+            );
+            skipped = outcome.skipped;
         });
-        res.json({ success: true, message: 'Quote approved, all linked orders updated' });
+        res.json({
+            success: true,
+            message: skipped.length
+                ? `Quote approved. ${skipped.length} linked order(s) kept their status.`
+                : 'Quote approved, all linked orders updated',
+            ...(skipped.length ? { skipped } : {})
+        });
     } catch (error) { responseError(res, error, 'Failed to approve quote'); }
 };
 
@@ -198,7 +243,10 @@ exports.logQuoteSend = async (req, res) => {
             if (!quote) throw new HttpError(404, 'Quote not found');
             await connection.query('INSERT INTO quote_send_log (quote_id,sent_by,method,supplier_email,notes) VALUES (?,?,?,?,?)', [id, req.user.id, method, supplier_email || null, notes || null]);
             await connection.query("UPDATE quotes SET status='Sent to Supplier' WHERE id=?", [id]);
-            await connection.query("UPDATE orders SET status='Quote Requested' WHERE quote_ref=? AND status IN ('New','Pending')", [id]);
+            const [linkedOrders] = await connection.query('SELECT id FROM orders WHERE quote_ref=?', [id]);
+            await applyStatusChangeToMany(
+                connection, linkedOrders.map(o => o.id), 'Quote Requested', req.user
+            );
         });
         const [updatedQuote] = await db.query(`SELECT q.*,s.name AS supplier_name,s.email AS supplier_email FROM quotes q LEFT JOIN suppliers s ON q.supplier_id=s.id WHERE q.id=?`, [req.params.id]);
         const [sendLog] = await db.query(`SELECT qsl.*,u.name AS sent_by_name FROM quote_send_log qsl LEFT JOIN users u ON qsl.sent_by=u.id WHERE qsl.quote_id=? ORDER BY qsl.sent_at DESC`, [req.params.id]);

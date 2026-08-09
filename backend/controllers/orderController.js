@@ -6,6 +6,9 @@ const emailService = require('../utils/emailService');
 const { getOrderScope, getManagedBuildingCodes, canAccessOrder } = require('../middleware/authz');
 const { withTransaction } = require('../utils/withTransaction');
 const { validateOrderTransition } = require('../utils/orderLifecycle');
+// getLifecycleContext lives in statusChange.js so that every caller reads the
+// same facts. It used to be defined here and nowhere else could reach it.
+const { getLifecycleContext } = require('../utils/statusChange');
 
 class HttpError extends Error {
     constructor(status, message) {
@@ -28,38 +31,6 @@ function validPositiveInteger(value) {
     return Number.isInteger(number) && number > 0;
 }
 
-async function getLifecycleContext(connection, order, overrides = {}) {
-    let quote = null;
-    let purchaseOrder = null;
-    if (order.quote_ref) {
-        [[quote]] = await connection.query('SELECT id, status FROM quotes WHERE id = ?', [order.quote_ref]);
-    }
-    if (order.po_id) {
-        [[purchaseOrder]] = await connection.query(
-            'SELECT id, actual_delivery_date FROM purchase_orders WHERE id = ?',
-            [order.po_id]
-        );
-    }
-    const [[proof]] = await connection.query(
-        `SELECT d.id
-         FROM documents d
-         LEFT JOIN order_documents_link odl ON odl.document_id = d.id AND odl.order_id = ?
-         WHERE (d.order_id = ? OR odl.order_id IS NOT NULL)
-           AND d.document_type IN ('delivery_proof', 'signed_delivery_note')
-         LIMIT 1`,
-        [order.id, order.id]
-    );
-    return {
-        hasSupplier: Boolean(order.supplier_id),
-        hasQuote: Boolean(quote),
-        quoteApproved: quote?.status === 'Approved',
-        approvalApproved: order.approval_status === 'approved',
-        hasPurchaseOrder: Boolean(purchaseOrder),
-        actualDeliveryDate: purchaseOrder?.actual_delivery_date || null,
-        hasDeliveryProof: Boolean(proof),
-        ...overrides
-    };
-}
 
 async function writeOrderAudit(connection, orderId, fieldName, oldValue, newValue, userId, reason) {
     await connection.query(
@@ -596,9 +567,21 @@ exports.updateOrder = async (req, res) => {
                 const lifecycle = validateOrderTransition(
                     orderData.status,
                     updates.status,
-                    await getLifecycleContext(connection, lifecycleOrder)
+                    {
+                        ...await getLifecycleContext(connection, lifecycleOrder),
+                        // An admin may reopen a Delivered or Cancelled order by
+                        // supplying a reason; anyone else is refused.
+                        actorRole: req.user?.role,
+                        reason: req.body?.reason
+                    }
                 );
                 if (!lifecycle.ok) throw new HttpError(409, lifecycle.message);
+                if (lifecycle.isReopen) {
+                    await writeOrderAudit(
+                        connection, id, 'status', orderData.status, updates.status,
+                        req.user.id, String(req.body.reason).trim()
+                    );
+                }
             }
 
             if (changedKeys.length) {

@@ -16,6 +16,8 @@ const {
 } = require('../controllers/quoteController');
 const emailService = require('../utils/emailService');
 const db = require('../config/database');
+const { withTransaction } = require('../utils/withTransaction');
+const { applyStatusChangeToMany } = require('../utils/statusChange');
 
 // All routes require auth
 router.use(authenticateToken);
@@ -84,16 +86,31 @@ router.post('/:id/send-rfq-email', requireQuoteAccess('id'), async (req, res) =>
             [id, req.user.id, recipientEmail, notes || null]
         );
 
-        // Update quote status
-        await db.query(`UPDATE quotes SET status = 'Sent to Supplier' WHERE id = ?`, [id]);
+        // The quote status and the linked orders move together, so they are now
+        // in one transaction. Each order is checked against the lifecycle rules
+        // instead of relying on a NOT IN list in the WHERE clause, which was the
+        // only guard here and did not match the rules the rest of the app uses.
+        let skipped = [];
+        await withTransaction(db, async connection => {
+            await connection.query(`UPDATE quotes SET status = 'Sent to Supplier' WHERE id = ?`, [id]);
 
-        // Update linked orders to Quote Requested
-        // Note: orders are NOT pre-changed to Quote Requested by createQuote anymore — this is the only place
-        await db.query(
-            `UPDATE orders SET status = 'Quote Requested' WHERE quote_ref = ? AND status NOT IN ('Quote Received','Approved','Ordered','In Transit','Partially Delivered','Delivered','Cancelled')`, [id]
-        );
+            const [linkedOrders] = await connection.query(
+                'SELECT id FROM orders WHERE quote_ref = ?', [id]
+            );
+            const outcome = await applyStatusChangeToMany(
+                connection, linkedOrders.map(o => o.id), 'Quote Requested', req.user
+            );
+            skipped = outcome.skipped;
+        });
 
-        res.json({ success: true, message: 'RFQ email sent successfully', messageId: result.messageId });
+        res.json({
+            success: true,
+            message: skipped.length
+                ? `RFQ email sent. ${skipped.length} linked order(s) kept their status.`
+                : 'RFQ email sent successfully',
+            messageId: result.messageId,
+            ...(skipped.length ? { skipped } : {})
+        });
     } catch (err) {
         console.error('send-rfq-email error:', err);
         res.status(500).json({ success: false, message: 'Failed to send email: ' + err.message });

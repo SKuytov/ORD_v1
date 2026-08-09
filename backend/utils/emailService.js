@@ -25,14 +25,18 @@ function getTransporter() {
             secure:  process.env.SMTP_SECURE === 'true',
             auth: {
                 user: process.env.SMTP_USER,
-                pass: process.env.SMTP_PASSWORD,
+                // SMTP_PASSWORD is the documented setting. SMTP_PASS remains a
+                // temporary compatibility fallback for older deployments.
+                pass: process.env.SMTP_PASSWORD || process.env.SMTP_PASS,
             },
-            tls:  { rejectUnauthorized: false },
             pool: true,
             maxConnections: 5,
             maxMessages:    100,
             rateDelta:      1000,
             rateLimit:      5,
+            connectionTimeout: 10_000,
+            greetingTimeout: 10_000,
+            socketTimeout: 20_000,
         });
         _transporter.verify()
             .then(() => console.log('[Email] SMTP transporter ready'))
@@ -96,9 +100,30 @@ const PRIORITY = {
 const fmt = (d, locale = 'bg-BG') => {
     if (!d) return '—';
     const date = new Date(d);
-    return isNaN(date) ? String(d) : date.toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
+    return isNaN(date) ? escapeHtml(d) : date.toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
 };
-const trunc = (s, n = 60) => s ? (s.length > n ? s.slice(0, n) + '…' : s) : '—';
+function escapeHtml(value) {
+    return String(value ?? '')
+        // Keep already encoded template values readable while encoding every
+        // otherwise raw HTML-significant character.
+        .replace(/&(?!(?:amp|lt|gt|quot|#39);)/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+function safeUrl(value, fallback = B.URL) {
+    try {
+        const url = new URL(String(value), B.URL);
+        return ['https:', 'http:'].includes(url.protocol) ? escapeHtml(url.href) : escapeHtml(fallback);
+    } catch {
+        return escapeHtml(fallback);
+    }
+}
+const trunc = (s, n = 60) => {
+    const value = String(s ?? '');
+    return escapeHtml(value.length > n ? value.slice(0, n) + '…' : (value || '—'));
+};
 const ikey  = (type, id, extra = '') =>
     `pp-${type}-${id}-${extra}-${new Date().toISOString().slice(0,13)}`
         .replace(/[^a-zA-Z0-9-_]/g, '-').slice(0, 256);
@@ -121,15 +146,20 @@ async function getStaffEmails(roles = ['admin','procurement','manager','super_ad
 }
 
 // Non-blocking email log to DB (silent fail if table missing)
-async function logEmail({ type, orderId, recipient, messageId, subject, tags = {} }) {
+async function logEmail({ type, orderId, recipient, messageId, subject, tags = {}, status = 'sent', errorMessage = null }) {
     try {
         await db.query(
-            `INSERT IGNORE INTO email_log
-             (type, order_id, recipient, message_id, subject, tags, sent_at)
-             VALUES (?,?,?,?,?,?,NOW())`,
-            [type, orderId || null, recipient, messageId || null, subject || '', JSON.stringify(tags)]
+            `INSERT INTO notification_log
+             (order_id, channel, notification_type, recipient_email, subject, message_preview, status, error_message, message_id, sent_at)
+             VALUES (?, 'email', ?, ?, ?, ?, ?, ?, ?, NOW())`,
+            [orderId || null, String(type || 'email').slice(0, 50), recipient || null,
+                String(subject || '').slice(0, 255), JSON.stringify(tags).slice(0, 2000),
+                status, errorMessage ? String(errorMessage).slice(0, 2000) : null, messageId || null]
         );
-    } catch { /* non-critical */ }
+    } catch (error) {
+        // Logging cannot be allowed to disrupt a business operation.
+        console.error('[Email] notification_log write failed:', error.message);
+    }
 }
 
 // ─── Core send (single) with exponential retry ───────────────────────────────
@@ -168,7 +198,15 @@ async function sendOne({ to, subject, html, text, replyTo, attachments } = {}) {
             await new Promise(r => setTimeout(r, 1200 * i));
         }
     }
-    throw new Error(`Email failed after ${maxAttempts} attempts: ${lastErr?.message}`);
+    const errorMessage = 'SMTP delivery failed after bounded retries';
+    await logEmail({
+        type: 'email',
+        recipient: toList.join(','),
+        subject,
+        status: 'failed',
+        errorMessage,
+    });
+    return { success: false, error: errorMessage };
 }
 
 // Batch send — SMTP has no native batch API, so we send sequentially.
@@ -177,7 +215,7 @@ async function sendBatch(emails) {
     const results = [];
     for (const e of emails) {
         const r = await sendOne(e);
-        results.push({ id: r.messageId });
+        results.push({ id: r.messageId, success: r.success, error: r.error });
     }
     return results;
 }
@@ -200,6 +238,11 @@ function buildAttachment(fileRecord, uploadsRoot) {
 
 // ─── Shared HTML layout ───────────────────────────────────────────────────────
 function layout({ preheader = '', badge = null, body }) {
+const safePreheader = escapeHtml(preheader);
+const safeBadge = badge && {
+    ...badge,
+    label: escapeHtml(badge.label),
+};
 return `<!DOCTYPE html>
 <html lang="bg" xmlns="http://www.w3.org/1999/xhtml">
 <head>
@@ -227,7 +270,7 @@ a{color:${B.orange};text-decoration:none}
 
 <!-- preheader -->
 <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:${B.bg}">
-${preheader}&nbsp;&#8203;&zwnj;&#8203;&zwnj;&#8203;&zwnj;&#8203;&zwnj;&#8203;
+${safePreheader}&nbsp;&#8203;&zwnj;&#8203;&zwnj;&#8203;&zwnj;&#8203;&zwnj;&#8203;
 </div>
 
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
@@ -254,11 +297,11 @@ ${preheader}&nbsp;&#8203;&zwnj;&#8203;&zwnj;&#8203;&zwnj;&#8203;&zwnj;&#8203;
                         border-radius:8px;background:#ffffff"
                  border="0">
           </td>
-          ${badge ? `<td align="right" style="vertical-align:middle">
-            <span style="display:inline-block;background:${badge.bg};color:${badge.text || '#fff'};
+          ${safeBadge ? `<td align="right" style="vertical-align:middle">
+            <span style="display:inline-block;background:${safeBadge.bg};color:${safeBadge.text || '#fff'};
                          padding:6px 16px;border-radius:20px;font-size:12px;font-weight:700;
                          letter-spacing:0.5px;text-transform:uppercase">
-              ${badge.label}
+              ${safeBadge.label}
             </span>
           </td>` : ''}
         </tr>
@@ -343,7 +386,7 @@ const btn = (label, url, color = B.navyMid) =>
 
 // Status pill
 const pill = (statusKey) => {
-    const s = STATUS[statusKey] || { color: B.muted, bg: '#f1f5f9', label: statusKey, icon: '•' };
+    const s = STATUS[statusKey] || { color: B.muted, bg: '#f1f5f9', label: escapeHtml(statusKey), icon: '•' };
     return `<span style="display:inline-block;background:${s.bg};color:${s.color};
                          border:1px solid ${s.color}40;padding:4px 14px;border-radius:20px;
                          font-size:12px;font-weight:700">${s.icon} ${s.label}</span>`;
@@ -444,7 +487,7 @@ function attachmentCards(files) {
     const cards = files.map(f => {
         const { icon, color } = iconFor(f.mime_type, f.original_name);
         const size = fmtSize(f.size_bytes);
-        const url  = f.download_url || `${B.URL}/api/orders/files/${f.id}/download`;
+        const url  = safeUrl(f.download_url || `${B.URL}/api/orders/files/${f.id}/download`);
         const name = trunc(f.original_name || 'Файл', 42);
         return `
 <tr>
@@ -458,7 +501,7 @@ function attachmentCards(files) {
         </td>
         <td style="padding:14px 12px;vertical-align:middle">
           <p style="margin:0 0 2px;font-size:13px;font-weight:700;color:${B.text}">${name}</p>
-          <p style="margin:0;font-size:11px;color:${B.muted}">${size ? size + ' &nbsp;·&nbsp; ' : ''}${f.mime_type || ''}</p>
+          <p style="margin:0;font-size:11px;color:${B.muted}">${size ? size + ' &nbsp;·&nbsp; ' : ''}${escapeHtml(f.mime_type || '')}</p>
         </td>
         <td style="padding:14px 16px;vertical-align:middle;text-align:right">
           <a href="${url}"
@@ -513,7 +556,7 @@ async function sendNewOrderNotification(orderData) {
     const makeBody = (recipientName) => `
       <!-- Greeting -->
       <p style="margin:0 0 4px;font-size:15px;font-weight:600;color:${B.text}">
-        Здравейте${recipientName ? `, ${recipientName}` : ''} 👋
+        Здравейте${recipientName ? `, ${escapeHtml(recipientName)}` : ''} 👋
       </p>
       <p style="margin:0 0 28px;font-size:14px;color:${B.textSub};line-height:1.7">
         Постъпила е нова заявка за поръчка и изисква обработка.
@@ -527,14 +570,14 @@ async function sendNewOrderNotification(orderData) {
       ${kvTable([
           ['Номер на заявка',  `<span style="font-size:17px;font-weight:800;color:${B.navyMid}">#${orderId}</span>`],
           ['Приоритет',        prioLabel(prio)],
-          ['Сграда',           displayBuilding],
-          costCenterCode ? ['Разходен център', costCenterCode] : null,
-          ['Артикул',          `<strong>${itemDescription}</strong>`],
-          partNumber ? ['Парт №', `<code style="background:#f1f5f9;padding:2px 8px;border-radius:4px;font-size:12px;font-family:monospace">${partNumber}</code>`] : null,
-          category   ? ['Категория', category] : null,
-          ['Количество',       `<strong>${quantity}${unit ? ' ' + unit : ''}</strong>`],
+          ['Сграда',           escapeHtml(displayBuilding)],
+          costCenterCode ? ['Разходен център', escapeHtml(costCenterCode)] : null,
+          ['Артикул',          `<strong>${escapeHtml(itemDescription)}</strong>`],
+          partNumber ? ['Парт №', `<code style="background:#f1f5f9;padding:2px 8px;border-radius:4px;font-size:12px;font-family:monospace">${escapeHtml(partNumber)}</code>`] : null,
+          category   ? ['Категория', escapeHtml(category)] : null,
+          ['Количество',       `<strong>${escapeHtml(quantity)}${unit ? ' ' + escapeHtml(unit) : ''}</strong>`],
           ['Необходима до',    `<strong>${fmt(dateNeeded)}</strong>`],
-          ['Заявена от',       requester || '—'],
+          ['Заявена от',       escapeHtml(requester || '—')],
           notes ? ['Бележки', `<em style="color:${B.textSub}">${trunc(notes, 200)}</em>`] : null,
       ])}
 
@@ -545,13 +588,13 @@ async function sendNewOrderNotification(orderData) {
       ${btn('📋 Отвори заявката', `${B.URL}/app.html#orders/${orderId}`, isUrgent ? '#dc2626' : B.navyMid)}
     `;
 
-    const subject = `🆕 Нова заявка #${orderId} · ${displayBuilding}${isUrgent ? ' 🔴 СПЕШНА' : ''}`;
+    const subject = `🆕 Нова заявка #${orderId} · ${escapeHtml(displayBuilding)}${isUrgent ? ' 🔴 СПЕШНА' : ''}`;
 
     const batchPayload = recipients.map(r => ({
         to: [r.email],
         subject,
         html: layout({
-            preheader: `Нова заявка #${orderId} — ${trunc(itemDescription,40)} (${displayBuilding})`,
+            preheader: `Нова заявка #${orderId} — ${trunc(itemDescription,40)} (${escapeHtml(displayBuilding)})`,
             badge: isUrgent ? { label: '🔴 Спешна', bg: '#dc2626' } : { label: 'Нова заявка', bg: B.navyMid },
             body: makeBody(r.name),
         }),
@@ -563,10 +606,10 @@ async function sendNewOrderNotification(orderData) {
     }));
 
     const results = await sendBatch(batchPayload);
-    for (const r of recipients) {
-        await logEmail({ type: 'new-order', orderId, recipient: r.email, subject, tags: { priority: prio } });
+    for (let i = 0; i < recipients.length; i++) {
+        if (results[i]?.success) await logEmail({ type: 'new-order', orderId, recipient: recipients[i].email, messageId: results[i].id, subject, tags: { priority: prio } });
     }
-    return { success: true, messageIds: results.map(r => r.id) };
+    return { success: results.every(r => r.success), messageIds: results.map(r => r.id) };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -589,13 +632,13 @@ async function sendStatusUpdateNotification(d) {
 
     if (!requesterEmail) return { success: false, error: 'No requester email' };
 
-    const oldS  = STATUS[oldStatus] || { color: B.muted, label: oldStatus,  icon: '•', step: 0 };
-    const newS  = STATUS[newStatus] || { color: B.navyMid, label: newStatus, icon: '•', step: 0 };
+    const oldS  = STATUS[oldStatus] || { color: B.muted, label: escapeHtml(oldStatus),  icon: '•', step: 0 };
+    const newS  = STATUS[newStatus] || { color: B.navyMid, label: escapeHtml(newStatus), icon: '•', step: 0 };
     const msg   = STATUS_MSG[newStatus];
 
     const body = `
       <p style="margin:0 0 6px;font-size:15px;font-weight:600;color:${B.text}">
-        Здравейте${requesterName ? `, <strong>${requesterName}</strong>` : ''} 👋
+        Здравейте${requesterName ? `, <strong>${escapeHtml(requesterName)}</strong>` : ''} 👋
       </p>
       <p style="margin:0 0 28px;font-size:14px;color:${B.textSub};line-height:1.7">
         Статусът на вашата заявка беше актуализиран.
@@ -667,9 +710,9 @@ async function sendStatusUpdateNotification(d) {
       ${sectionHead('Детайли на заявката')}
       ${kvTable([
           ['Заявка №',           `<strong>#${orderId}</strong>`],
-          ['Сграда',             building || '—'],
+          ['Сграда',             escapeHtml(building || '—')],
           ['Артикул',            trunc(itemDescription, 55)],
-          supplierName     ? ['Доставчик',        `<strong>${supplierName}</strong>`] : null,
+          supplierName     ? ['Доставчик',        `<strong>${escapeHtml(supplierName)}</strong>`] : null,
           expectedDelivery ? ['Очаквана доставка', `<strong>${fmt(expectedDelivery)}</strong>`] : null,
           notes ? ['Бележка', `<em style="color:${B.textSub}">${trunc(notes, 120)}</em>`] : null,
       ])}
@@ -696,7 +739,7 @@ async function sendStatusUpdateNotification(d) {
         ],
     });
 
-    await logEmail({ type: 'status-update', orderId, recipient: requesterEmail, messageId: result.messageId, subject, tags: { newStatus } });
+    if (result.success) await logEmail({ type: 'status-update', orderId, recipient: requesterEmail, messageId: result.messageId, subject, tags: { newStatus } });
     return result;
 }
 
@@ -737,7 +780,7 @@ async function sendApprovalRequest(d) {
           <p style="margin:0 0 6px;font-size:11px;color:rgba(255,255,255,.6);
                     letter-spacing:1.5px;text-transform:uppercase">Сума на офертата</p>
           <p style="margin:0;font-size:42px;font-weight:900;color:#fff;letter-spacing:-1px">
-            ${amt} <span style="font-size:22px;font-weight:600;color:rgba(255,255,255,.7)">${currency}</span>
+            ${amt} <span style="font-size:22px;font-weight:600;color:rgba(255,255,255,.7)">${escapeHtml(currency)}</span>
           </p>
         </td></tr>
       </table>
@@ -746,9 +789,9 @@ async function sendApprovalRequest(d) {
       ${kvTable([
           ['Заявка №',    `<strong>#${orderId}</strong>`],
           ['Артикул',     `<strong>${trunc(itemDescription, 55)}</strong>`],
-          supplierName     ? ['Доставчик',   supplierName]     : null,
-          requestedByName  ? ['Заявена от',  requestedByName]  : null,
-          notes ? ['Бележки', `<em style="color:${B.textSub}">${notes}</em>`] : null,
+          supplierName     ? ['Доставчик',   escapeHtml(supplierName)]     : null,
+          requestedByName  ? ['Заявена от',  escapeHtml(requestedByName)]  : null,
+          notes ? ['Бележки', `<em style="color:${B.textSub}">${escapeHtml(notes)}</em>`] : null,
       ])}
 
       ${attachmentCards(files)}
@@ -778,9 +821,9 @@ async function sendApprovalRequest(d) {
       </p>
     `;
 
-    const subject = `🔍 Одобрение нужно — заявка #${orderId} · ${amt} ${currency}`;
+    const subject = `🔍 Одобрение нужно — заявка #${orderId} · ${amt} ${escapeHtml(currency)}`;
     const html = layout({
-        preheader: `Оферта от ${supplierName || 'доставчик'}: ${amt} ${currency} — изисква одобрение`,
+        preheader: `Оферта от ${escapeHtml(supplierName || 'доставчик')}: ${amt} ${escapeHtml(currency)} — изисква одобрение`,
         badge: { label: '⏳ Чака одобрение', bg: '#f59e0b', text: '#fff' },
         body,
     });
@@ -793,10 +836,10 @@ async function sendApprovalRequest(d) {
         ],
     })));
 
-    for (const email of approverEmails) {
-        await logEmail({ type: 'approval-request', orderId, recipient: email, subject });
+    for (let i = 0; i < approverEmails.length; i++) {
+        if (results[i]?.success) await logEmail({ type: 'approval-request', orderId, recipient: approverEmails[i], messageId: results[i].id, subject });
     }
-    return { success: true, messageIds: results.map(r => r.id) };
+    return { success: results.every(r => r.success), messageIds: results.map(r => r.id) };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -833,7 +876,7 @@ async function sendApprovalDecision(d) {
           <div style="font-size:52px;line-height:1;margin-bottom:12px">${bigIcon}</div>
           <h2 style="margin:0 0 8px;font-size:24px;font-weight:800;color:${accentColor}">${headline}</h2>
           <p style="margin:0;font-size:14px;color:${B.textSub}">
-            Здравейте${requesterName ? `, ${requesterName}` : ''} — решението е взето.
+            Здравейте${requesterName ? `, ${escapeHtml(requesterName)}` : ''} — решението е взето.
           </p>
         </td></tr>
       </table>
@@ -843,15 +886,15 @@ async function sendApprovalDecision(d) {
       ${sectionHead('Детайли на решението', accentColor)}
       ${kvTable([
           ['Решение',       `<strong style="color:${accentColor}">${approved ? '✅ ОДОБРЕНО' : '❌ ОТХВЪРЛЕНО'}</strong>`],
-          ['Одобрено от',   approverName || '—'],
-          quoteAmount ? ['Одобрена сума', `<strong style="font-size:17px">${parseFloat(quoteAmount).toFixed(2)} ${currency}</strong>`] : null,
-          notes           ? ['Бележки',            `<em style="color:${B.textSub}">${notes}</em>`]                     : null,
-          !approved && rejectionReason ? ['Причина за отказ', `<span style="color:#dc2626;font-weight:600">${rejectionReason}</span>`] : null,
+          ['Одобрено от',   escapeHtml(approverName || '—')],
+          quoteAmount ? ['Одобрена сума', `<strong style="font-size:17px">${parseFloat(quoteAmount).toFixed(2)} ${escapeHtml(currency)}</strong>`] : null,
+          notes           ? ['Бележки',            `<em style="color:${B.textSub}">${escapeHtml(notes)}</em>`]                     : null,
+          !approved && rejectionReason ? ['Причина за отказ', `<span style="color:#dc2626;font-weight:600">${escapeHtml(rejectionReason)}</span>`] : null,
       ])}
 
       ${approved
           ? alert('Моля, пристъпете към издаване на поръчка (PO) към доставчика.', 'success')
-          : alert(`Офертата е отхвърлена.${rejectionReason ? ' <strong>Причина:</strong> ' + rejectionReason : ''} Моля, потърсете алтернативна оферта.`, 'danger')}
+          : alert(`Офертата е отхвърлена.${rejectionReason ? ' <strong>Причина:</strong> ' + escapeHtml(rejectionReason) : ''} Моля, потърсете алтернативна оферта.`, 'danger')}
 
       ${btn('📋 Преглед на заявката', `${B.URL}/app.html#approvals/${orderId}`, accentColor)}
     `;
@@ -873,7 +916,7 @@ async function sendApprovalDecision(d) {
         ],
     });
 
-    await logEmail({ type: 'approval-decision', orderId, recipient: requesterEmail, messageId: result.messageId, subject, tags: { decision } });
+    if (result.success) await logEmail({ type: 'approval-decision', orderId, recipient: requesterEmail, messageId: result.messageId, subject, tags: { decision } });
     return result;
 }
 
@@ -904,20 +947,20 @@ async function sendRfqToSupplier(d) {
         <td style="padding:11px 14px;font-size:13px;color:${B.muted};
                    border-bottom:1px solid ${B.border};text-align:center">${i+1}</td>
         <td style="padding:11px 14px;font-size:13px;font-weight:600;color:${B.text};
-                   border-bottom:1px solid ${B.border}">${it.itemDescription || '—'}</td>
+                   border-bottom:1px solid ${B.border}">${escapeHtml(it.itemDescription || '—')}</td>
         <td style="padding:11px 14px;font-size:12px;color:${B.muted};
-                   border-bottom:1px solid ${B.border};font-family:monospace">${it.partNumber || '—'}</td>
+                   border-bottom:1px solid ${B.border};font-family:monospace">${escapeHtml(it.partNumber || '—')}</td>
         <td style="padding:11px 14px;font-size:13px;font-weight:700;color:${B.navyMid};
                    border-bottom:1px solid ${B.border};text-align:right">
-          ${it.quantity || 1} ${it.unit || ''}
+          ${escapeHtml(it.quantity || 1)} ${escapeHtml(it.unit || '')}
         </td>
         <td style="padding:11px 14px;font-size:12px;color:${B.muted};
-                   border-bottom:1px solid ${B.border}">${it.notes || '—'}</td>
+                   border-bottom:1px solid ${B.border}">${escapeHtml(it.notes || '—')}</td>
       </tr>`).join('');
 
     const body = `
       <p style="margin:0 0 4px;font-size:14px;color:${B.textSub}">
-        До: <strong>${contactPerson || supplierName}</strong>
+        До: <strong>${escapeHtml(contactPerson || supplierName)}</strong>
       </p>
       <h2 style="margin:0 0 24px;font-size:20px;font-weight:700;color:${B.text}">
         Запитване за оферта № ${quoteId}
@@ -927,7 +970,7 @@ async function sendRfqToSupplier(d) {
         Уважаеми партньор,<br><br>
         Моля, изпратете ни оферта за посочените артикули.
         Очакваме вашия отговор до <strong>${validUntil ? fmt(validUntil) : '5 работни дни'}</strong>.
-        ${notes ? `<br><br><em style="color:${B.textSub}">${notes}</em>` : ''}
+        ${notes ? `<br><br><em style="color:${B.textSub}">${escapeHtml(notes)}</em>` : ''}
       </p>
 
       <!-- Items table -->
@@ -951,7 +994,7 @@ async function sendRfqToSupplier(d) {
         <tfoot>
           <tr style="background:#f8fafc">
             <td colspan="5" style="padding:10px 14px;font-size:12px;color:${B.muted}">
-              Валута: <strong>${currency}</strong> &nbsp;·&nbsp;
+              Валута: <strong>${escapeHtml(currency)}</strong> &nbsp;·&nbsp;
               Моля посочете дали цените включват ДДС &nbsp;·&nbsp;
               Посочете срок за доставка
             </td>
@@ -963,12 +1006,12 @@ async function sendRfqToSupplier(d) {
 
       <p style="font-size:13px;color:${B.textSub};margin-top:24px;line-height:1.8">
         С уважение,<br>
-        <strong style="color:${B.text}">Отдел Доставки — ${companyName}</strong><br>
-        <a href="mailto:${process.env.SMTP_USER||''}" style="color:${B.orange}">${process.env.SMTP_USER||''}</a>
+        <strong style="color:${B.text}">Отдел Доставки — ${escapeHtml(companyName)}</strong><br>
+        <a href="mailto:${escapeHtml(process.env.SMTP_USER || '')}" style="color:${B.orange}">${escapeHtml(process.env.SMTP_USER || '')}</a>
       </p>
     `;
 
-    const subject = `Запитване за оферта #${quoteId} — ${companyName}`;
+    const subject = `Запитване за оферта #${quoteId} — ${escapeHtml(companyName)}`;
     const html = layout({
         preheader: `Запитване за ${items.length} артикула — моля, изпратете оферта`,
         badge: { label: `RFQ #${quoteId}`, bg: B.navyMid },
@@ -986,7 +1029,7 @@ async function sendRfqToSupplier(d) {
         ],
     });
 
-    await logEmail({ type: 'rfq', orderId: null, recipient: supplierEmail, messageId: result.messageId, subject });
+    if (result.success) await logEmail({ type: 'rfq', orderId: null, recipient: supplierEmail, messageId: result.messageId, subject });
     return result;
 }
 
@@ -1015,7 +1058,7 @@ async function sendDeliveryConfirmation(d) {
             Поръчката е доставена!
           </h2>
           <p style="margin:0;font-size:14px;color:rgba(255,255,255,.7)">
-            Здравейте${requesterName ? `, ${requesterName}` : ''} — заявката е изпълнена успешно.
+            Здравейте${requesterName ? `, ${escapeHtml(requesterName)}` : ''} — заявката е изпълнена успешно.
           </p>
         </td></tr>
       </table>
@@ -1025,10 +1068,10 @@ async function sendDeliveryConfirmation(d) {
       ${sectionHead('Детайли на доставката', '#16a34a')}
       ${kvTable([
           ['Заявка №',        `<strong>#${orderId}</strong>`],
-          ['Артикул',         `<strong>${itemDescription}</strong>`],
-          ['Количество',      `<strong>${quantity || '—'}${unit ? ' ' + unit : ''}</strong>`],
-          ['Сграда',          building || '—'],
-          supplierName ? ['Доставчик', `<strong>${supplierName}</strong>`] : null,
+          ['Артикул',         `<strong>${escapeHtml(itemDescription)}</strong>`],
+          ['Количество',      `<strong>${escapeHtml(quantity || '—')}${unit ? ' ' + escapeHtml(unit) : ''}</strong>`],
+          ['Сграда',          escapeHtml(building || '—')],
+          supplierName ? ['Доставчик', `<strong>${escapeHtml(supplierName)}</strong>`] : null,
           ['Доставено на',    `<strong>${fmt(deliveredAt || new Date())}</strong>`],
       ])}
 
@@ -1055,7 +1098,7 @@ async function sendDeliveryConfirmation(d) {
         ],
     });
 
-    await logEmail({ type: 'delivery', orderId, recipient: requesterEmail, messageId: result.messageId, subject });
+    if (result.success) await logEmail({ type: 'delivery', orderId, recipient: requesterEmail, messageId: result.messageId, subject });
     return result;
 }
 
@@ -1106,7 +1149,7 @@ async function sendDailyDigest(d) {
         <td style="padding:9px 12px;font-size:12px;color:${B.text};
                    border-bottom:1px solid ${B.border}">${trunc(o.item_description || o.itemDescription, 32)}</td>
         <td style="padding:9px 12px;font-size:12px;color:${B.muted};
-                   border-bottom:1px solid ${B.border}">${o.building || '—'}</td>
+                   border-bottom:1px solid ${B.border}">${escapeHtml(o.building || '—')}</td>
         <td style="padding:9px 12px;font-size:12px;border-bottom:1px solid ${B.border}">${pill(o.status || 'New')}</td>
       </tr>`;
 
@@ -1164,7 +1207,7 @@ async function sendDailyDigest(d) {
         tags: [{ name: 'type', value: 'daily-digest' }],
     })));
 
-    return { success: true, messageIds: results.map(r => r.id), count: recipients.length };
+    return { success: results.every(r => r.success), messageIds: results.map(r => r.id), count: recipients.length };
 }
 
 // ─── Connection test ──────────────────────────────────────────────────────────
@@ -1238,10 +1281,10 @@ async function sendBuildingManagerNewOrderNotification(d) {
 
     const makeBody = (recipientName) => `
       <p style="margin:0 0 4px;font-size:15px;font-weight:600;color:${B.text}">
-        Здравейте${recipientName ? `, ${recipientName}` : ''} 👋
+        Здравейте${recipientName ? `, ${escapeHtml(recipientName)}` : ''} 👋
       </p>
       <p style="margin:0 0 28px;font-size:14px;color:${B.textSub};line-height:1.7">
-        Подадена е нова заявка за поръчка от вашата сграда <strong>${building}</strong>.
+        Подадена е нова заявка за поръчка от вашата сграда <strong>${escapeHtml(building)}</strong>.
       </p>
 
       ${tracker(1)}
@@ -1252,13 +1295,13 @@ async function sendBuildingManagerNewOrderNotification(d) {
       ${kvTable([
           ['Номер на заявка', `<span style="font-size:17px;font-weight:800;color:${B.navyMid}">#${orderId}</span>`],
           ['Приоритет',       prioLabel(prio)],
-          ['Сграда',          building || '—'],
-          costCenterCode ? ['Разходен център', costCenterCode] : null,
-          ['Артикул',         `<strong>${itemDescription}</strong>`],
-          ['Количество',      `<strong>${quantity}</strong>`],
+          ['Сграда',          escapeHtml(building || '—')],
+          costCenterCode ? ['Разходен център', escapeHtml(costCenterCode)] : null,
+          ['Артикул',         `<strong>${escapeHtml(itemDescription)}</strong>`],
+          ['Количество',      `<strong>${escapeHtml(quantity)}</strong>`],
           ['Необходима до',   `<strong>${fmt(dateNeeded)}</strong>`],
-          ['Заявена от',      requester || '—'],
-          requesterEmail ? ['Email на заявителя', requesterEmail] : null,
+          ['Заявена от',      escapeHtml(requester || '—')],
+          requesterEmail ? ['Email на заявителя', escapeHtml(requesterEmail)] : null,
       ])}
 
       ${alert('Можете да прегледате и при нужда да отмените тази заявка от системата.', 'info')}
@@ -1266,13 +1309,13 @@ async function sendBuildingManagerNewOrderNotification(d) {
       ${btn('📋 Отвори заявката', `${B.URL}/app.html#orders/${orderId}`, isUrgent ? '#dc2626' : B.navyMid)}
     `;
 
-    const subject = `🆕 Нова заявка #${orderId} · ${building}${isUrgent ? ' 🔴 СПЕШНА' : ''}`;
+    const subject = `🆕 Нова заявка #${orderId} · ${escapeHtml(building)}${isUrgent ? ' 🔴 СПЕШНА' : ''}`;
 
     const batchPayload = recipients.map(r => ({
         to: [r.email],
         subject,
         html: layout({
-            preheader: `Нова заявка #${orderId} — ${trunc(itemDescription, 40)} (${building})`,
+            preheader: `Нова заявка #${orderId} — ${trunc(itemDescription, 40)} (${escapeHtml(building)})`,
             badge: isUrgent ? { label: '🔴 Спешна', bg: '#dc2626' } : { label: 'Нова заявка · ' + building, bg: B.navyMid },
             body: makeBody(r.name),
         }),
@@ -1283,10 +1326,10 @@ async function sendBuildingManagerNewOrderNotification(d) {
     }));
 
     const results = await sendBatch(batchPayload);
-    for (const r of recipients) {
-        await logEmail({ type: 'bm-new-order', orderId, recipient: r.email, subject, tags: { building } });
+    for (let i = 0; i < recipients.length; i++) {
+        if (results[i]?.success) await logEmail({ type: 'bm-new-order', orderId, recipient: recipients[i].email, messageId: results[i].id, subject, tags: { building } });
     }
-    return { success: true, messageIds: results.map(r => r.id) };
+    return { success: results.every(r => r.success), messageIds: results.map(r => r.id) };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1310,16 +1353,16 @@ async function sendBuildingManagerStatusUpdateNotification(d) {
     const recipients = await getBuildingManagerEmails(building, excludeUserId || null);
     if (!recipients.length) return { success: false, error: 'No building manager recipients' };
 
-    const oldS = STATUS[oldStatus] || { color: B.muted, label: oldStatus,  icon: '•', step: 0 };
-    const newS = STATUS[newStatus] || { color: B.navyMid, label: newStatus, icon: '•', step: 0 };
+    const oldS = STATUS[oldStatus] || { color: B.muted, label: escapeHtml(oldStatus),  icon: '•', step: 0 };
+    const newS = STATUS[newStatus] || { color: B.navyMid, label: escapeHtml(newStatus), icon: '•', step: 0 };
     const msg  = STATUS_MSG[newStatus];
 
     const makeBody = (recipientName) => `
       <p style="margin:0 0 6px;font-size:15px;font-weight:600;color:${B.text}">
-        Здравейте${recipientName ? `, <strong>${recipientName}</strong>` : ''} 👋
+        Здравейте${recipientName ? `, <strong>${escapeHtml(recipientName)}</strong>` : ''} 👋
       </p>
       <p style="margin:0 0 28px;font-size:14px;color:${B.textSub};line-height:1.7">
-        Статусът на заявка от вашата сграда <strong>${building}</strong> беше актуализиран.
+        Статусът на заявка от вашата сграда <strong>${escapeHtml(building)}</strong> беше актуализиран.
       </p>
 
       ${tracker(newS.step)}
@@ -1379,23 +1422,23 @@ async function sendBuildingManagerStatusUpdateNotification(d) {
       ${sectionHead('Детайли на заявката')}
       ${kvTable([
           ['Заявка №',           `<strong>#${orderId}</strong>`],
-          ['Сграда',             building || '—'],
+          ['Сграда',             escapeHtml(building || '—')],
           ['Артикул',            trunc(itemDescription, 55)],
-          requesterName ? ['Заявена от', requesterName] : null,
-          supplierName     ? ['Доставчик',        `<strong>${supplierName}</strong>`] : null,
+          requesterName ? ['Заявена от', escapeHtml(requesterName)] : null,
+          supplierName     ? ['Доставчик',        `<strong>${escapeHtml(supplierName)}</strong>`] : null,
           expectedDelivery ? ['Очаквана доставка', `<strong>${fmt(expectedDelivery)}</strong>`] : null,
       ])}
 
       ${btn('📋 Преглед на заявката', `${B.URL}/app.html#orders/${orderId}`, newS.color)}
     `;
 
-    const subject = `${newS.icon} Заявка #${orderId} · ${newS.label} · ${building}`;
+    const subject = `${newS.icon} Заявка #${orderId} · ${newS.label} · ${escapeHtml(building)}`;
 
     const batchPayload = recipients.map(r => ({
         to: [r.email],
         subject,
         html: layout({
-            preheader: `Статус на заявка #${orderId}: ${oldS.label} → ${newS.label} (${building})`,
+            preheader: `Статус на заявка #${orderId}: ${oldS.label} → ${newS.label} (${escapeHtml(building)})`,
             badge: { label: newS.label, bg: newS.color },
             body: makeBody(r.name),
         }),
@@ -1407,10 +1450,10 @@ async function sendBuildingManagerStatusUpdateNotification(d) {
     }));
 
     const results = await sendBatch(batchPayload);
-    for (const r of recipients) {
-        await logEmail({ type: 'bm-status-update', orderId, recipient: r.email, subject, tags: { newStatus } });
+    for (let i = 0; i < recipients.length; i++) {
+        if (results[i]?.success) await logEmail({ type: 'bm-status-update', orderId, recipient: recipients[i].email, messageId: results[i].id, subject, tags: { newStatus } });
     }
-    return { success: true, messageIds: results.map(r => r.id) };
+    return { success: results.every(r => r.success), messageIds: results.map(r => r.id) };
 }
 
 
@@ -1435,10 +1478,10 @@ async function sendAccountingHandover(d) {
     const docRows = documents.map((d, i) => `
     <tr style="background:${i%2===0?'#fff':'#f8fafc'}">
       <td style="padding:10px 16px;font-size:13px;color:${B.muted};border-bottom:1px solid ${B.border};white-space:nowrap">
-        ${docTypeLabel[d.document_type] || d.document_type}
+        ${escapeHtml(docTypeLabel[d.document_type] || d.document_type)}
       </td>
       <td style="padding:10px 16px;font-size:13px;color:${B.text};font-weight:600;border-bottom:1px solid ${B.border}">
-        ${d.file_name}
+        ${escapeHtml(d.file_name)}
       </td>
       <td style="padding:10px 16px;font-size:12px;color:${B.muted};border-bottom:1px solid ${B.border};text-align:right;white-space:nowrap">
         ${(d.file_size/1024).toFixed(0)} KB
@@ -1450,11 +1493,11 @@ async function sendAccountingHandover(d) {
         Здравейте 👋
       </p>
       <p style="margin:0 0 24px;font-size:14px;color:${B.textSub};line-height:1.7">
-        <strong>${sentBy}</strong> ви е изпратил/а ново счетоводно предаване с <strong>${documents.length} документа</strong>.
+        <strong>${escapeHtml(sentBy)}</strong> ви е изпратил/а ново счетоводно предаване с <strong>${documents.length} документа</strong>.
         Моля, прегледайте и потвърдете получаването.
       </p>
 
-      ${notes ? alert(`<strong>Бележка:</strong> ${notes}`, 'info') : ''}
+      ${notes ? alert(`<strong>Бележка:</strong> ${escapeHtml(notes)}`, 'info') : ''}
 
       ${sectionHead('📂 Предадени документи')}
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
@@ -1497,7 +1540,7 @@ async function sendAccountingHandover(d) {
         to: [r.email],
         subject: `📂 Счетоводно предаване #${handoverId} — ${documents.length} документа`,
         html: layout({
-            preheader: `Ново счетоводно предаване от ${sentBy} — ${documents.length} документа`,
+            preheader: `Ново счетоводно предаване от ${escapeHtml(sentBy)} — ${documents.length} документа`,
             badge: { label: 'Счетоводство', bg: B.navyMid },
             body,
         }),
@@ -1505,11 +1548,11 @@ async function sendAccountingHandover(d) {
     }));
 
     const results = await sendBatch(batchPayload);
-    for (const r of recipients) {
-        await logEmail({ type: 'accounting-handover', recipient: r.email,
-            subject: `Счетоводно предаване #${handoverId}` });
+    for (let i = 0; i < recipients.length; i++) {
+        if (results[i]?.success) await logEmail({ type: 'accounting-handover', recipient: recipients[i].email,
+            messageId: results[i].id, subject: `Счетоводно предаване #${handoverId}` });
     }
-    return { success: true, messageIds: results.map(r => r.id) };
+    return { success: results.every(r => r.success), messageIds: results.map(r => r.id) };
 }
 
 /**
@@ -1532,7 +1575,7 @@ async function sendPaymentReminder(d) {
         : `⏰ Остават ${daysUntilDue} дни до крайния срок`;
 
     const amountStr = inv.amount_total
-        ? `${parseFloat(inv.amount_total).toLocaleString('bg-BG',{minimumFractionDigits:2})} ${inv.currency || 'BGN'}`
+        ? `${parseFloat(inv.amount_total).toLocaleString('bg-BG',{minimumFractionDigits:2})} ${escapeHtml(inv.currency || 'BGN')}`
         : '—';
 
     const body = `
@@ -1552,12 +1595,12 @@ async function sendPaymentReminder(d) {
 
       ${sectionHead('Детайли на фактурата')}
       ${kvTable([
-          ['Номер на фактура', `<strong>${inv.invoice_number || '—'}</strong>`],
+          ['Номер на фактура', `<strong>${escapeHtml(inv.invoice_number || '—')}</strong>`],
           ['Тип документ',     inv.document_type === 'proforma_invoice' ? 'Проформа фактура' : 'Фактура'],
           ['Сума за плащане',  `<strong style="font-size:17px;color:${isOverdue?'#dc2626':B.navyMid}">${amountStr}</strong>`],
           ['Дата на фактура',  fmt(inv.invoice_date)],
           ['Краен срок',       `<strong style="color:${isOverdue?'#dc2626':'inherit'}">${fmt(inv.due_date)}</strong>`],
-          inv.supplier_name ? ['Доставчик', inv.supplier_name] : null,
+          inv.supplier_name ? ['Доставчик', escapeHtml(inv.supplier_name)] : null,
       ])}
 
       ${btn('💳 Маркирай като платена', `${B.URL}/app.html#accounting/invoices`, isOverdue ? '#dc2626' : B.navyMid)}
@@ -1578,10 +1621,10 @@ async function sendPaymentReminder(d) {
     }));
 
     const results = await sendBatch(batchPayload);
-    for (const r of recipients) {
-        await logEmail({ type: 'payment-reminder', recipient: r.email, subject });
+    for (let i = 0; i < recipients.length; i++) {
+        if (results[i]?.success) await logEmail({ type: 'payment-reminder', recipient: recipients[i].email, messageId: results[i].id, subject });
     }
-    return { success: true, messageIds: results.map(r => r.id) };
+    return { success: results.every(r => r.success), messageIds: results.map(r => r.id) };
 }
 
 

@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../config/database');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, authorizeRoles } = require('../middleware/auth');
 const nodemailer = require('nodemailer');
 
 // Email transporter (configure in .env)
@@ -285,7 +285,7 @@ router.post('/', authenticateToken, async (req, res) => {
 });
 
 // ========== PUT: Approve request ==========
-router.put('/:id/approve', authenticateToken, async (req, res) => {
+router.put('/:id/approve', authenticateToken, authorizeRoles('admin', 'manager'), async (req, res) => {
     const connection = await pool.getConnection();
     
     try {
@@ -293,15 +293,36 @@ router.put('/:id/approve', authenticateToken, async (req, res) => {
         const { comments } = req.body;
         
         // Verify approval exists and is pending
+        // Admins may act on any approval. Managers only on approvals routed to
+        // them, or on ones left unassigned in the shared pool.
         const [approvals] = await connection.query(
-            'SELECT * FROM approvals WHERE id = ? AND status = "pending"',
-            [id]
+            `SELECT * FROM approvals
+              WHERE id = ?
+                AND status = 'pending'
+                AND (? = 'admin' OR assigned_to IS NULL OR assigned_to = ?)`,
+            [id, req.user.role, req.user.id]
         );
         
         if (approvals.length === 0) {
-            return res.status(404).json({
+            const [exists] = await connection.query(
+                'SELECT status, assigned_to FROM approvals WHERE id = ?',
+                [id]
+            );
+            if (exists.length === 0) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Approval not found'
+                });
+            }
+            if (exists[0].status !== 'pending') {
+                return res.status(409).json({
+                    success: false,
+                    message: `This request has already been ${exists[0].status}`
+                });
+            }
+            return res.status(403).json({
                 success: false,
-                message: 'Pending approval not found'
+                message: 'This approval is assigned to another manager'
             });
         }
         
@@ -310,14 +331,23 @@ router.put('/:id/approve', authenticateToken, async (req, res) => {
         await connection.beginTransaction();
         
         // Update approval
-        await connection.query(`
+        const [decision] = await connection.query(`
             UPDATE approvals 
             SET status = 'approved', 
                 approved_by = ?, 
                 approved_at = NOW(),
                 comments = CONCAT(COALESCE(comments, ''), '\n\nApproved: ', ?)
-            WHERE id = ?
+            WHERE id = ? AND status = 'pending'
         `, [req.user.id, comments || '', id]);
+        
+        // Another worker may have decided this between our check and here.
+        if (decision.affectedRows !== 1) {
+            await connection.rollback();
+            return res.status(409).json({
+                success: false,
+                message: 'This request was just decided by someone else'
+            });
+        }
         
         // Log to history
         await connection.query(`
@@ -365,7 +395,7 @@ router.put('/:id/approve', authenticateToken, async (req, res) => {
 });
 
 // ========== PUT: Reject request ==========
-router.put('/:id/reject', authenticateToken, async (req, res) => {
+router.put('/:id/reject', authenticateToken, authorizeRoles('admin', 'manager'), async (req, res) => {
     const connection = await pool.getConnection();
     
     try {
@@ -380,15 +410,36 @@ router.put('/:id/reject', authenticateToken, async (req, res) => {
         }
         
         // Verify approval exists and is pending
+        // Admins may act on any approval. Managers only on approvals routed to
+        // them, or on ones left unassigned in the shared pool.
         const [approvals] = await connection.query(
-            'SELECT * FROM approvals WHERE id = ? AND status = "pending"',
-            [id]
+            `SELECT * FROM approvals
+              WHERE id = ?
+                AND status = 'pending'
+                AND (? = 'admin' OR assigned_to IS NULL OR assigned_to = ?)`,
+            [id, req.user.role, req.user.id]
         );
         
         if (approvals.length === 0) {
-            return res.status(404).json({
+            const [exists] = await connection.query(
+                'SELECT status, assigned_to FROM approvals WHERE id = ?',
+                [id]
+            );
+            if (exists.length === 0) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Approval not found'
+                });
+            }
+            if (exists[0].status !== 'pending') {
+                return res.status(409).json({
+                    success: false,
+                    message: `This request has already been ${exists[0].status}`
+                });
+            }
+            return res.status(403).json({
                 success: false,
-                message: 'Pending approval not found'
+                message: 'This approval is assigned to another manager'
             });
         }
         
@@ -397,14 +448,23 @@ router.put('/:id/reject', authenticateToken, async (req, res) => {
         await connection.beginTransaction();
         
         // Update approval
-        await connection.query(`
+        const [decision] = await connection.query(`
             UPDATE approvals 
             SET status = 'rejected', 
                 approved_by = ?, 
                 approved_at = NOW(),
                 rejection_reason = ?
-            WHERE id = ?
+            WHERE id = ? AND status = 'pending'
         `, [req.user.id, rejection_reason, id]);
+        
+        // Another worker may have decided this between our check and here.
+        if (decision.affectedRows !== 1) {
+            await connection.rollback();
+            return res.status(409).json({
+                success: false,
+                message: 'This request was just decided by someone else'
+            });
+        }
         
         // Log to history
         await connection.query(`

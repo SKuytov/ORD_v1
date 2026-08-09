@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const db = require('../config/database');
 const emailService = require('../utils/emailService');
+const { getOrderScope, getManagedBuildingCodes } = require('../middleware/authz');
 
 // ─── Helper: check if user is a building manager and return their building code ──
 async function getBuildingManagerInfo(userId) {
@@ -44,10 +45,12 @@ exports.createOrder = async (req, res) => {
         await connection.beginTransaction();
 
         const {
-            building, itemDescription, partNumber, category,
-            quantity, dateNeeded, priority, notes,
-            requester, requesterEmail, costCenterId
+            itemDescription, partNumber, category,
+            quantity, dateNeeded, priority, notes, costCenterId
         } = req.body;
+        const building = req.user.building;
+        const requester = req.user.name;
+        const requesterEmail = req.user.email;
 
         // Input length validation
         const validationErrors = [];
@@ -63,15 +66,34 @@ exports.createOrder = async (req, res) => {
             validationErrors.push('Notes must be 2000 characters or fewer.');
         }
         if (!building || typeof building !== 'string' || building.trim().length === 0) {
-            validationErrors.push('Building is required.');
+            validationErrors.push('Your account is not assigned to a building.');
         }
         if (!quantity || isNaN(parseInt(quantity)) || parseInt(quantity) < 1) {
             validationErrors.push('Quantity must be a positive number.');
         }
         if (validationErrors.length > 0) {
             await connection.rollback();
-            connection.release();
             return res.status(400).json({ success: false, message: validationErrors.join(' ') });
+        }
+
+        const [[activeBuilding]] = await connection.query(
+            'SELECT code FROM buildings WHERE code = ? AND active = 1',
+            [building]
+        );
+        if (!activeBuilding) {
+            await connection.rollback();
+            return res.status(403).json({ success: false, message: 'Your account is not assigned to an active building.' });
+        }
+
+        if (costCenterId) {
+            const [[costCenter]] = await connection.query(
+                'SELECT id FROM cost_centers WHERE id = ? AND building_code = ? AND active = 1',
+                [costCenterId, building]
+            );
+            if (!costCenter) {
+                await connection.rollback();
+                return res.status(403).json({ success: false, message: 'Cost center does not belong to your building.' });
+            }
         }
 
         const [result] = await connection.query(
@@ -214,18 +236,12 @@ exports.getOrders = async (req, res) => {
         const conditions = [];
         const params = [];
 
-        // Role-based filtering
-        if (req.user.role === 'requester') {
-            // ⭐ Building managers see ALL orders from their building
-            // Regular requesters see only their own orders
-            if (req.user.isBuildingManager && req.user.managedBuilding) {
-                conditions.push('o.building = ?');
-                params.push(req.user.managedBuilding);
-            } else {
-                conditions.push('o.requester_id = ?');
-                params.push(req.user.id);
-            }
+        const scope = await getOrderScope(req.user, 'o');
+        if (!scope.allowed) {
+            return res.status(403).json({ success: false, message: 'Access denied' });
         }
+        conditions.push(scope.clause);
+        params.push(...scope.params);
 
         // Always exclude templates from the order list
         conditions.push('(o.is_template IS NULL OR o.is_template = 0)');
@@ -348,10 +364,7 @@ exports.getOrderById = async (req, res) => {
     try {
         const { id } = req.params;
 
-        // SECURITY: requesters can only see orders from their own building
-        // Building managers (who have role=requester) can see all orders in their building
         const isRequester = req.user.role === 'requester';
-        const isBuildingManager = isRequester && req.user.isBuildingManager && req.user.managedBuilding;
 
         // Requester view: strip sensitive supplier/price fields at DB level
         const selectFields = isRequester
@@ -380,23 +393,9 @@ exports.getOrderById = async (req, res) => {
                LEFT JOIN cost_centers cc ON o.cost_center_id = cc.id
                LEFT JOIN users u_assigned ON o.assigned_to_user_id = u_assigned.id`;
 
-        // Building managers can see any order in their building
-        // Regular requesters can only see orders from their own building
-        let whereClause, queryParams;
-        if (isBuildingManager) {
-            whereClause = `WHERE o.id = ? AND o.building = ?`;
-            queryParams = [id, req.user.managedBuilding];
-        } else if (isRequester) {
-            whereClause = `WHERE o.id = ? AND o.building = ?`;
-            queryParams = [id, req.user.building];
-        } else {
-            whereClause = `WHERE o.id = ?`;
-            queryParams = [id];
-        }
-
         const [orders] = await db.query(
-            `SELECT ${selectFields} FROM orders o ${joins} ${whereClause}`,
-            queryParams
+            `SELECT ${selectFields} FROM orders o ${joins} WHERE o.id = ?`,
+            [id]
         );
 
         if (orders.length === 0) {
@@ -704,8 +703,8 @@ exports.cancelOrderByManager = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Cancellation reason is required.' });
         }
 
-        // Only building managers can call this endpoint
-        if (!req.user.isBuildingManager || !req.user.managedBuilding) {
+        const managedBuildings = await getManagedBuildingCodes(req.user.id);
+        if (!managedBuildings.length) {
             await connection.rollback();
             return res.status(403).json({ success: false, message: 'Access denied. Building manager only.' });
         }
@@ -722,8 +721,7 @@ exports.cancelOrderByManager = async (req, res) => {
 
         const order = orders[0];
 
-        // Verify the order belongs to the manager's building
-        if (order.building !== req.user.managedBuilding) {
+        if (!managedBuildings.includes(order.building)) {
             await connection.rollback();
             return res.status(403).json({ success: false, message: 'You can only cancel orders from your own building.' });
         }

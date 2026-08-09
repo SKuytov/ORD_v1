@@ -1,5 +1,6 @@
 // backend/middleware/auth.js
 const jwt = require('jsonwebtoken');
+const db = require('../config/database');
 
 const authenticateToken = (req, res, next) => {
     // 1. Try Authorization header (standard)
@@ -18,9 +19,9 @@ const authenticateToken = (req, res, next) => {
     // Document viewing uses fetchDocAsDataUrl() with Authorization header instead.
 
     if (!token) {
-        return res.status(401).json({ 
-            success: false, 
-            message: 'Access token required' 
+        return res.status(401).json({
+            success: false,
+            message: 'Access token required'
         });
     }
 
@@ -28,23 +29,52 @@ const authenticateToken = (req, res, next) => {
         algorithms: ['HS256'],
         clockTolerance: 0,
         ignoreExpiration: false
-    }, (err, decoded) => {
+    }, async (err, decoded) => {
         if (err) {
             if (err.name === 'TokenExpiredError') {
-                return res.status(401).json({ 
-                    success: false, 
+                return res.status(401).json({
+                    success: false,
                     message: 'Token expired',
                     code: 'TOKEN_EXPIRED'
                 });
             }
-            return res.status(403).json({ 
-                success: false, 
-                message: 'Invalid or expired token' 
+            return res.status(401).json({
+                success: false,
+                message: 'Invalid or expired token'
             });
         }
-        req.user = decoded;
-        next();
+        try {
+            // Authorization-critical fields come from the current database row, not
+            // a potentially stale JWT claim. This also blocks deactivated users.
+            const [[user]] = await db.query(
+                `SELECT id, username, name, email, role, building
+                 FROM users WHERE id = ? AND active = 1`,
+                [decoded.id]
+            );
+            if (!user) {
+                return res.status(401).json({
+                    success: false,
+                    message: 'User account is inactive or unavailable'
+                });
+            }
+            req.user = { ...decoded, ...user };
+            next();
+        } catch (dbError) {
+            console.error('Authentication user lookup failed:', dbError.message);
+            return res.status(500).json({ success: false, message: 'Authentication failed' });
+        }
     });
+};
+
+const authenticateHeaderToken = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader || !/^Bearer\s+\S+$/i.test(authHeader)) {
+        return res.status(401).json({
+            success: false,
+            message: 'Authorization header required'
+        });
+    }
+    return authenticateToken(req, res, next);
 };
 
 const authorizeRoles = (...roles) => {
@@ -59,4 +89,4 @@ const authorizeRoles = (...roles) => {
     };
 };
 
-module.exports = { authenticateToken, authorizeRoles };
+module.exports = { authenticateToken, authenticateHeaderToken, authorizeRoles };

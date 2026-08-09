@@ -8,6 +8,11 @@ const descriptionCorrectionController  = require('../controllers/descriptionCorr
 const { authenticateToken, authorizeRoles } = require('../middleware/auth');
 const { enrichBuildingManager } = require('../middleware/buildingManagerMiddleware');
 const upload = require('../middleware/upload');
+const {
+    requireOrderAccess,
+    requireBodyOrderAccess,
+    getManagedBuildingCodes
+} = require('../middleware/authz');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // IMPORTANT: ALL static/named routes MUST appear before /:id routes
@@ -32,11 +37,12 @@ router.get('/stats/suggestions',
 router.post('/supplier-selection-log',
     authenticateToken,
     authorizeRoles('admin', 'procurement'),
+    requireBodyOrderAccess('orderId'),
     supplierSuggestionsController.logSupplierSelection
 );
 
 // ⭐ POST /api/orders/auto-suggest-suppliers — AI supplier suggestions for multiple orders at once
-router.post('/auto-suggest-suppliers', authenticateToken, authorizeRoles('admin', 'procurement'), async (req, res) => {
+router.post('/auto-suggest-suppliers', authenticateToken, authorizeRoles('admin', 'procurement'), requireBodyOrderAccess('order_ids'), async (req, res) => {
     try {
         const { order_ids } = req.body;
         if (!order_ids || !order_ids.length) return res.status(400).json({ success: false, message: 'order_ids required' });
@@ -61,7 +67,7 @@ router.post('/auto-suggest-suppliers', authenticateToken, authorizeRoles('admin'
 });
 
 // ⭐ POST /api/orders/bulk-status — update status for multiple orders at once
-router.post('/bulk-status', authenticateToken, authorizeRoles('admin', 'procurement'), async (req, res) => {
+router.post('/bulk-status', authenticateToken, authorizeRoles('admin', 'procurement'), requireBodyOrderAccess('order_ids'), async (req, res) => {
     try {
         const { order_ids, status } = req.body;
         if (!order_ids || !order_ids.length || !status) {
@@ -196,13 +202,24 @@ router.get('/templates', authenticateToken, async (req, res) => {
     try {
         const building = req.user.building;
         const role = req.user.role;
-        // Admins/procurement see all templates; requesters see their building's templates
+        // Admins/procurement see all templates; managers and requesters are building-scoped.
         let rows;
-        if (role === 'admin' || role === 'procurement' || role === 'manager') {
+        if (role === 'admin' || role === 'procurement') {
             [rows] = await db.query(
                 `SELECT id, template_name, item_description, part_number, category, quantity, priority, notes, building
                  FROM orders WHERE is_template = 1 ORDER BY id DESC LIMIT 50`
             );
+        } else if (role === 'manager') {
+            const managedBuildings = await getManagedBuildingCodes(req.user.id);
+            if (!managedBuildings.length) {
+                rows = [];
+            } else {
+                [rows] = await db.query(
+                    `SELECT id, template_name, item_description, part_number, category, quantity, priority, notes, building
+                     FROM orders WHERE is_template = 1 AND building IN (?) ORDER BY id DESC LIMIT 50`,
+                    [managedBuildings]
+                );
+            }
         } else {
             [rows] = await db.query(
                 `SELECT id, template_name, item_description, part_number, category, quantity, priority, notes, building
@@ -250,7 +267,7 @@ router.post('/templates', authenticateToken, async (req, res) => {
 });
 
 // DELETE /api/orders/templates/:id
-router.delete('/templates/:id', authenticateToken, async (req, res) => {
+router.delete('/templates/:id', authenticateToken, requireOrderAccess(), async (req, res) => {
     const db = require('../config/database');
     try {
         const [rows] = await db.query('SELECT requester_id FROM orders WHERE id = ? AND is_template = 1', [req.params.id]);
@@ -292,7 +309,7 @@ router.get('/building-manager-status',
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/orders/:id/cancel — requester self-cancellation with audit trail
 // ─────────────────────────────────────────────────────────────────────────────
-router.post('/:id/cancel', authenticateToken, async (req, res) => {
+router.post('/:id/cancel', authenticateToken, requireOrderAccess(), authorizeRoles('admin', 'procurement', 'requester', 'manager'), async (req, res) => {
     const db = require('../config/database');
     try {
         const orderId = parseInt(req.params.id, 10);
@@ -303,23 +320,9 @@ router.post('/:id/cancel', authenticateToken, async (req, res) => {
             return res.status(400).json({ success: false, message: 'Cancellation reason is required' });
         }
 
-        // Fetch the order — requester isolation enforced
-        const whereClause = (user.role === 'requester')
-            ? 'WHERE id = ? AND building = ? AND requester_id = ?'
-            : 'WHERE id = ?';
-        const params = (user.role === 'requester')
-            ? [orderId, user.building, user.id]
-            : [orderId];
-
-        const [orders] = await db.query(`SELECT id, status, item_description, building, quantity FROM orders ${whereClause}`, params);
-        if (!orders.length) {
-            return res.status(404).json({ success: false, message: 'Order not found or access denied' });
-        }
-
-        const order = orders[0];
+        const order = req.order;
         const CANCELLABLE_STATUSES = ['New', 'Pending', 'Quote Requested'];
-
-        if (!CANCELLABLE_STATUSES.includes(order.status)) {
+        if (user.role === 'requester' && !CANCELLABLE_STATUSES.includes(order.status)) {
             return res.status(400).json({
                 success: false,
                 message: `Cannot cancel an order with status "${order.status}". Only New, Pending or Quote Requested orders can be cancelled by the requester.`
@@ -376,6 +379,8 @@ router.post('/:id/cancel', authenticateToken, async (req, res) => {
 router.post('/:id/cancel-by-manager',
     authenticateToken,
     enrichBuildingManager,
+    requireOrderAccess(),
+    authorizeRoles('requester', 'manager'),
     orderController.cancelOrderByManager
 );
 
@@ -402,6 +407,7 @@ router.get('/',
 router.get('/:id/suggested-suppliers',
     authenticateToken,
     authorizeRoles('admin', 'procurement'),
+    requireOrderAccess(),
     supplierSuggestionsController.getSuggestedSuppliers
 );
 
@@ -409,6 +415,7 @@ router.get('/:id/suggested-suppliers',
 router.post('/:id/correct-description',
     authenticateToken,
     authorizeRoles('admin', 'procurement'),
+    requireOrderAccess(),
     descriptionCorrectionController.correctDescription
 );
 
@@ -417,6 +424,7 @@ router.post('/:id/correct-description',
 router.get('/:id',
     authenticateToken,
     enrichBuildingManager,
+    requireOrderAccess(),
     orderController.getOrderById
 );
 
@@ -424,6 +432,7 @@ router.get('/:id',
 router.put('/:id',
     authenticateToken,
     authorizeRoles('admin', 'procurement'),
+    requireOrderAccess(),
     orderController.updateOrder
 );
 
@@ -431,6 +440,7 @@ router.put('/:id',
 router.delete('/:id',
     authenticateToken,
     authorizeRoles('admin'),
+    requireOrderAccess(),
     orderController.deleteOrder
 );
 

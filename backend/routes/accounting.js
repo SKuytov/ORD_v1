@@ -8,6 +8,14 @@ const multer    = require('multer');
 const path      = require('path');
 const fs        = require('fs').promises;
 const { authenticateToken, authorizeRoles } = require('../middleware/auth');
+const {
+    requireDocumentAccess,
+    requireInvoiceMetaAccess,
+    requireHandoverAccess,
+    requireBodyDocumentAccess,
+    requireOptionalBodyDocumentAccess,
+    requireOptionalAccountingRecipient
+} = require('../middleware/authz');
 const ctrl      = require('../controllers/accountingController');
 
 // ── Multer config for payment slip uploads ───────────────────────────────────
@@ -36,22 +44,28 @@ const uploadSlip = multer({
 router.use(authenticateToken);
 
 // ── Dashboard (accounting users + admin/procurement) ─────────────────────────
-router.get('/dashboard', ctrl.getDashboard);
+router.get('/dashboard', authorizeRoles('admin', 'accounting', 'procurement'), ctrl.getDashboard);
 
 // ── Invoice Metadata (procurement/admin can edit; accounting can read) ────────
-router.get('/invoice-meta/:documentId',  ctrl.getInvoiceMeta);
+router.get('/invoice-meta/:documentId',
+    authorizeRoles('admin', 'accounting', 'procurement'),
+    requireDocumentAccess(),
+    ctrl.getInvoiceMeta
+);
 router.post('/invoice-meta/:documentId',
-    authorizeRoles('admin', 'procurement', 'manager'),
+    authorizeRoles('admin', 'accounting'),
+    requireDocumentAccess(),
     ctrl.upsertInvoiceMeta
 );
 
 // ── Invoice List ──────────────────────────────────────────────────────────────
-router.get('/invoices', ctrl.listInvoices);
+router.get('/invoices', authorizeRoles('admin', 'accounting', 'procurement'), ctrl.listInvoices);
 
 // ── Mark Invoice Paid ─────────────────────────────────────────────────────────
 // Accounting can mark paid; so can admin
 router.post('/invoices/:invoiceMetaId/pay',
     authorizeRoles('accounting', 'admin'),
+    requireInvoiceMetaAccess(),
     uploadSlip.single('payment_slip'),
     async (req, res, next) => {
         // If a payment slip file was uploaded, store it as a document first
@@ -89,25 +103,37 @@ router.post('/invoices/:invoiceMetaId/pay',
         }
         next();
     },
+    requireOptionalBodyDocumentAccess('payment_slip_doc_id'),
     ctrl.markInvoicePaid
 );
 
 // ── Handovers ─────────────────────────────────────────────────────────────────
-router.get('/handovers',          ctrl.listHandovers);
-router.get('/handovers/:id',      ctrl.getHandover);
+router.get('/handovers', authorizeRoles('admin', 'accounting', 'procurement'), ctrl.listHandovers);
+router.get('/handovers/:id',
+    authorizeRoles('admin', 'accounting', 'procurement'),
+    requireHandoverAccess(),
+    ctrl.getHandover
+);
 router.post('/handover',
-    authorizeRoles('admin', 'procurement', 'manager'),
+    authorizeRoles('admin', 'accounting'),
+    requireBodyDocumentAccess('documentIds'),
+    requireOptionalAccountingRecipient(),
     ctrl.createHandover
 );
 router.post('/handovers/:id/acknowledge',
     authorizeRoles('accounting', 'admin'),
+    requireHandoverAccess(),
     ctrl.acknowledgeHandover
 );
-router.get('/handovers/:id/download-zip', ctrl.downloadHandoverZip);
+router.get('/handovers/:id/download-zip',
+    authorizeRoles('admin', 'accounting', 'procurement'),
+    requireHandoverAccess(),
+    ctrl.downloadHandoverZip
+);
 
 // ── Audit Log ─────────────────────────────────────────────────────────────────
 router.get('/audit-log',
-    authorizeRoles('admin', 'accounting', 'manager'),
+    authorizeRoles('admin', 'accounting', 'procurement'),
     ctrl.getAuditLog
 );
 
@@ -119,7 +145,7 @@ router.post('/send-reminders',
 
 // ── Accounting Users (for recipient picker in proforma send) ──────────────
 router.get('/users',
-    authorizeRoles('admin', 'procurement', 'manager', 'accounting'),
+    authorizeRoles('admin', 'procurement', 'accounting'),
     ctrl.getAccountingUsers
 );
 

@@ -1981,6 +1981,9 @@ function updateSelectionUi() {
     const count = selectedOrderIds.size;
     if (count > 0) { orderActionsBar.hidden = false; selectedCount.textContent = `${count} selected`; }
     else { orderActionsBar.hidden = true; }
+    // Rebuild the bulk status dropdown so it only lists moves every selected
+    // order can actually make. Defined in partpulse-features.js.
+    if (typeof ppRefreshBulkStatusOptions === 'function') ppRefreshBulkStatusOptions();
 }
 
 async function openOrderDetail(orderId) {
@@ -4590,6 +4593,7 @@ function renderAssignedSupplierGroup(group) {
           <button class="sg-bulk-status-btn btn btn-sm"
             data-supplier-name="${escapeHtml(group.supplier_name)}"
             data-order-ids="${group.orders.map(o => o.id).join(',')}"
+            data-order-statuses="${[...new Set(group.orders.map(o => o.status).filter(Boolean))].join('|')}"
             style="background:#10b981;color:#fff;border:none;border-radius:7px;padding:6px 14px;
                    font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap;">
             📋 Актуализирай статус
@@ -4788,13 +4792,65 @@ function wireWorkbenchEvents(container) {
             e.stopPropagation();
             const { supplierName, orderIds } = btn.dataset;
             const ids = orderIds.split(',').map(Number);
-            const newStatus = prompt(
-                `Актуализирай статуса на ${ids.length} заявки от "${supplierName}":\n\nВъведи нов статус:\nNew / Pending / Quote Requested / Quote Received / Approved / Ordered / Delivered`
+            // This used to be a free-text prompt suggesting New / Approved /
+            // Ordered / Delivered — none of which the backend would accept from
+            // the statuses these groups are usually in, so it always failed.
+            // Ask the server which moves are shared by the whole group instead.
+            let lifecycle = null;
+            try {
+                const lr = await apiGet('/orders/status-transitions');
+                if (lr && lr.success) lifecycle = lr;
+            } catch (_) { /* fall through to the message below */ }
+
+            if (!lifecycle) {
+                alert('Не може да се заредят допустимите статуси. Опитай отново.');
+                return;
+            }
+
+            // Read the statuses off the button rather than ordersState: the
+            // supplier groups come from /orders/by-supplier, which is a
+            // different fetch, so those orders may not be in ordersState at all.
+            const groupStatuses = (btn.dataset.orderStatuses || '')
+                .split('|').filter(Boolean);
+            const allowed = groupStatuses.length
+                ? groupStatuses.map(st => lifecycle.transitions[st] || [])
+                               .reduce((acc, list) => acc.filter(x => list.includes(x)))
+                : [];
+
+            if (!allowed.length) {
+                alert(
+                    `Няма общ следващ статус за тези ${ids.length} заявки` +
+                    (groupStatuses.length ? ` (${groupStatuses.join(', ')}).` : '.')
+                );
+                return;
+            }
+
+            const choice = prompt(
+                `Актуализирай статуса на ${ids.length} заявки от "${supplierName}":\n\n` +
+                `Текущ статус: ${groupStatuses.join(', ')}\n\n` +
+                `Въведи номер:\n` +
+                allowed.map((st, n) => `${n + 1}. ${st}`).join('\n')
             );
-            if (!newStatus || !newStatus.trim()) return;
+            if (choice === null || !choice.trim()) return;
+
+            const picked = allowed[parseInt(choice.trim(), 10) - 1] ||
+                           allowed.find(st => st.toLowerCase() === choice.trim().toLowerCase());
+            if (!picked) { alert('Невалиден избор.'); return; }
+
+            let reopenReason = null;
+            if (groupStatuses.some(st => (lifecycle.reason_required_from || []).includes(st))) {
+                reopenReason = prompt('Причина за повторно отваряне (мин. 5 знака) — записва се в одит дневника:');
+                if (reopenReason === null) return;
+                if (reopenReason.trim().length < 5) { alert('Нужна е причина от поне 5 знака.'); return; }
+            }
+
+            const newStatus = picked;
             btn.disabled = true; btn.textContent = '…';
             try {
-                const res = await apiPost('/orders/bulk-status', { order_ids: ids, status: newStatus.trim() });
+                const res = await apiPost('/orders/bulk-status', {
+                    order_ids: ids, status: newStatus,
+                    ...(reopenReason ? { reason: reopenReason.trim() } : {})
+                });
                 if (res.success) {
                     btn.textContent = `✓ ${res.updated} актуализирани`;
                     btn.style.background = '#16a34a';

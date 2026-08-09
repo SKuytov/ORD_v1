@@ -2,6 +2,7 @@
 // PartPulse Orders v3.0 - Procurement Lifecycle Controller
 // Handles: quote responses, purchase orders, invoices, accounting handoff
 const db = require('../config/database');
+const { applyStatusChangeToMany } = require('../utils/statusChange');
 
 function managerOrderScope(req, alias = 'o') {
     if (req.user.role !== 'manager') return { clause: '', params: [] };
@@ -107,10 +108,10 @@ exports.recordQuoteResponse = async (req, res) => {
         `, [quoteId]);
 
         // Update linked orders to Quote Received
-        await connection.query(`
-            UPDATE orders SET status = 'Quote Received'
-            WHERE quote_ref = ? AND status = 'Quote Requested'
-        `, [quoteId]);
+        const [linkedToQuote] = await connection.query(
+            'SELECT id FROM orders WHERE quote_ref = ?', [quoteId]
+        );
+        await applyStatusChangeToMany(connection, linkedToQuote.map(o => o.id), 'Quote Received', req.user);
 
         await connection.commit();
         res.status(201).json({ success: true, message: 'Response recorded', responseId: result.insertId });
@@ -237,6 +238,7 @@ exports.createPO = async (req, res) => {
         const poId = result.insertId;
 
         // Insert PO items
+        const orderedIds = [];
         if (items && items.length > 0) {
             for (const item of items) {
                 const itemTotal = (item.unit_price || 0) * (item.quantity || 0);
@@ -248,12 +250,14 @@ exports.createPO = async (req, res) => {
                     item.item_description, item.part_number || null,
                     item.quantity, item.unit_price || null, itemTotal, currency || 'EUR']);
                 
-                // Update order: link PO, set status to Ordered
+                // Link the PO here; the move to 'Ordered' is validated below
+                // once every link exists, so the rules can see the PO.
                 if (item.order_id) {
                     await connection.query(
-                        'UPDATE orders SET po_id = ?, po_number = ?, status = ? WHERE id = ?',
-                        [poId, poNumber, 'Ordered', item.order_id]
+                        'UPDATE orders SET po_id = ?, po_number = ? WHERE id = ?',
+                        [poId, poNumber, item.order_id]
                     );
+                    orderedIds.push(item.order_id);
                 }
             }
         } else if (quote_id) {
@@ -275,9 +279,10 @@ exports.createPO = async (req, res) => {
                     qi.quantity, qi.unit_price || null, itemTotal, currency || 'EUR']);
                 
                 await connection.query(
-                    'UPDATE orders SET po_id = ?, po_number = ?, status = ? WHERE id = ?',
-                    [poId, poNumber, 'Ordered', qi.order_id]
+                    'UPDATE orders SET po_id = ?, po_number = ? WHERE id = ?',
+                    [poId, poNumber, qi.order_id]
                 );
+                orderedIds.push(qi.order_id);
             }
         }
 
@@ -286,8 +291,23 @@ exports.createPO = async (req, res) => {
             await connection.query('UPDATE quotes SET status = ? WHERE id = ?', ['Approved', quote_id]);
         }
 
+        // Creating a PO used to force every linked order straight to 'Ordered'
+        // with no check at all, so a cancelled or already-delivered order picked
+        // up by the same PO would be pulled back into the flow. Orders that
+        // cannot legally move keep their status and are named in the response.
+        const poOutcome = await applyStatusChangeToMany(
+            connection, [...new Set(orderedIds)], 'Ordered', req.user,
+            { contextOverrides: { hasPurchaseOrder: true } }
+        );
+
         await connection.commit();
-        res.status(201).json({ success: true, poId, poNumber, message: 'Purchase order created' });
+        res.status(201).json({
+            success: true, poId, poNumber,
+            message: poOutcome.skipped.length
+                ? `Purchase order created. ${poOutcome.skipped.length} linked order(s) kept their status.`
+                : 'Purchase order created',
+            ...(poOutcome.skipped.length ? { skipped: poOutcome.skipped } : {})
+        });
     } catch (err) {
         await connection.rollback();
         console.error('createPO error:', err);
@@ -391,24 +411,45 @@ exports.updatePO = async (req, res) => {
         }
 
         // If delivered, update linked orders
-        if (status === 'delivered' && actual_delivery_date) {
-            await connection.query(`
-                UPDATE orders SET status = 'Delivered', 
-                    delivery_confirmed_at = NOW(), delivery_confirmed_by = ?
-                WHERE po_id = ? AND status IN ('Ordered', 'In Transit', 'Partially Delivered')
-            `, [req.user.id, id]);
-        } else if (status === 'partially_delivered') {
-            await connection.query(`
-                UPDATE orders SET status = 'Partially Delivered' WHERE po_id = ?
-                AND status IN ('Ordered', 'In Transit')
-            `, [id]);
-        } else if (status === 'sent') {
-            await connection.query(`
-                UPDATE orders SET status = 'In Transit' WHERE po_id = ? AND status = 'Ordered'
-            `, [id]);
+        // These three used to be sweeping UPDATEs whose WHERE clause was the only
+        // guard, so the lifecycle rules never saw them. Each order is now checked
+        // individually; any that cannot legally move is left as it is and named in
+        // the response rather than being dragged along silently.
+        let skipped = [];
+        if (['delivered', 'partially_delivered', 'sent'].includes(status)) {
+            const nextStatus = status === 'delivered'
+                ? 'Delivered'
+                : status === 'partially_delivered' ? 'Partially Delivered' : 'In Transit';
+
+            if (nextStatus !== 'Delivered' || actual_delivery_date) {
+                const [linkedToPo] = await connection.query(
+                    'SELECT id FROM orders WHERE po_id = ?', [id]
+                );
+                const outcome = await applyStatusChangeToMany(
+                    connection, linkedToPo.map(o => o.id), nextStatus, req.user,
+                    // The purchase order was updated moments ago in this same
+                    // transaction, so read the delivery date from the request
+                    // rather than from a stale row.
+                    nextStatus === 'Delivered' || nextStatus === 'Partially Delivered'
+                        ? { contextOverrides: { actualDeliveryDate: actual_delivery_date || null } }
+                        : {}
+                );
+                skipped = outcome.skipped;
+
+                if (nextStatus === 'Delivered' && outcome.updated.length) {
+                    await connection.query(
+                        `UPDATE orders SET delivery_confirmed_at = NOW(), delivery_confirmed_by = ?
+                         WHERE id IN (${outcome.updated.map(() => '?').join(',')})`,
+                        [req.user.id, ...outcome.updated]
+                    );
+                }
+            }
         }
         await connection.commit();
-        res.json({ success: true });
+        res.json({
+            success: true,
+            ...(skipped.length ? { skipped, message: `${skipped.length} linked order(s) kept their status.` } : {})
+        });
     } catch (err) {
         await connection.rollback();
         console.error('updatePO error:', err);

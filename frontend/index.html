@@ -196,15 +196,13 @@
                             </div>
                             <div id="orderActionsBar" class="order-actions-inner" hidden>
                                 <span id="selectedCount" class="badge-muted">0 selected</span>
+                                <!-- Options are filled in by ppRefreshBulkStatusOptions() from
+                                     GET /api/orders/status-transitions, so only moves that are
+                                     legal for the current selection are ever shown. The old
+                                     hard-coded list included "Pending CAD", which is not a valid
+                                     status and always failed. -->
                                 <select id="bulkStatusSelect" class="form-control form-control-sm" style="width:auto;min-width:140px;">
                                     <option value="">Bulk: Change Status</option>
-                                    <option value="Pending">Pending</option>
-                                    <option value="Pending CAD">Pending CAD</option>
-                                    <option value="Ordered">Ordered</option>
-                                    <option value="In Transit">In Transit</option>
-                                    <option value="Delivered">Delivered</option>
-                                    <option value="Cancelled">Cancelled</option>
-                                    <option value="On Hold">On Hold</option>
                                 </select>
                                 <button id="btnBulkStatus" class="btn btn-secondary btn-sm">Apply</button>
                                 <button id="btnSendRfq" class="btn btn-primary btn-sm">📧 Send RFQ to Supplier</button>

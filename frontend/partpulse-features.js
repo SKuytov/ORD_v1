@@ -25,6 +25,79 @@ function ppWaitFor(id, cb, tries = 20) {
 // ============================================================
 //  BULK STATUS UPDATE
 // ============================================================
+// ------------------------------------------------------------
+//  Lifecycle map — the server decides which moves are possible.
+//  The status pickers used to be hard-coded lists that included
+//  options the backend always rejected (including "Pending CAD",
+//  which is not even a valid status), so every attempt failed with
+//  a 409. They now only ever offer moves that can actually succeed.
+// ------------------------------------------------------------
+let ppLifecycleMap = null;
+
+async function ppGetLifecycle() {
+    if (ppLifecycleMap) return ppLifecycleMap;
+    try {
+        const res = await apiGet('/orders/status-transitions');
+        if (res && res.success) ppLifecycleMap = res;
+    } catch (e) {
+        ppLifecycleMap = null;
+    }
+    return ppLifecycleMap;
+}
+
+// Only offer a status if EVERY selected order can legally reach it,
+// otherwise the whole bulk update is rejected and nothing moves.
+function ppCommonNextStatuses(lifecycle, currentStatuses) {
+    if (!lifecycle || !currentStatuses.length) return [];
+    const lists = currentStatuses.map(st => lifecycle.transitions[st] || []);
+    return lists.reduce((acc, list) => acc.filter(x => list.includes(x)));
+}
+
+function ppNeedsReason(lifecycle, currentStatuses) {
+    if (!lifecycle) return false;
+    return currentStatuses.some(st => (lifecycle.reason_required_from || []).includes(st));
+}
+
+// Refresh the bulk dropdown to match the current selection.
+async function ppRefreshBulkStatusOptions() {
+    const sel = document.getElementById('bulkStatusSelect');
+    if (!sel) return;
+    const lifecycle = await ppGetLifecycle();
+    if (!lifecycle) return;
+
+    const orders = (typeof ordersState !== 'undefined' ? ordersState : []) || [];
+    const selected = (typeof selectedOrderIds !== 'undefined' && selectedOrderIds)
+        ? [...selectedOrderIds] : [];
+    const statuses = [...new Set(
+        selected.map(id => (orders.find(o => Number(o.id) === Number(id)) || {}).status)
+                .filter(Boolean)
+    )];
+
+    const allowed = ppCommonNextStatuses(lifecycle, statuses);
+    const previous = sel.value;
+    sel.innerHTML = '';
+
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    if (!statuses.length) {
+        placeholder.textContent = 'Bulk: Change Status';
+    } else if (!allowed.length) {
+        placeholder.textContent = 'No shared next status';
+    } else {
+        placeholder.textContent = 'Bulk: Change Status';
+    }
+    sel.appendChild(placeholder);
+
+    allowed.forEach(st => {
+        const opt = document.createElement('option');
+        opt.value = st;
+        opt.textContent = st;
+        sel.appendChild(opt);
+    });
+    if (allowed.includes(previous)) sel.value = previous;
+    sel.disabled = statuses.length > 0 && allowed.length === 0;
+}
+
 async function applyBulkStatus() {
     const sel = document.getElementById('bulkStatusSelect');
     if (!sel || !sel.value) { showToast('Select a status first', 'warning'); return; }
@@ -32,16 +105,42 @@ async function applyBulkStatus() {
 
     const status = sel.value;
     const ids = [...selectedOrderIds];
-    const confirmed = confirm(`Change ${ids.length} order(s) to "${status}"?`);
-    if (!confirmed) return;
+
+    const lifecycle = await ppGetLifecycle();
+    const orders = (typeof ordersState !== 'undefined' ? ordersState : []) || [];
+    const statuses = [...new Set(
+        ids.map(id => (orders.find(o => Number(o.id) === Number(id)) || {}).status).filter(Boolean)
+    )];
+
+    // Moving out of Delivered or Cancelled is a reopen: admin only, and the
+    // reason is written to the audit log so the change can be explained later.
+    let reason = null;
+    if (ppNeedsReason(lifecycle, statuses)) {
+        reason = prompt(
+            `Reopening ${ids.length} order(s) from ${statuses.join(' / ')} to "${status}".\n\n` +
+            'Give a reason (at least 5 characters) — it is recorded in the audit log:'
+        );
+        if (reason === null) return;
+        if (reason.trim().length < 5) {
+            showToast('A reason of at least 5 characters is required to reopen', 'warning');
+            return;
+        }
+    } else {
+        const confirmed = confirm(`Change ${ids.length} order(s) to "${status}"?`);
+        if (!confirmed) return;
+    }
 
     try {
-        const res = await apiPost('/orders/bulk-status', { order_ids: ids, status });
+        const res = await apiPost('/orders/bulk-status', {
+            order_ids: ids, status, ...(reason ? { reason: reason.trim() } : {})
+        });
         if (res.success) {
             showToast(`${res.updated} orders updated to ${status}`, 'success');
             selectedOrderIds.clear();
             updateSelectionUi();
             loadOrders();
+        } else if (res.requires_reason) {
+            showToast('That change needs a reason — try again and enter one', 'warning');
         } else {
             showToast(res.message || 'Failed to update', 'error');
         }

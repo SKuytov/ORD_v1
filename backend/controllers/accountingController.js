@@ -36,10 +36,11 @@ exports.getInvoiceMeta = async (req, res) => {
 
         // Also fetch linked orders (for cost center + supplier auto-fill)
         const [linked] = await db.query(
-            `SELECT o.id, o.cost_center_code, o.cost_center_name,
+            `SELECT o.id, cc.code AS cost_center_code, cc.name AS cost_center_name,
                     o.building, s.name AS supplier_name
              FROM order_documents_link odl
              INNER JOIN orders o ON odl.order_id = o.id
+             LEFT JOIN cost_centers cc ON cc.id = o.cost_center_id
              LEFT JOIN suppliers s ON o.supplier_id = s.id
              WHERE odl.document_id = ?
              LIMIT 10`,

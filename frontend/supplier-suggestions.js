@@ -128,6 +128,14 @@ function attachSuggestionHandlers(orderId) {
                 });
 
                 if (updateRes.success) {
+                    // ⭐ Log selection for AI learning
+                    apiPost('/orders/supplier-selection-log', {
+                        orderId: orderId,
+                        supplierId: supplierId,
+                        wasFromSuggestion: true,
+                        suggestionRank: rank
+                    }).catch(err => console.warn('[AI] Failed to log supplier selection:', err));
+
                     // Show success message
                     showToast(`✓ Supplier "${supplierName}" assigned successfully!`, 'success');
 

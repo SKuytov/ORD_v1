@@ -1,0 +1,316 @@
+
+/* ── Requester Dashboard Enhancements — Dark Mode ──────────── */
+
+/* KPI Strip */
+.req-kpi-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 0.65rem;
+    margin-bottom: 1rem;
+}
+.req-kpi-card {
+    background: #1e293b;
+    border: 1.5px solid rgba(148, 163, 184, 0.2);
+    border-radius: 12px;
+    padding: 0.85rem 1rem;
+    cursor: pointer;
+    transition: box-shadow 0.18s, border-color 0.18s, transform 0.15s;
+    text-align: center;
+    user-select: none;
+    color: #e5e7eb;
+}
+.req-kpi-card:hover { box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4); transform: translateY(-2px); }
+.req-kpi-card.active { border-color: #e8682a; box-shadow: 0 4px 18px rgba(232, 104, 42, 0.2); }
+.req-kpi-icon { font-size: 1.6rem; line-height: 1; margin-bottom: 4px; }
+.req-kpi-count { font-size: 1.7rem; font-weight: 800; line-height: 1; color: #e8682a; }
+.req-kpi-label { font-size: 0.72rem; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 3px; }
+.req-kpi-card.kpi-late .req-kpi-count { color: #dc2626; }
+.req-kpi-card.kpi-transit .req-kpi-count { color: #7dd3fc; }
+.req-kpi-card.kpi-delivered .req-kpi-count { color: #16a34a; }
+.req-kpi-card.kpi-pending .req-kpi-count { color: #a78bfa; }
+.req-kpi-card.kpi-selected { border-color: #e8682a !important; box-shadow: 0 4px 18px rgba(232, 104, 42, 0.25); }
+
+/* Needs Attention Banner */
+.req-attention-banner {
+    background: rgba(249, 115, 22, 0.1);
+    border: 1.5px solid rgba(249, 115, 22, 0.4);
+    color: #fed7aa;
+    border-radius: 10px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+}
+.req-attention-banner .att-icon { font-size: 1.2rem; flex-shrink: 0; margin-top: 1px; }
+.req-attention-banner .att-body { flex: 1; }
+.req-attention-banner .att-title { font-weight: 700; color: #fb923c; font-size: 0.85rem; margin-bottom: 4px; }
+.req-attention-item {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: rgba(249, 115, 22, 0.15);
+    border: 1px solid rgba(249, 115, 22, 0.3);
+    border-radius: 20px;
+    padding: 2px 10px; margin: 2px 4px 2px 0;
+    font-size: 0.78rem; color: #fdba74; cursor: pointer;
+    transition: background 0.15s;
+}
+.req-attention-item:hover { background: rgba(249, 115, 22, 0.25); }
+
+/* View Mode Toggle */
+.btn-view-mode.active { background: #e8682a; color: #fff; }
+
+/* Card View */
+.req-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+    margin-top: 0.5rem;
+}
+.req-order-card {
+    background: #1e293b;
+    border: 2px solid rgba(148, 163, 184, 0.2);
+    border-radius: 14px;
+    padding: 1rem 1.1rem 0.9rem;
+    cursor: pointer;
+    transition: box-shadow 0.18s, transform 0.15s;
+    position: relative;
+    overflow: hidden;
+    color: #e5e7eb;
+}
+.req-order-card:hover { box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4); transform: translateY(-2px); }
+.req-order-card.card-late { border-color: #dc2626; }
+.req-order-card.card-due7 { border-color: #e8682a; }
+.req-order-card.card-ontrack { border-color: #22c55e; }
+.req-order-card.card-delivered { border-color: #22c55e; background: rgba(22, 163, 74, 0.08); }
+.req-order-card.card-cancelled { border-color: #475569; background: rgba(15, 23, 42, 0.5); opacity: 0.75; }
+.req-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem; }
+.req-card-id { font-size: 0.72rem; color: #64748b; font-weight: 700; }
+.req-card-priority { font-size: 0.7rem; font-weight: 700; padding: 2px 8px; border-radius: 20px; }
+.req-card-title { font-size: 0.92rem; font-weight: 700; color: #f1f5f9; margin-bottom: 0.5rem; line-height: 1.35; }
+.req-card-meta { font-size: 0.75rem; color: #94a3b8; margin-bottom: 0.65rem; }
+
+/* Progress stepper */
+.req-stepper { display: flex; align-items: center; margin: 0.55rem 0; }
+.req-step {
+    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 0.6rem; font-weight: 800; flex-shrink: 0;
+    border: 2px solid #334155; background: #0f172a; color: #64748b;
+}
+.req-step.done { background: #e8682a; border-color: #e8682a; color: #fff; }
+.req-step.active { background: #1e3a5f; border-color: #1e3a5f; color: #fff; box-shadow: 0 0 0 3px rgba(30, 58, 95, 0.3); }
+.req-step-line { flex: 1; height: 2px; background: #334155; margin: 0 2px; }
+.req-step-line.done { background: #e8682a; }
+
+/* Delivery countdown */
+.req-countdown { font-size: 0.78rem; font-weight: 700; padding: 3px 10px; border-radius: 20px; display: inline-block; }
+.req-countdown.cnt-late { background: rgba(220, 38, 38, 0.15); color: #fca5a5; }
+.req-countdown.cnt-due7 { background: rgba(234, 88, 12, 0.15); color: #fb923c; }
+.req-countdown.cnt-due14 { background: rgba(202, 138, 4, 0.15); color: #fde68a; }
+.req-countdown.cnt-ok { background: rgba(22, 163, 74, 0.15); color: #86efac; }
+.req-countdown.cnt-delivered { background: rgba(22, 163, 74, 0.15); color: #86efac; }
+.req-countdown.cnt-none { background: rgba(71, 85, 105, 0.3); color: #64748b; }
+
+/* Ordered date column */
+.col-ordered { white-space: nowrap; }
+
+/* Date ordered filter */
+#filterOrdered { min-width: 110px; }
+
+/* In-transit countdown pill */
+.req-countdown.cnt-transit { background: rgba(125, 211, 252, 0.15); color: #7dd3fc; }
+
+/* Card on-hold variant */
+.req-order-card.card-onhold {
+    border-color: #475569;
+    background: rgba(30, 41, 59, 0.6);
+    opacity: 0.85;
+}
+.req-order-card.card-onhold::after {
+    content: 'ON HOLD';
+    position: absolute; top: 8px; right: 8px;
+    font-size: 0.58rem; font-weight: 800; letter-spacing: 1px;
+    background: rgba(71, 85, 105, 0.4); color: #94a3b8;
+    border-radius: 4px; padding: 1px 6px;
+}
+
+/* Quick reorder button */
+.req-reorder-btn {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: transparent;
+    border: 1.5px solid rgba(232, 104, 42, 0.4);
+    color: #e8682a;
+    border-radius: 20px;
+    padding: 3px 10px;
+    font-size: 0.72rem; font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, transform 0.1s;
+    margin-top: 0.5rem;
+}
+.req-reorder-btn:hover {
+    background: rgba(232, 104, 42, 0.12);
+    border-color: #e8682a;
+    transform: scale(1.03);
+}
+
+/* Mobile: stack KPIs 2-per-row on small screens */
+@media (max-width: 480px) {
+    .req-kpi-strip {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .req-cards-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ── Smart Duplicate Detection Warning Panel ──────────────── */
+
+#dupWarningPanel {
+    margin-bottom: 0.75rem;
+}
+
+.dup-warn-block {
+    border-radius: 10px;
+    margin-bottom: 0.5rem;
+    overflow: hidden;
+    animation: dupSlideIn 0.22s ease;
+}
+
+@keyframes dupSlideIn {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Active duplicates — amber */
+.dup-warn-active {
+    background: rgba(245, 158, 11, 0.08);
+    border: 1.5px solid rgba(245, 158, 11, 0.45);
+}
+
+.dup-warn-active .dup-warn-title { color: #fbbf24; }
+.dup-warn-active .dup-warn-sub   { color: #92400e; color: #fde68a; opacity: 0.8; }
+
+/* Delivered matches — blue-teal informational */
+.dup-warn-delivered {
+    background: rgba(56, 189, 248, 0.06);
+    border: 1.5px solid rgba(56, 189, 248, 0.3);
+}
+
+.dup-warn-delivered .dup-warn-title { color: #7dd3fc; }
+.dup-warn-delivered .dup-warn-sub   { color: #bae6fd; opacity: 0.75; }
+
+/* Header row inside each block */
+.dup-warn-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    padding: 0.65rem 0.85rem 0.5rem;
+}
+.dup-warn-icon   { font-size: 1.1rem; flex-shrink: 0; margin-top: 1px; }
+.dup-warn-title  { font-size: 0.83rem; font-weight: 700; line-height: 1.2; }
+.dup-warn-sub    { font-size: 0.72rem; margin-top: 2px; line-height: 1.3; }
+
+/* List of matching orders */
+.dup-warn-list {
+    padding: 0 0.6rem 0.6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+/* Individual matching order row */
+.dup-warn-row {
+    background: rgba(0, 0, 0, 0.18);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 7px;
+    padding: 0.5rem 0.7rem;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+.dup-warn-active .dup-warn-row:hover {
+    background: rgba(245, 158, 11, 0.12);
+    border-color: rgba(245, 158, 11, 0.4);
+}
+.dup-warn-row-delivered:hover {
+    background: rgba(56, 189, 248, 0.1) !important;
+    border-color: rgba(56, 189, 248, 0.35) !important;
+}
+
+/* Row sub-elements */
+.dup-warn-row-left {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-bottom: 3px;
+    flex-wrap: wrap;
+}
+.dup-warn-orderid {
+    font-weight: 800;
+    font-size: 0.78rem;
+    color: #f1f5f9;
+}
+.dup-warn-match {
+    font-size: 0.68rem;
+    font-weight: 700;
+    background: rgba(255,255,255,0.08);
+    border-radius: 20px;
+    padding: 1px 7px;
+    color: #94a3b8;
+}
+.dup-warn-row-desc {
+    font-size: 0.78rem;
+    color: #cbd5e1;
+    margin-bottom: 2px;
+    font-weight: 500;
+}
+.dup-warn-row-meta {
+    font-size: 0.68rem;
+    color: #64748b;
+}
+
+/* ================================================================
+   LOW-18: Mobile sticky Submit button on create order form
+================================================================ */
+@media (max-width: 640px) {
+    #createOrderForm .form-actions,
+    #createOrderForm > div:last-child > div:last-child {
+        position: sticky;
+        bottom: 0;
+        background: rgba(15, 23, 42, 0.97);
+        backdrop-filter: blur(8px);
+        padding: 0.75rem 1rem;
+        margin: 0 -1rem -1rem;
+        border-top: 1px solid rgba(148, 163, 184, 0.12);
+        z-index: 10;
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    /* Target the submit row by its structure inside createOrderForm */
+    #createOrderForm div[style*="display:flex"],
+    #createOrderForm div[style*="display: flex"] {
+        position: sticky;
+        bottom: 0;
+        background: rgba(15, 23, 42, 0.97);
+        backdrop-filter: blur(8px);
+        padding: 0.75rem 0;
+        z-index: 10;
+    }
+}
+
+/* ================================================================
+   LOW-19: KPI card tap feedback animation (mobile touch)
+================================================================ */
+@keyframes kpiTap {
+    0%   { transform: scale(1); }
+    40%  { transform: scale(0.93); }
+    70%  { transform: scale(1.04); }
+    100% { transform: scale(1); }
+}
+
+.req-kpi-card:active {
+    animation: kpiTap 0.22s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+    border-color: rgba(232, 104, 42, 0.6) !important;
+    box-shadow: 0 0 0 2px rgba(232, 104, 42, 0.25) !important;
+}

@@ -2,8 +2,20 @@
 const jwt = require('jsonwebtoken');
 
 const authenticateToken = (req, res, next) => {
+    // 1. Try Authorization header (standard)
     const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
+    let token = authHeader && authHeader.split(' ')[1];
+
+    // 2. Fallback: cookie (works when Cloudflare strips Authorization header)
+    // Parse manually — no cookie-parser dependency needed
+    if (!token) {
+        const cookieHeader = req.headers['cookie'] || '';
+        const match = cookieHeader.match(/(?:^|;\s*)pp_token=([^;]*)/);
+        if (match) token = decodeURIComponent(match[1]);
+    }
+
+    // NOTE: query param fallback removed (security: JWT must not appear in URLs/logs)
+    // Document viewing uses fetchDocAsDataUrl() with Authorization header instead.
 
     if (!token) {
         return res.status(401).json({ 

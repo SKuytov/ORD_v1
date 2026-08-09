@@ -3,14 +3,31 @@
 
 let currentOrderId = null;
 let currentDocuments = [];
+let allLoadedDocuments = []; // unfiltered master copy
+let activeDocTypeFilter = ''; // currently active type filter
 let uploadDialogOrders = []; // All orders available for linking
 let filteredUploadOrders = []; // Filtered subset
+
+// ========== Document type label map ==========
+const DOC_TYPE_LABELS = {
+    '': 'All',
+    'quote_request': 'Quote Request',
+    'quote_pdf': 'Quote PDF',
+    'proforma_invoice': 'Proforma Invoice',
+    'purchase_order': 'PO',
+    'invoice': 'Invoice',
+    'delivery_note': 'Delivery Note',
+    'signed_delivery_note': 'Signed Delivery',
+    'packing_list': 'Packing List',
+    'customs_declaration': 'Customs',
+    'intrastat_declaration': 'Intrastat',
+    'other': 'Other'
+};
 
 // Initialize tab switching in order detail panel
 function initializeOrderDetailTabs() {
     // ⭐ SECURITY: Hide Documents tab from requesters
     if (currentUser && currentUser.role === 'requester') {
-        // Don't create tabs for requesters
         return;
     }
     
@@ -21,12 +38,10 @@ function initializeOrderDetailTabs() {
         </div>
     `;
     
-    // Insert tabs after order detail panel header
     const panelHeader = document.querySelector('#orderDetailPanel .side-panel-header');
     if (panelHeader && !document.getElementById('detailTabs')) {
         panelHeader.insertAdjacentHTML('afterend', tabsHtml);
         
-        // Add click handlers
         document.querySelectorAll('.detail-tab').forEach(tab => {
             tab.addEventListener('click', () => switchDetailTab(tab.dataset.tab));
         });
@@ -34,12 +49,10 @@ function initializeOrderDetailTabs() {
 }
 
 function switchDetailTab(tabName) {
-    // Update tab active states
     document.querySelectorAll('.detail-tab').forEach(tab => {
         tab.classList.toggle('active', tab.dataset.tab === tabName);
     });
     
-    // Show/hide content
     const detailBody = document.getElementById('orderDetailBody');
     const documentsSection = document.getElementById('documentsSection');
     
@@ -56,12 +69,12 @@ function switchDetailTab(tabName) {
 async function loadOrderDocuments(orderId) {
     // ⭐ SECURITY: Block requesters from loading documents
     if (currentUser && currentUser.role === 'requester') {
-        return; // Exit silently
+        return;
     }
     
     currentOrderId = orderId;
+    activeDocTypeFilter = ''; // reset filter on new order load
     
-    // Initialize tabs if not already done
     initializeOrderDetailTabs();
     
     try {
@@ -72,7 +85,8 @@ async function loadOrderDocuments(orderId) {
         const data = await res.json();
         
         if (data.success) {
-            currentDocuments = data.documents || [];
+            allLoadedDocuments = data.documents || [];
+            currentDocuments = [...allLoadedDocuments];
             renderDocumentsSection();
         } else {
             showDocumentError('Failed to load documents');
@@ -83,32 +97,61 @@ async function loadOrderDocuments(orderId) {
     }
 }
 
+// ⭐ NEW: Apply client-side filter by document type
+function applyDocTypeFilter(type) {
+    activeDocTypeFilter = type;
+    if (type === '') {
+        currentDocuments = [...allLoadedDocuments];
+    } else {
+        currentDocuments = allLoadedDocuments.filter(d => d.document_type === type);
+    }
+    renderDocumentsSection();
+}
+
 function renderDocumentsSection() {
     const section = document.getElementById('documentsSection');
     if (!section) return;
     
+    // ⭐ NEW: Build type filter tabs from types present in allLoadedDocuments
+    const presentTypes = ['', ...new Set(allLoadedDocuments.map(d => d.document_type).filter(Boolean))];
+    
+    let typeTabsHtml = '<div class="doc-type-tabs">';
+    for (const t of presentTypes) {
+        const label = DOC_TYPE_LABELS[t] || t;
+        const count = t === '' ? allLoadedDocuments.length : allLoadedDocuments.filter(d => d.document_type === t).length;
+        const activeClass = activeDocTypeFilter === t ? ' active' : '';
+        typeTabsHtml += `<button class="doc-type-tab${activeClass}" onclick="applyDocTypeFilter('${t}')">${label} <span class="doc-type-count">${count}</span></button>`;
+    }
+    typeTabsHtml += '</div>';
+    
     let html = '<div class="documents-container">';
     html += '<div class="documents-header">';
-    html += '<h4>📄 Documents</h4>';
+    html += '<h4>\uD83D\uDCC4 Documents</h4>';
     
-    // Only show upload button for admin/procurement
     if (currentUser && currentUser.role !== 'requester') {
-        html += '<button class="btn btn-primary btn-sm" onclick="openUploadDialog()">📤 Upload Document</button>';
+        html += '<button class="btn btn-primary btn-sm" onclick="openUploadDialog()">\uD83D\uDCE4 Upload Document</button>';
     }
     
     html += '</div>';
     
+    // ⭐ NEW: Only show type tabs when there are any documents loaded
+    if (allLoadedDocuments.length > 0) {
+        html += typeTabsHtml;
+    }
+    
     if (currentDocuments.length === 0) {
         html += '<div class="documents-empty">';
-        html += '<p class="text-muted">No documents attached to this order yet.</p>';
+        if (allLoadedDocuments.length > 0 && activeDocTypeFilter !== '') {
+            html += `<p class="text-muted">No documents of type <strong>${DOC_TYPE_LABELS[activeDocTypeFilter] || activeDocTypeFilter}</strong> attached to this order.</p>`;
+        } else {
+            html += '<p class="text-muted">No documents attached to this order yet.</p>';
+        }
         html += '</div>';
     } else {
         html += '<div class="documents-list">';
-        
         for (const doc of currentDocuments) {
             html += renderDocumentCard(doc);
         }
-        
         html += '</div>';
     }
     
@@ -121,19 +164,23 @@ function renderDocumentCard(doc) {
     const fileSize = formatFileSize(doc.file_size);
     const uploadDate = formatDateTime(doc.uploaded_at);
     
-    // Show linked orders
     const linkedOrders = doc.linked_order_ids || [];
     const orderBadges = linkedOrders.map(id => `<span class="order-badge">#${id}</span>`).join(' ');
+    
+    // ⭐ NEW: show document type badge
+    const typeLabel = DOC_TYPE_LABELS[doc.document_type] || doc.document_type || '';
+    const typeBadgeHtml = typeLabel ? `<span class="doc-type-badge">${escapeHtml(typeLabel)}</span>` : '';
     
     let html = '<div class="document-card">';
     html += '<div class="document-icon">' + fileIcon + '</div>';
     html += '<div class="document-info">';
     html += `<div class="document-name" title="${escapeHtml(doc.file_name)}">${escapeHtml(doc.file_name)}</div>`;
     html += `<div class="document-meta">`;
+    html += typeBadgeHtml;
     html += `<span>${fileSize}</span>`;
-    html += `<span>•</span>`;
+    html += `<span>&bull;</span>`;
     html += `<span>${uploadDate}</span>`;
-    html += `<span>•</span>`;
+    html += `<span>&bull;</span>`;
     html += `<span>by ${escapeHtml(doc.uploaded_by_name || 'Unknown')}</span>`;
     html += `</div>`;
     
@@ -147,10 +194,10 @@ function renderDocumentCard(doc) {
     
     html += '</div>';
     html += '<div class="document-actions">';
-    // Use dedicated download API route instead of direct file access
-    html += `<button class="btn-icon" onclick="downloadDocument(${doc.id}, '${escapeHtml(doc.file_name)}')" title="Download">⬇</button>`;
+    html += `<button class="btn-icon" onclick="downloadDocument(${doc.id}, '${escapeHtml(doc.file_name)}')" title="Download">&#x2B07;</button>`;
     
-    if (currentUser && currentUser.role !== 'requester') {
+    // ⭐ SECURITY: Only admin can unlink (which may delete the document)
+    if (currentUser && currentUser.role === 'admin') {
         html += `<button class="btn-icon btn-danger" onclick="unlinkDocument(${doc.id})" title="Remove from this order">🗑</button>`;
     }
     
@@ -172,18 +219,13 @@ async function downloadDocument(documentId, fileName) {
             return;
         }
         
-        // Get the blob from response
         const blob = await res.blob();
-        
-        // Create download link
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
         a.download = fileName;
         document.body.appendChild(a);
         a.click();
-        
-        // Cleanup
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
     } catch (err) {
@@ -193,15 +235,13 @@ async function downloadDocument(documentId, fileName) {
 }
 
 function getFileIcon(mimeType) {
-    if (!mimeType) return '📄';
-    
-    if (mimeType.includes('pdf')) return '📕';
-    if (mimeType.includes('image')) return '🖼️';
-    if (mimeType.includes('word')) return '📘';
-    if (mimeType.includes('excel') || mimeType.includes('spreadsheet')) return '📗';
-    if (mimeType.includes('zip') || mimeType.includes('rar')) return '📦';
-    
-    return '📄';
+    if (!mimeType) return '\uD83D\uDCC4';
+    if (mimeType.includes('pdf')) return '\uD83D\uDCD5';
+    if (mimeType.includes('image')) return '\uD83D\uDDBC\uFE0F';
+    if (mimeType.includes('word')) return '\uD83D\uDCD8';
+    if (mimeType.includes('excel') || mimeType.includes('spreadsheet')) return '\uD83D\uDCD7';
+    if (mimeType.includes('zip') || mimeType.includes('rar')) return '\uD83D\uDCE6';
+    return '\uD83D\uDCC4';
 }
 
 function formatFileSize(bytes) {
@@ -214,7 +254,6 @@ function formatFileSize(bytes) {
 
 // Open upload dialog with multi-order selection
 function openUploadDialog() {
-    // Get current orders for selection
     uploadDialogOrders = ordersState || [];
     filteredUploadOrders = [...uploadDialogOrders];
     
@@ -222,46 +261,75 @@ function openUploadDialog() {
     html += '<div class="upload-dialog">';
     html += '<div class="upload-dialog-header">';
     html += '<h3>Upload Document</h3>';
-    html += '<button class="btn-icon" onclick="closeUploadDialog()">✕</button>';
+    html += '<button class="btn-icon" onclick="closeUploadDialog()">\u2715</button>';
     html += '</div>';
     html += '<div class="upload-dialog-body">';
     
-    // File input
     html += '<div class="form-group">';
     html += '<label for="docFile">Select File</label>';
     html += '<input type="file" id="docFile" class="form-control" required>';
     html += '<small class="text-muted">Max 50MB - PDF, Images, Office docs, Archives</small>';
     html += '</div>';
     
-    // Document type
     html += '<div class="form-group">';
     html += '<label for="docType">Document Type</label>';
-    html += '<select id="docType" class="form-control">';
-    html += '<option value="quote_request">Quote Request</option>';
-    html += '<option value="quote_pdf">Quote PDF</option>';
-    html += '<option value="proforma_invoice">Proforma Invoice</option>';
-    html += '<option value="purchase_order">Purchase Order</option>';
-    html += '<option value="invoice">Invoice</option>';
-    html += '<option value="delivery_note">Delivery Note</option>';
-    html += '<option value="signed_delivery_note">Signed Delivery Note</option>';
-    html += '<option value="packing_list">Packing List</option>';
-    html += '<option value="customs_declaration">Customs Declaration</option>';
-    html += '<option value="intrastat_declaration">Intrastat Declaration</option>';
-    html += '<option value="other">Other</option>';
+    html += '<select id="docType" class="form-control" onchange="_toggleInvMetaFields()">';
+    for (const [val, label] of Object.entries(DOC_TYPE_LABELS)) {
+        if (val === '') continue;
+        html += `<option value="${val}">${label}</option>`;
+    }
     html += '</select>';
     html += '</div>';
+
+    // ── Invoice metadata fields (shown only for invoice / proforma_invoice) ──
+    html += `<div id="invMetaFields" style="display:none;background:#0b1520;border:1px solid #1e3a5f;
+             border-radius:8px;padding:0.85rem 1rem;margin-bottom:0.5rem;">
+        <div style="font-size:0.72rem;color:#e8682a;text-transform:uppercase;letter-spacing:0.8px;
+                    font-weight:700;margin-bottom:0.65rem;">📋 Данни за фактура</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem;">
+            <div>
+                <label style="font-size:0.75rem;color:#94a3b8;display:block;margin-bottom:0.2rem;">Номер на фактура</label>
+                <input id="invNumber" class="form-control" style="font-size:0.83rem;" placeholder="Напр. INV-2024-001">
+            </div>
+            <div>
+                <label style="font-size:0.75rem;color:#94a3b8;display:block;margin-bottom:0.2rem;">Дата на фактура</label>
+                <input id="invDate" type="date" class="form-control" style="font-size:0.83rem;">
+            </div>
+            <div>
+                <label style="font-size:0.75rem;color:#94a3b8;display:block;margin-bottom:0.2rem;">Краен срок за плащане</label>
+                <input id="invDueDate" type="date" class="form-control" style="font-size:0.83rem;">
+            </div>
+            <div>
+                <label style="font-size:0.75rem;color:#94a3b8;display:block;margin-bottom:0.2rem;">Обща сума</label>
+                <input id="invAmountTotal" type="number" step="0.01" class="form-control" style="font-size:0.83rem;" placeholder="0.00">
+            </div>
+            <div>
+                <label style="font-size:0.75rem;color:#94a3b8;display:block;margin-bottom:0.2rem;">Нетна сума</label>
+                <input id="invAmountNet" type="number" step="0.01" class="form-control" style="font-size:0.83rem;" placeholder="0.00">
+            </div>
+            <div>
+                <label style="font-size:0.75rem;color:#94a3b8;display:block;margin-bottom:0.2rem;">ДДС</label>
+                <input id="invAmountVat" type="number" step="0.01" class="form-control" style="font-size:0.83rem;" placeholder="0.00">
+            </div>
+        </div>
+        <div style="margin-top:0.6rem;">
+            <label style="font-size:0.75rem;color:#94a3b8;display:block;margin-bottom:0.2rem;">Валута</label>
+            <select id="invCurrency" class="form-control" style="font-size:0.83rem;max-width:120px;">
+                <option value="EUR" selected>EUR</option>
+                <option value="USD">USD</option>
+                <option value="GBP">GBP</option>
+                <option value="CHF">CHF</option>
+            </select>
+        </div>
+    </div>`;
     
-    // Description
     html += '<div class="form-group">';
     html += '<label for="docDescription">Description (optional)</label>';
     html += '<textarea id="docDescription" class="form-control" rows="2" placeholder="Add notes about this document"></textarea>';
     html += '</div>';
     
-    // Order selection with filters
     html += '<div class="form-group">';
     html += '<label>Link to Orders (select multiple)</label>';
-    
-    // Filter controls
     html += '<div class="order-filters">';
     html += '<input type="text" id="orderSearchInput" class="form-control form-control-sm" placeholder="Search by ID, description, part number..." oninput="filterUploadOrders()">';
     html += '<select id="orderStatusFilter" class="form-control form-control-sm" onchange="filterUploadOrders()">';
@@ -282,7 +350,6 @@ function openUploadDialog() {
     }
     html += '</select>';
     html += '</div>';
-    
     html += '<div class="order-selection-list" id="orderSelectionList">';
     html += renderOrderSelectionList();
     html += '</div>';
@@ -305,7 +372,6 @@ function filterUploadOrders() {
     const supplierFilter = document.getElementById('orderSupplierFilter')?.value || '';
     
     filteredUploadOrders = uploadDialogOrders.filter(order => {
-        // Search filter
         if (searchTerm) {
             const searchFields = [
                 order.id?.toString() || '',
@@ -314,20 +380,13 @@ function filterUploadOrders() {
                 order.category || '',
                 order.supplier_name || ''
             ].join(' ').toLowerCase();
-            
             if (!searchFields.includes(searchTerm)) return false;
         }
-        
-        // Status filter
         if (statusFilter && order.status !== statusFilter) return false;
-        
-        // Supplier filter
         if (supplierFilter && order.supplier_id !== parseInt(supplierFilter, 10)) return false;
-        
         return true;
     });
     
-    // Re-render list
     const listContainer = document.getElementById('orderSelectionList');
     if (listContainer) {
         listContainer.innerHTML = renderOrderSelectionList();
@@ -357,10 +416,10 @@ function renderOrderSelectionList() {
         html += `</div>`;
         html += `<div class="order-checkbox-meta">`;
         html += `<span>Supplier: ${escapeHtml(supplier)}</span>`;
-        html += `<span>•</span>`;
+        html += `<span>&bull;</span>`;
         html += `<span>CC: ${escapeHtml(costCenter)}</span>`;
         if (order.part_number) {
-            html += `<span>•</span>`;
+            html += `<span>&bull;</span>`;
             html += `<span>PN: ${escapeHtml(order.part_number)}</span>`;
         }
         html += `</div>`;
@@ -376,6 +435,15 @@ function closeUploadDialog() {
     if (dialog) dialog.remove();
 }
 
+// Show / hide invoice metadata panel based on selected document type
+function _toggleInvMetaFields() {
+    const sel    = document.getElementById('docType');
+    const panel  = document.getElementById('invMetaFields');
+    if (!sel || !panel) return;
+    const show = ['invoice','proforma_invoice'].includes(sel.value);
+    panel.style.display = show ? 'block' : 'none';
+}
+
 async function uploadDocument() {
     const fileInput = document.getElementById('docFile');
     const typeSelect = document.getElementById('docType');
@@ -386,7 +454,6 @@ async function uploadDocument() {
         return;
     }
     
-    // Get selected orders
     const selectedOrders = Array.from(document.querySelectorAll('.order-checkbox:checked'))
         .map(cb => parseInt(cb.value, 10));
     
@@ -411,8 +478,38 @@ async function uploadDocument() {
         const data = await res.json();
         
         if (data.success) {
-            alert('✅ Document uploaded successfully!');
+            // ── Save invoice metadata if filled ──
+            const docType = typeSelect.value;
+            const uploadedDocId = data.document?.id || data.documentId;
+            if (['invoice','proforma_invoice'].includes(docType) && uploadedDocId) {
+                const invNumber   = document.getElementById('invNumber')?.value.trim()     || '';
+                const invDate     = document.getElementById('invDate')?.value              || '';
+                const invDueDate  = document.getElementById('invDueDate')?.value           || '';
+                const invTotal    = document.getElementById('invAmountTotal')?.value       || '';
+                const invNet      = document.getElementById('invAmountNet')?.value         || '';
+                const invVat      = document.getElementById('invAmountVat')?.value         || '';
+                const invCurrency = document.getElementById('invCurrency')?.value          || 'EUR';
+                if (invNumber || invDueDate || invTotal) {
+                    try {
+                        await fetch(`${API_BASE}/accounting/invoice-meta/${uploadedDocId}`, {
+                            method: 'POST',
+                            headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                invoice_number: invNumber   || null,
+                                invoice_date:   invDate     || null,
+                                due_date:       invDueDate  || null,
+                                amount_total:   invTotal    || null,
+                                amount_net:     invNet      || null,
+                                amount_vat:     invVat      || null,
+                                currency:       invCurrency
+                            })
+                        });
+                    } catch (e) { console.warn('Could not save invoice metadata:', e); }
+                }
+            }
             closeUploadDialog();
+            if (typeof showToast === 'function') showToast('Документът е качен успешно', 'success');
+            else alert('\u2705 Document uploaded successfully!');
             loadOrderDocuments(currentOrderId);
         } else {
             alert('Upload failed: ' + (data.message || 'Unknown error'));
@@ -452,7 +549,7 @@ function showDocumentError(message) {
     section.innerHTML = `
         <div class="documents-container">
             <div class="documents-error">
-                <p class="text-danger">⚠️ ${escapeHtml(message)}</p>
+                <p class="text-danger">\u26A0\uFE0F ${escapeHtml(message)}</p>
             </div>
         </div>
     `;
@@ -467,4 +564,6 @@ if (typeof window !== 'undefined') {
     window.unlinkDocument = unlinkDocument;
     window.filterUploadOrders = filterUploadOrders;
     window.downloadDocument = downloadDocument;
+    window.applyDocTypeFilter = applyDocTypeFilter;
+    window._toggleInvMetaFields = _toggleInvMetaFields;
 }

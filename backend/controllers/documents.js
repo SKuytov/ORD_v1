@@ -63,8 +63,8 @@ exports.uploadDocument = async (req, res) => {
         // Log activity in order history
         await db.query(`
             INSERT INTO order_history (order_id, field_name, old_value, new_value, changed_by)
-            VALUES (?, 'document', '', ?)
-        `, [orderId, `Uploaded ${document_type}: ${req.file.originalname}`]);
+            VALUES (?, 'document', '', ?, ?)
+        `, [orderId, `Uploaded ${document_type}: ${req.file.originalname}`, req.user.name || req.user.username]);
         
         res.json({
             success: true,
@@ -121,8 +121,8 @@ exports.deleteDocument = async (req, res) => {
         // Log activity
         await db.query(`
             INSERT INTO order_history (order_id, field_name, old_value, new_value, changed_by)
-            VALUES (?, 'document', ?, 'deleted')
-        `, [document.order_id, `${document.document_type}: ${document.file_name}`]);
+            VALUES (?, 'document', ?, 'deleted', ?)
+        `, [document.order_id, `${document.document_type}: ${document.file_name}`, req.user.name || req.user.username]);
         
         res.json({ success: true, message: 'Document deleted successfully' });
     } catch (error) {

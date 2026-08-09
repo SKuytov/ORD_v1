@@ -4,7 +4,10 @@ const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
 const path = require('path');
+const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
 require('dotenv').config();
+const db = require('./config/database');
 
 const authRoutes = require('./routes/auth');
 const orderRoutes = require('./routes/orders');
@@ -31,10 +34,10 @@ app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
-            scriptSrc: ["'self'", "'unsafe-inline'", "https://www.googletagmanager.com", "https://www.google-analytics.com"],
+            scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://www.googletagmanager.com", "https://www.google-analytics.com"],
             styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdnjs.cloudflare.com"],
-            fontSrc: ["'self'", "https://fonts.gstatic.com", "https://cdnjs.cloudflare.com"],
-            imgSrc: ["'self'", "data:", "https:", "blob:"],
+            fontSrc: ["'self'", "https://fonts.gstatic.com", "https://raw.githubusercontent.com"],
+            imgSrc: ["'self'", "data:", "blob:", "https://partpulse.eu"],
             connectSrc: ["'self'", "https://www.google-analytics.com"],
             frameSrc: ["'none'"],
             objectSrc: ["'none'"],
@@ -52,6 +55,54 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(compression());
+app.use((req, res, next) => {
+    req.requestId = req.headers['x-request-id'] || crypto.randomUUID();
+    res.setHeader('X-Request-ID', req.requestId);
+    next();
+});
+
+// The existing route middleware verifies JWT signatures. This lightweight
+// state check is deliberately mounted before every API router so revocation,
+// role/building changes, and disabled accounts take effect across both PM2
+// workers without editing that shared middleware. Public endpoints remain
+// available without an Authorization header.
+async function getTokenState(userId) {
+    try {
+        const [rows] = await db.query(
+            'SELECT id, role, building, active, token_version FROM users WHERE id=?',
+            [userId]
+        );
+        return { user: rows[0] || null, tokenVersionSupported: true };
+    } catch (error) {
+        if (error.code !== 'ER_BAD_FIELD_ERROR' && !/token_version/i.test(error.message || '')) throw error;
+        const [rows] = await db.query(
+            'SELECT id, role, building, active FROM users WHERE id=?',
+            [userId]
+        );
+        return { user: rows[0] || null, tokenVersionSupported: false };
+    }
+}
+app.use('/api', async (req, res, next) => {
+    if (req.path === '/health' || req.path === '/auth/login') return next();
+    const header = req.headers.authorization;
+    if (!header?.startsWith('Bearer ')) return next();
+    try {
+        const payload = jwt.verify(header.slice(7), process.env.JWT_SECRET);
+        const { user, tokenVersionSupported } = await getTokenState(payload.id);
+        const stale = !user || !user.active ||
+            user.role !== payload.role ||
+            (user.building || null) !== (payload.building || null) ||
+            (tokenVersionSupported && Number(payload.tokenVersion) !== Number(user.token_version || 0));
+        if (stale) return res.status(401).json({ success: false, message: 'Session is no longer valid', requestId: req.requestId });
+        next();
+    } catch (error) {
+        // Signature failures are handled consistently by the existing route
+        // middleware. Database failures should not silently bypass revocation.
+        if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') return next();
+        console.error(`[${req.requestId}] token state check failed:`, error.stack || error);
+        res.status(503).json({ success: false, message: 'Authentication service unavailable', requestId: req.requestId });
+    }
+});
 
 // Uploaded documents are NOT served statically. Invoices, quotes, delivery
 // notes and customs declarations are only reachable through the authenticated
@@ -78,14 +129,23 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/procurement', procurementRoutes); // ⭐ PO creation, supplier responses, invoices
 app.use('/api/accounting', accountingRoutes);
 
-// Health check
-app.get('/api/health', (req, res) => {
-    res.json({
-        status: 'OK',
-        timestamp: new Date().toISOString(),
-        environment: process.env.NODE_ENV,
-        version: '2.6.0' // Phase 6: Smart Quote Send
-    });
+// Health check: PM2/load balancers must only receive OK after MySQL responds.
+app.get('/api/health', async (req, res) => {
+    let timer;
+    try {
+        await Promise.race([
+            db.query('SELECT 1 AS ok'),
+            new Promise((_, reject) => {
+                timer = setTimeout(() => reject(new Error('database health timeout')), 2_000);
+            }),
+        ]);
+        res.json({ success: true, status: 'OK', timestamp: new Date().toISOString(), environment: process.env.NODE_ENV, version: '2.6.0' });
+    } catch (error) {
+        console.error('[Health] database check failed:', error.message);
+        res.status(503).json({ success: false, status: 'UNAVAILABLE', message: 'Service temporarily unavailable' });
+    } finally {
+        clearTimeout(timer);
+    }
 });
 
 // Serve frontend
@@ -93,21 +153,38 @@ app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, '../frontend/index.html'));
 });
 
-// Error handling
+// Error handling: never expose driver messages, SQL, or stack traces.
 app.use((err, req, res, next) => {
-    console.error('Error:', err);
-    res.status(err.status || 500).json({
-        success: false,
-        message: err.message || 'Internal server error',
-        ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
-    });
+    if (res.headersSent) return next(err);
+    const requestId = req.requestId || crypto.randomUUID();
+    const status = Number.isInteger(err.status) && err.status >= 400 && err.status < 500 ? err.status : 500;
+    console.error(`[${requestId}] ${req.method} ${req.originalUrl}:`, err.stack || err);
+    res.status(status).json({ success: false, message: status === 500 ? 'Internal server error' : (err.publicMessage || 'Request could not be completed'), requestId });
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
     console.log(`PartPulse Orders Server v2.6.0 running on port ${PORT}`);
     console.log(`Environment: ${process.env.NODE_ENV}`);
-    console.log(`Frontend URL: ${process.env.FRONTEND_URL}`);
-    console.log(`Features: Smart Quote Send + Smart Autocomplete + Document Management + Approvals + Procurement`);
 });
+
+let shuttingDown = false;
+async function shutdown(signal) {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`${signal} received; draining in-flight requests`);
+    const forceTimer = setTimeout(() => {
+        console.error('Graceful shutdown timed out; forcing process exit');
+        process.exit(1);
+    }, 30_000).unref();
+    server.close(async error => {
+        try { await db.end(); }
+        catch (dbError) { console.error('Database pool close failed:', dbError.message); }
+        clearTimeout(forceTimer);
+        if (error) { console.error('HTTP server close failed:', error.message); process.exitCode = 1; }
+        process.exit();
+    });
+}
+process.once('SIGTERM', () => shutdown('SIGTERM'));
+process.once('SIGINT', () => shutdown('SIGINT'));
 
 module.exports = app;

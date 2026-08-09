@@ -6,10 +6,7 @@ module.exports = {
         secure: process.env.SMTP_SECURE === 'true',
         auth: {
             user: process.env.SMTP_USER,
-            pass: process.env.SMTP_PASSWORD
-        },
-        tls: {
-            rejectUnauthorized: false
+            pass: process.env.SMTP_PASSWORD || process.env.SMTP_PASS
         }
     },
     from: process.env.EMAIL_FROM || 'PartPulse Orders <orders@partpulse.eu>',

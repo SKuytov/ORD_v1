@@ -1541,7 +1541,12 @@ async function loadOrders() {
         if (res.success) {
             ordersState = res.orders;
             filteredOrders = ordersState;
-            selectedOrderIds.clear();
+            // Keep selections while the operator pages or refreshes the list, but
+            // do not retain IDs that no longer exist in the current result set.
+            const availableOrderIds = new Set(ordersState.map(order => Number(order.id)));
+            selectedOrderIds.forEach(id => {
+                if (!availableOrderIds.has(Number(id))) selectedOrderIds.delete(id);
+            });
             updateSelectionUi();
 
             // ⭐ Mark which orders match was:/by: (backend already filtered; all returned IDs qualify)
@@ -1551,6 +1556,7 @@ async function loadOrders() {
 
             currentPage = 1; // Reset to page 1
             applyFilters();
+            window.AdminCockpit?.refresh?.();
         }
     } catch (err) {
         if (seq !== _loadOrdersSeq) return; // ignore error from stale request
@@ -1861,10 +1867,10 @@ function renderOrderRow(order, canSelectOrders, isAdminView) {
     const deliveryStatus = getDeliveryStatus(order);
     const deliveredDate = getDeliveredDate(order);
 
-    let html = '<tr data-id="' + order.id + '">';
+    let html = '<tr data-id="' + order.id + '"' + (selectedOrderIds.has(Number(order.id)) ? ' class="row-selected"' : '') + '>';
     
     if (canSelectOrders) {
-        html += `<td class="sticky"><input type="checkbox" class="row-select" data-id="${order.id}"></td>`;
+        html += `<td class="sticky"><input type="checkbox" class="row-select" data-id="${order.id}"${selectedOrderIds.has(Number(order.id)) ? ' checked' : ''}></td>`;
     }
     
     html += `<td>#${order.id}</td>`;
@@ -1917,16 +1923,30 @@ function attachOrderEventListeners(canSelectOrders) {
     if (canSelectOrders) {
         const selectAll = document.getElementById('selectAllOrders');
         if (selectAll) {
+            const visiblePageCheckboxes = () => Array.from(
+                selectAll.closest('table')?.querySelectorAll('.row-select') || []
+            );
+            const syncSelectAll = () => {
+                const checkboxes = visiblePageCheckboxes();
+                const selected = checkboxes.filter(cb => cb.checked).length;
+                selectAll.checked = checkboxes.length > 0 && selected === checkboxes.length;
+                selectAll.indeterminate = selected > 0 && selected < checkboxes.length;
+            };
+            syncSelectAll();
             selectAll.addEventListener('change', e => {
                 const checked = e.target.checked;
-                selectedOrderIds.clear();
-                if (checked) { filteredOrders.forEach(o => selectedOrderIds.add(o.id)); }
-                document.querySelectorAll('.row-select').forEach(cb => {
+                // The header checkbox must only affect the rows visible on this
+                // page.  Existing selections on other pages remain intact.
+                visiblePageCheckboxes().forEach(cb => {
                     cb.checked = checked;
+                    const id = parseInt(cb.dataset.id, 10);
+                    if (checked) selectedOrderIds.add(id);
+                    else selectedOrderIds.delete(id);
                     const tr = cb.closest('tr');
                     if (tr) checked ? tr.classList.add('row-selected') : tr.classList.remove('row-selected');
                 });
                 updateSelectionUi();
+                syncSelectAll();
             });
         }
 
@@ -1941,6 +1961,13 @@ function attachOrderEventListeners(canSelectOrders) {
                     e.target.closest('tr')?.classList.remove('row-selected');
                 }
                 updateSelectionUi();
+                const pageSelectAll = document.getElementById('selectAllOrders');
+                if (pageSelectAll) {
+                    const pageChecks = Array.from(pageSelectAll.closest('table')?.querySelectorAll('.row-select') || []);
+                    const selected = pageChecks.filter(box => box.checked).length;
+                    pageSelectAll.checked = pageChecks.length > 0 && selected === pageChecks.length;
+                    pageSelectAll.indeterminate = selected > 0 && selected < pageChecks.length;
+                }
             });
         });
     }
@@ -2185,7 +2212,10 @@ function renderOrderDetail(o) {
     if (currentUser.role === 'admin' || currentUser.role === 'procurement') {
         html += '<hr class="mt-2" style="border-color: rgba(31,41,55,0.9); margin-bottom: 0.6rem;">';
         html += '<div class="detail-section-title">Update Order</div>';
-        html += `<div class="form-group mt-1"><label>Status</label><select id="detailStatus" class="form-control form-control-sm">${ORDER_STATUSES.map(s => `<option value="${s}" ${s === o.status ? 'selected' : ''}>${s}</option>`).join('')}</select></div>`;
+        // Status is deliberately not a free-form selector.  The cockpit mounts
+        // explicit, prerequisite-aware lifecycle actions in this location.
+        html += `<div class="form-group mt-1"><label>Status</label><div class="form-control form-control-sm" aria-live="polite">${escapeHtml(o.status || 'New')}</div></div>`;
+        html += '<div id="adminLifecycleMount"></div>';
         
         // ⭐ REPLACE SUPPLIER DROPDOWN WITH BUTTON
         html += `<div class="form-group">
@@ -2279,7 +2309,8 @@ function renderOrderDetail(o) {
     if (btnSave) {
         btnSave.addEventListener('click', async () => {
             const payload = {
-                status: document.getElementById('detailStatus').value,
+                // Lifecycle status changes are handled by admin-cockpit.js only.
+                status: o.status,
                 supplier_id: o.supplier_id || null, // Keep current supplier_id (updated by modal)
                 expected_delivery_date: document.getElementById('detailExpected').value || null,
                 unit_price: parseFloat(document.getElementById('detailUnitPrice').value || 0) || null,
@@ -2288,9 +2319,26 @@ function renderOrderDetail(o) {
                 alternative_product_name: document.getElementById('detailAltProductName') ? document.getElementById('detailAltProductName').value || null : null,
                 alternative_product_description: document.getElementById('detailAltProductDesc') ? document.getElementById('detailAltProductDesc').value || null : null
             };
-            const res = await apiPut(`/orders/${o.id}`, payload);
-            if (res.success) { alert('Order updated'); currentPage = 1; loadOrders(); openOrderDetail(o.id); } // ⭐ FIX: reset pagination after update
-            else { alert('Failed to update order: ' + (res.message || 'Unknown error')); }
+            const detailTranslate = key => window.AdminCockpit?.t?.(key) || window.i18n?.t?.(key) || key;
+            btnSave.disabled = true;
+            const previousLabel = btnSave.textContent;
+            btnSave.textContent = detailTranslate('saving');
+            try {
+                const res = await apiPut(`/orders/${o.id}`, payload);
+                if (res.success) {
+                    if (typeof showToast === 'function') showToast(detailTranslate('orderDetail.updated'), 'success');
+                    currentPage = 1;
+                    await loadOrders();
+                    await openOrderDetail(o.id);
+                } else {
+                    if (typeof showToast === 'function') showToast(detailTranslate('orderDetail.updateError') + ': ' + (res.message || ''), 'error');
+                }
+            } catch (err) {
+                if (typeof showToast === 'function') showToast(detailTranslate('orderDetail.updateError') + ': ' + (err?.message || ''), 'error');
+            } finally {
+                btnSave.disabled = false;
+                btnSave.textContent = previousLabel;
+            }
         });
     }
 

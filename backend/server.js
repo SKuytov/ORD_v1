@@ -148,8 +148,26 @@ app.get('/api/health', async (req, res) => {
     }
 });
 
-// Serve frontend
+// Serve frontend.
+//
+// The catch-all must never answer for API or upload paths. Before this guard a
+// mistyped endpoint returned index.html with status 200, so the client tried to
+// JSON.parse a page of HTML and reported a confusing parse error instead of a
+// 404. Uploads are equally important: they are served only by the authenticated
+// routes in routes/documents.js, and a 200 here made it look as though a public
+// upload directory still existed.
+app.use('/api', (req, res) => {
+    res.status(404).json({ success: false, message: 'Endpoint not found' });
+});
+
+app.use('/uploads', (req, res) => {
+    res.status(404).json({ success: false, message: 'Not found' });
+});
+
 app.get('*', (req, res) => {
+    if (path.basename(req.path).startsWith('.')) {
+        return res.status(404).json({ success: false, message: 'Not found' });
+    }
     res.sendFile(path.join(__dirname, '../frontend/index.html'));
 });
 

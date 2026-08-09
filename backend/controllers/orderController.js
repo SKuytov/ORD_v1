@@ -686,6 +686,19 @@ exports.confirmDelivery = async (req, res) => {
             const [[order]] = await connection.query('SELECT * FROM orders WHERE id = ? FOR UPDATE', [orderId]);
             if (!order) throw new HttpError(404, 'Order not found');
 
+            // Delivered is terminal. Without this guard a second confirmation on
+            // an already delivered order was accepted: the row lock serialises
+            // the requests, but validateOrderTransition treats Delivered ->
+            // Delivered as a no-op, so a duplicate submit could silently rewrite
+            // the received quantities and the delivery date. Two PM2 workers plus
+            // an impatient double click made that reachable in practice.
+            if (order.status === 'Delivered') {
+                throw new HttpError(409, 'This order is already marked delivered; reopen it before confirming another delivery');
+            }
+            if (order.status === 'Cancelled') {
+                throw new HttpError(409, 'Cannot confirm a delivery for a cancelled order');
+            }
+
             const [[proof]] = await connection.query(
                 `SELECT d.id FROM documents d
                  LEFT JOIN order_documents_link odl ON odl.document_id = d.id AND odl.order_id = ?
@@ -728,14 +741,29 @@ exports.confirmDelivery = async (req, res) => {
                 );
             }
 
+            // A purchase order can cover several orders, because po_items carries
+            // its own order_id. The two statuses must therefore be derived from
+            // different sets: the ORDER's status from this order's items only,
+            // and the PO's status from every item on the PO. Deriving both from
+            // the whole PO left a fully received order stuck on "Partially
+            // Delivered" whenever a sibling order on the same PO was still open,
+            // and that order could then be confirmed again and again.
+            const isFullyReceived = items => items.length > 0 && items.every(item =>
+                item.status === 'cancelled' || Number(item.received_quantity) >= Number(item.quantity)
+            );
+
+            const [thisOrderItems] = await connection.query(
+                'SELECT * FROM po_items WHERE po_id = ? AND order_id = ? ORDER BY id ASC',
+                [po.id, orderId]
+            );
             const [allPoItems] = await connection.query(
                 'SELECT * FROM po_items WHERE po_id = ? ORDER BY id ASC FOR UPDATE',
                 [po.id]
             );
-            const allReceived = allPoItems.length > 0 && allPoItems.every(item =>
-                item.status !== 'cancelled' && Number(item.received_quantity) >= Number(item.quantity)
-            );
-            const nextStatus = allReceived ? 'Delivered' : 'Partially Delivered';
+
+            const orderFullyReceived = isFullyReceived(thisOrderItems);
+            const poFullyReceived = isFullyReceived(allPoItems);
+            const nextStatus = orderFullyReceived ? 'Delivered' : 'Partially Delivered';
             const lifecycle = validateOrderTransition(order.status, nextStatus, {
                 hasPurchaseOrder: true,
                 actualDeliveryDate,
@@ -745,7 +773,7 @@ exports.confirmDelivery = async (req, res) => {
 
             await connection.query(
                 'UPDATE purchase_orders SET actual_delivery_date = ?, status = ? WHERE id = ?',
-                [actualDeliveryDate, allReceived ? 'delivered' : 'partially_delivered', po.id]
+                [actualDeliveryDate, poFullyReceived ? 'delivered' : 'partially_delivered', po.id]
             );
             await connection.query(
                 `UPDATE orders

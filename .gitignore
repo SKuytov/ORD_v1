@@ -35,3 +35,4 @@ backend/uploads/*
 !.env.example
 backups/
 backend/uploads/
+backend/node_modules/

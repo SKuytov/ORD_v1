@@ -11,7 +11,7 @@ const pool = mysql.createPool({
     connectionLimit: 10,
     maxIdle: 10,
     idleTimeout: 60000,
-    queueLimit: 0,
+    queueLimit: 50,
     enableKeepAlive: true,
     keepAliveInitialDelay: 0,
     connectTimeout: 10000,
@@ -28,18 +28,5 @@ pool.getConnection()
     .catch(err => {
         console.error('Database connection failed:', err.message);
     });
-
-// Graceful shutdown
-process.on('SIGTERM', async () => {
-    console.log('SIGTERM received, closing database pool');
-    await pool.end();
-    process.exit(0);
-});
-
-process.on('SIGINT', async () => {
-    console.log('SIGINT received, closing database pool');
-    await pool.end();
-    process.exit(0);
-});
 
 module.exports = pool;

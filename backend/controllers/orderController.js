@@ -3,6 +3,79 @@ const path = require('path');
 const fs = require('fs');
 const db = require('../config/database');
 const emailService = require('../utils/emailService');
+const { getOrderScope, getManagedBuildingCodes, canAccessOrder } = require('../middleware/authz');
+const { withTransaction } = require('../utils/withTransaction');
+const { validateOrderTransition } = require('../utils/orderLifecycle');
+
+class HttpError extends Error {
+    constructor(status, message) {
+        super(message);
+        this.status = status;
+    }
+}
+
+function sendHttpError(res, error, fallback) {
+    const status = error instanceof HttpError ? error.status : 500;
+    if (status === 500) console.error(fallback, error);
+    return res.status(status).json({
+        success: false,
+        message: error instanceof HttpError ? error.message : fallback
+    });
+}
+
+function validPositiveInteger(value) {
+    const number = Number(value);
+    return Number.isInteger(number) && number > 0;
+}
+
+async function getLifecycleContext(connection, order, overrides = {}) {
+    let quote = null;
+    let purchaseOrder = null;
+    if (order.quote_ref) {
+        [[quote]] = await connection.query('SELECT id, status FROM quotes WHERE id = ?', [order.quote_ref]);
+    }
+    if (order.po_id) {
+        [[purchaseOrder]] = await connection.query(
+            'SELECT id, actual_delivery_date FROM purchase_orders WHERE id = ?',
+            [order.po_id]
+        );
+    }
+    const [[proof]] = await connection.query(
+        `SELECT d.id
+         FROM documents d
+         LEFT JOIN order_documents_link odl ON odl.document_id = d.id AND odl.order_id = ?
+         WHERE (d.order_id = ? OR odl.order_id IS NOT NULL)
+           AND d.document_type IN ('delivery_proof', 'signed_delivery_note')
+         LIMIT 1`,
+        [order.id, order.id]
+    );
+    return {
+        hasSupplier: Boolean(order.supplier_id),
+        hasQuote: Boolean(quote),
+        quoteApproved: quote?.status === 'Approved',
+        approvalApproved: order.approval_status === 'approved',
+        hasPurchaseOrder: Boolean(purchaseOrder),
+        actualDeliveryDate: purchaseOrder?.actual_delivery_date || null,
+        hasDeliveryProof: Boolean(proof),
+        ...overrides
+    };
+}
+
+async function writeOrderAudit(connection, orderId, fieldName, oldValue, newValue, userId, reason) {
+    await connection.query(
+        `INSERT INTO orders_audit_log (order_id, field_name, old_value, new_value, changed_by, reason)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [orderId, fieldName, oldValue == null ? null : String(oldValue), newValue == null ? null : String(newValue), userId, reason || null]
+    );
+}
+
+async function writeOrderHistory(connection, orderId, actor, fieldName, oldValue, newValue) {
+    await connection.query(
+        `INSERT INTO order_history (order_id, changed_by, field_name, old_value, new_value)
+         VALUES (?, ?, ?, ?, ?)`,
+        [orderId, actor, fieldName, oldValue == null ? null : String(oldValue), newValue == null ? null : String(newValue)]
+    );
+}
 
 // ─── Helper: check if user is a building manager and return their building code ──
 async function getBuildingManagerInfo(userId) {
@@ -44,10 +117,12 @@ exports.createOrder = async (req, res) => {
         await connection.beginTransaction();
 
         const {
-            building, itemDescription, partNumber, category,
-            quantity, dateNeeded, priority, notes,
-            requester, requesterEmail, costCenterId
+            itemDescription, partNumber, category,
+            quantity, dateNeeded, priority, notes, costCenterId
         } = req.body;
+        const building = req.user.building;
+        const requester = req.user.name;
+        const requesterEmail = req.user.email;
 
         // Input length validation
         const validationErrors = [];
@@ -63,15 +138,34 @@ exports.createOrder = async (req, res) => {
             validationErrors.push('Notes must be 2000 characters or fewer.');
         }
         if (!building || typeof building !== 'string' || building.trim().length === 0) {
-            validationErrors.push('Building is required.');
+            validationErrors.push('Your account is not assigned to a building.');
         }
         if (!quantity || isNaN(parseInt(quantity)) || parseInt(quantity) < 1) {
             validationErrors.push('Quantity must be a positive number.');
         }
         if (validationErrors.length > 0) {
             await connection.rollback();
-            connection.release();
             return res.status(400).json({ success: false, message: validationErrors.join(' ') });
+        }
+
+        const [[activeBuilding]] = await connection.query(
+            'SELECT code FROM buildings WHERE code = ? AND active = 1',
+            [building]
+        );
+        if (!activeBuilding) {
+            await connection.rollback();
+            return res.status(403).json({ success: false, message: 'Your account is not assigned to an active building.' });
+        }
+
+        if (costCenterId) {
+            const [[costCenter]] = await connection.query(
+                'SELECT id FROM cost_centers WHERE id = ? AND building_code = ? AND active = 1',
+                [costCenterId, building]
+            );
+            if (!costCenter) {
+                await connection.rollback();
+                return res.status(403).json({ success: false, message: 'Cost center does not belong to your building.' });
+            }
         }
 
         const [result] = await connection.query(
@@ -214,18 +308,12 @@ exports.getOrders = async (req, res) => {
         const conditions = [];
         const params = [];
 
-        // Role-based filtering
-        if (req.user.role === 'requester') {
-            // ⭐ Building managers see ALL orders from their building
-            // Regular requesters see only their own orders
-            if (req.user.isBuildingManager && req.user.managedBuilding) {
-                conditions.push('o.building = ?');
-                params.push(req.user.managedBuilding);
-            } else {
-                conditions.push('o.requester_id = ?');
-                params.push(req.user.id);
-            }
+        const scope = await getOrderScope(req.user, 'o');
+        if (!scope.allowed) {
+            return res.status(403).json({ success: false, message: 'Access denied' });
         }
+        conditions.push(scope.clause);
+        params.push(...scope.params);
 
         // Always exclude templates from the order list
         conditions.push('(o.is_template IS NULL OR o.is_template = 0)');
@@ -348,10 +436,7 @@ exports.getOrderById = async (req, res) => {
     try {
         const { id } = req.params;
 
-        // SECURITY: requesters can only see orders from their own building
-        // Building managers (who have role=requester) can see all orders in their building
         const isRequester = req.user.role === 'requester';
-        const isBuildingManager = isRequester && req.user.isBuildingManager && req.user.managedBuilding;
 
         // Requester view: strip sensitive supplier/price fields at DB level
         const selectFields = isRequester
@@ -380,23 +465,9 @@ exports.getOrderById = async (req, res) => {
                LEFT JOIN cost_centers cc ON o.cost_center_id = cc.id
                LEFT JOIN users u_assigned ON o.assigned_to_user_id = u_assigned.id`;
 
-        // Building managers can see any order in their building
-        // Regular requesters can only see orders from their own building
-        let whereClause, queryParams;
-        if (isBuildingManager) {
-            whereClause = `WHERE o.id = ? AND o.building = ?`;
-            queryParams = [id, req.user.managedBuilding];
-        } else if (isRequester) {
-            whereClause = `WHERE o.id = ? AND o.building = ?`;
-            queryParams = [id, req.user.building];
-        } else {
-            whereClause = `WHERE o.id = ?`;
-            queryParams = [id];
-        }
-
         const [orders] = await db.query(
-            `SELECT ${selectFields} FROM orders o ${joins} ${whereClause}`,
-            queryParams
+            `SELECT ${selectFields} FROM orders o ${joins} WHERE o.id = ?`,
+            [id]
         );
 
         if (orders.length === 0) {
@@ -404,6 +475,20 @@ exports.getOrderById = async (req, res) => {
         }
 
         const order = orders[0];
+
+        // The delivery workflow needs the lines belonging to this order's PO.
+        // Keep the existing order response shape and add this one field.
+        if (order.po_id) {
+            const [poItems] = await db.query(
+                `SELECT * FROM po_items
+                 WHERE po_id = ? AND order_id = ?
+                 ORDER BY id ASC`,
+                [order.po_id, id]
+            );
+            order.poItems = poItems;
+        } else {
+            order.poItems = [];
+        }
 
         // Get files
         const [files] = await db.query(
@@ -464,177 +549,408 @@ exports.getOrderById = async (req, res) => {
 };
 
 exports.updateOrder = async (req, res) => {
-    const connection = await db.getConnection();
-
     try {
-        await connection.beginTransaction();
+        const result = await withTransaction(db, async connection => {
+            const { id } = req.params;
+            const updates = req.body || {};
+            const [[orderData]] = await connection.query(
+                'SELECT * FROM orders WHERE id = ? FOR UPDATE', [id]
+            );
+            if (!orderData) throw new HttpError(404, 'Order not found');
 
-        const { id } = req.params;
-        const updates = req.body;
-
-        const [currentOrder] = await connection.query(
-            'SELECT * FROM orders WHERE id = ?', [id]
-        );
-
-        if (currentOrder.length === 0) {
-            await connection.rollback();
-            return res.status(404).json({ success: false, message: 'Order not found' });
-        }
-
-        const orderData = currentOrder[0];
-        
-        // ⭐ NEW: Check assignment permissions
-        if (orderData.assigned_to_user_id && req.user.role !== 'admin') {
-            // If order is assigned, only the assigned user can edit it
-            if (orderData.assigned_to_user_id !== req.user.id) {
-                await connection.rollback();
-                
-                // Get assigned user name
-                const [assignedUser] = await connection.query(
-                    'SELECT name FROM users WHERE id = ?',
-                    [orderData.assigned_to_user_id]
+            if (orderData.assigned_to_user_id && req.user.role !== 'admin' && orderData.assigned_to_user_id !== req.user.id) {
+                const [[assignedUser]] = await connection.query(
+                    'SELECT name FROM users WHERE id = ?', [orderData.assigned_to_user_id]
                 );
-                
-                return res.status(403).json({ 
-                    success: false, 
-                    message: `This order is currently being processed by ${assignedUser[0]?.name || 'another user'}. Only they or an admin can edit it.`,
-                    assigned_to: assignedUser[0]?.name
-                });
+                throw new HttpError(403, `This order is currently being processed by ${assignedUser?.name || 'another user'}. Only they or an admin can edit it.`);
             }
-        }
-        
-        // ⭐ NEW: Auto-claim order on first edit if not assigned
-        if (!orderData.assigned_to_user_id && ['admin', 'procurement'].includes(req.user.role)) {
-            const now = new Date();
-            await connection.query(
-                `UPDATE orders 
-                 SET assigned_to_user_id = ?, assigned_at = ?, last_activity_at = ?
-                 WHERE id = ?`,
-                [req.user.id, now, now, id]
-            );
-            
-            // Log the auto-claim
-            await connection.query(
-                `INSERT INTO order_assignment_history 
-                 (order_id, assigned_to_user_id, assigned_by_user_id, assignment_type, reason)
-                 VALUES (?, ?, ?, 'claim', 'Auto-claimed on first edit')`,
-                [id, req.user.id, req.user.id]
-            );
-        }
 
-        // Allowed updatable fields
-        const allowedFields = [
-            'status', 'supplier', 'supplier_id', 'quote_id', 'price',
-            'unit_price', 'total_price', 'assigned_to', 'priority',
-            'expected_delivery_date', 'notes', 'part_number', 'category',
-            'cost_center_id',
-            'supplier_notes', 'alternative_product_name', 'alternative_product_description'
-        ];
-
-        const updateFields = [];
-        const updateValues = [];
-
-        for (const key of Object.keys(updates)) {
-            if (allowedFields.includes(key)) {
-                updateFields.push(`${key} = ?`);
-                updateValues.push(updates[key]);
+            if (!orderData.assigned_to_user_id && ['admin', 'procurement'].includes(req.user.role)) {
+                await connection.query(
+                    `UPDATE orders
+                     SET assigned_to_user_id = ?, assigned_at = NOW(), last_activity_at = NOW()
+                     WHERE id = ?`,
+                    [req.user.id, id]
+                );
+                await connection.query(
+                    `INSERT INTO order_assignment_history
+                     (order_id, assigned_to_user_id, assigned_by_user_id, assignment_type, reason)
+                     VALUES (?, ?, ?, 'claim', 'Auto-claimed on first edit')`,
+                    [id, req.user.id, req.user.id]
+                );
             }
-        }
 
-        if (updateFields.length > 0) {
-            updateValues.push(id);
+            const allowedFields = [
+                'status', 'supplier', 'supplier_id', 'quote_id', 'price',
+                'unit_price', 'total_price', 'assigned_to', 'priority',
+                'expected_delivery_date', 'notes', 'part_number', 'category',
+                'cost_center_id', 'supplier_notes', 'alternative_product_name',
+                'alternative_product_description'
+            ];
+            const changedKeys = Object.keys(updates).filter(key => allowedFields.includes(key));
+            if (Object.prototype.hasOwnProperty.call(updates, 'status')) {
+                const lifecycleOrder = {
+                    ...orderData,
+                    supplier_id: Object.prototype.hasOwnProperty.call(updates, 'supplier_id') ? updates.supplier_id : orderData.supplier_id
+                };
+                const lifecycle = validateOrderTransition(
+                    orderData.status,
+                    updates.status,
+                    await getLifecycleContext(connection, lifecycleOrder)
+                );
+                if (!lifecycle.ok) throw new HttpError(409, lifecycle.message);
+            }
 
-            await connection.query(
-                `UPDATE orders SET ${updateFields.join(', ')} WHERE id = ?`,
-                updateValues
-            );
-
-            // Log history for each changed field
-            for (const key of Object.keys(updates)) {
-                if (allowedFields.includes(key) && String(orderData[key]) !== String(updates[key])) {
-                    await connection.query(
-                        `INSERT INTO order_history
-                        (order_id, changed_by, field_name, old_value, new_value)
-                        VALUES (?, ?, ?, ?, ?)`,
-                        [id, req.user.name || req.user.username, key,
-                         String(orderData[key] || ''), String(updates[key] || '')]
-                    );
+            if (changedKeys.length) {
+                const updateFields = changedKeys.map(key => `${key} = ?`);
+                const updateValues = changedKeys.map(key => updates[key]);
+                await connection.query(
+                    `UPDATE orders SET ${updateFields.join(', ')} WHERE id = ?`,
+                    [...updateValues, id]
+                );
+                for (const key of changedKeys) {
+                    if (String(orderData[key] ?? '') !== String(updates[key] ?? '')) {
+                        await writeOrderHistory(connection, id, req.user.name || req.user.username, key, orderData[key], updates[key]);
+                        if (key === 'status') {
+                            await writeOrderAudit(connection, id, 'status', orderData.status, updates.status, req.user.id, 'Generic order update');
+                        }
+                    }
                 }
             }
-        }
 
-        // ⭐ Write to supplier_item_history when a supplier is newly assigned
-        if (updates.supplier_id && String(updates.supplier_id) !== String(orderData.supplier_id)) {
-            const keywords = (orderData.item_description || '')
-                .toLowerCase()
-                .replace(/[^a-z\u0400-\u04ff0-9\s-]/g, ' ')
-                .split(/\s+/)
-                .filter(w => w.length > 2)
-                .join(' ');
-            // BUG FIX: must use await so this runs inside the transaction
-            await connection.query(
-                `INSERT INTO supplier_item_history
-                 (order_id, supplier_id, item_description, part_number, category, keywords, match_quality)
-                 VALUES (?, ?, ?, ?, ?, ?, 'manual')
-                 ON DUPLICATE KEY UPDATE
-                 supplier_id = VALUES(supplier_id),
-                 keywords = VALUES(keywords)`,
-                [
-                    id,
-                    updates.supplier_id,
-                    orderData.item_description || '',
-                    orderData.part_number || null,
-                    orderData.category || null,
-                    keywords
-                ]
-            ).catch(err => console.warn('[AI] supplier_item_history insert failed:', err.message));
-        }
+            if (updates.supplier_id && String(updates.supplier_id) !== String(orderData.supplier_id)) {
+                const keywords = (orderData.item_description || '')
+                    .toLowerCase()
+                    .replace(/[^a-z\u0400-\u04ff0-9\s-]/g, ' ')
+                    .split(/\s+/)
+                    .filter(word => word.length > 2)
+                    .join(' ');
+                await connection.query(
+                    `INSERT INTO supplier_item_history
+                     (order_id, supplier_id, item_description, part_number, category, keywords, match_quality)
+                     VALUES (?, ?, ?, ?, ?, ?, 'manual')`,
+                    [id, updates.supplier_id, orderData.item_description || '', orderData.part_number || null,
+                     orderData.category || null, keywords]
+                );
+            }
+            return { orderData, statusChanged: updates.status && updates.status !== orderData.status };
+        });
 
-        await connection.commit();
-
-        // Send email if status changed
-        if (updates.status && updates.status !== orderData.status) {
-            // Notify the requester
+        if (result.statusChanged) {
             emailService.sendStatusUpdateNotification({
-                orderId: id,
-                requesterEmail: orderData.requester_email,
-                requesterName: orderData.requester_name,
-                requesterId: orderData.requester_id,
-                oldStatus: orderData.status,
-                newStatus: updates.status,
-                building: orderData.building,
-                itemDescription: orderData.item_description,
-                priority: orderData.priority,
-                quantity: orderData.quantity,
-                unit: orderData.unit,
-                supplierName: orderData.supplier,
-                expectedDelivery: orderData.expected_delivery_date,
-            }).catch(err => console.error('Status update email (requester) failed:', err.message));
-
-            // ⭐ NEW: Also notify the building manager of this order's building
-            emailService.sendBuildingManagerStatusUpdateNotification({
-                orderId: id,
-                building: orderData.building,
-                itemDescription: orderData.item_description,
-                requesterName: orderData.requester_name,
-                oldStatus: orderData.status,
-                newStatus: updates.status,
-                priority: orderData.priority,
-                quantity: orderData.quantity,
-                supplierName: orderData.supplier,
-                expectedDelivery: orderData.expected_delivery_date,
-                // Exclude if the requester IS the building manager (to avoid duplicate email)
-                excludeUserId: orderData.requester_id,
-            }).catch(err => console.error('Status update email (building manager) failed:', err.message));
+                orderId: req.params.id,
+                requesterEmail: result.orderData.requester_email,
+                requesterName: result.orderData.requester_name,
+                requesterId: result.orderData.requester_id,
+                oldStatus: result.orderData.status,
+                newStatus: req.body.status,
+                building: result.orderData.building,
+                itemDescription: result.orderData.item_description,
+                priority: result.orderData.priority,
+                quantity: result.orderData.quantity,
+                supplierName: result.orderData.supplier,
+                expectedDelivery: result.orderData.expected_delivery_date
+            }).catch(error => console.error('Status update email (requester) failed:', error.message));
         }
-
         res.json({ success: true, message: 'Order updated successfully' });
     } catch (error) {
-        await connection.rollback();
-        console.error('Update order error:', error);
-        res.status(500).json({ success: false, message: 'Failed to update order' });
-    } finally {
-        connection.release();
+        sendHttpError(res, error, 'Failed to update order');
+    }
+};
+
+exports.confirmDelivery = async (req, res) => {
+    const orderId = Number(req.params.orderId);
+    const { actual_delivery_date: actualDeliveryDate, partial, items, proof_document_id: proofDocumentId } = req.body || {};
+    if (!validPositiveInteger(orderId) || !validPositiveInteger(proofDocumentId)) {
+        return res.status(422).json({ success: false, message: 'A valid delivery proof document is required' });
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(actualDeliveryDate || ''))) {
+        return res.status(422).json({ success: false, message: 'A valid actual_delivery_date is required' });
+    }
+    if (typeof partial !== 'boolean' || !Array.isArray(items) || !items.length) {
+        return res.status(422).json({ success: false, message: 'partial and at least one delivery item are required' });
+    }
+
+    const submitted = new Map();
+    for (const item of items) {
+        const itemId = Number(item?.id);
+        const receivedQuantity = Number(item?.received_quantity);
+        if (!Number.isInteger(itemId) || itemId < 1 || !Number.isInteger(receivedQuantity) || receivedQuantity < 0 || submitted.has(itemId)) {
+            return res.status(422).json({ success: false, message: 'Delivery items must have unique IDs and non-negative whole received quantities' });
+        }
+        submitted.set(itemId, receivedQuantity);
+    }
+
+    try {
+        const delivery = await withTransaction(db, async connection => {
+            const [[order]] = await connection.query('SELECT * FROM orders WHERE id = ? FOR UPDATE', [orderId]);
+            if (!order) throw new HttpError(404, 'Order not found');
+
+            // Delivered is terminal. Without this guard a second confirmation on
+            // an already delivered order was accepted: the row lock serialises
+            // the requests, but validateOrderTransition treats Delivered ->
+            // Delivered as a no-op, so a duplicate submit could silently rewrite
+            // the received quantities and the delivery date. Two PM2 workers plus
+            // an impatient double click made that reachable in practice.
+            if (order.status === 'Delivered') {
+                throw new HttpError(409, 'This order is already marked delivered; reopen it before confirming another delivery');
+            }
+            if (order.status === 'Cancelled') {
+                throw new HttpError(409, 'Cannot confirm a delivery for a cancelled order');
+            }
+
+            const [[proof]] = await connection.query(
+                `SELECT d.id FROM documents d
+                 LEFT JOIN order_documents_link odl ON odl.document_id = d.id AND odl.order_id = ?
+                 WHERE d.id = ? AND (d.order_id = ? OR odl.order_id IS NOT NULL)
+                   AND d.document_type IN ('delivery_proof', 'signed_delivery_note')
+                 FOR UPDATE`,
+                [orderId, proofDocumentId, orderId]
+            );
+            if (!proof) throw new HttpError(422, 'Delivery proof must be linked to this order and be a delivery proof or signed delivery note');
+
+            const [[po]] = await connection.query(
+                `SELECT * FROM purchase_orders
+                 WHERE id = ? OR (po_number = ? AND ? IS NOT NULL)
+                 ORDER BY id ASC LIMIT 1 FOR UPDATE`,
+                [order.po_id || 0, order.po_number || null, order.po_number || null]
+            );
+            if (!po) throw new HttpError(409, 'Cannot confirm delivery: missing prerequisite a purchase order');
+
+            const [orderItems] = await connection.query(
+                'SELECT * FROM po_items WHERE po_id = ? AND order_id = ? ORDER BY id ASC FOR UPDATE',
+                [po.id, orderId]
+            );
+            if (!orderItems.length) throw new HttpError(422, 'This order has no purchase-order items to receive');
+            const byId = new Map(orderItems.map(item => [Number(item.id), item]));
+            for (const [itemId, receivedQuantity] of submitted) {
+                const poItem = byId.get(itemId);
+                if (!poItem) throw new HttpError(422, `PO item ${itemId} does not belong to this order's purchase order`);
+                if (receivedQuantity > Number(poItem.quantity)) {
+                    throw new HttpError(422, `Received quantity for PO item ${itemId} exceeds its ordered quantity`);
+                }
+            }
+
+            for (const [itemId, receivedQuantity] of submitted) {
+                const poItem = byId.get(itemId);
+                const itemStatus = receivedQuantity === 0 ? 'pending'
+                    : receivedQuantity === Number(poItem.quantity) ? 'received' : 'partial';
+                await connection.query(
+                    'UPDATE po_items SET received_quantity = ?, status = ? WHERE id = ? AND po_id = ? AND order_id = ?',
+                    [receivedQuantity, itemStatus, itemId, po.id, orderId]
+                );
+            }
+
+            // A purchase order can cover several orders, because po_items carries
+            // its own order_id. The two statuses must therefore be derived from
+            // different sets: the ORDER's status from this order's items only,
+            // and the PO's status from every item on the PO. Deriving both from
+            // the whole PO left a fully received order stuck on "Partially
+            // Delivered" whenever a sibling order on the same PO was still open,
+            // and that order could then be confirmed again and again.
+            const isFullyReceived = items => items.length > 0 && items.every(item =>
+                item.status === 'cancelled' || Number(item.received_quantity) >= Number(item.quantity)
+            );
+
+            const [thisOrderItems] = await connection.query(
+                'SELECT * FROM po_items WHERE po_id = ? AND order_id = ? ORDER BY id ASC',
+                [po.id, orderId]
+            );
+            const [allPoItems] = await connection.query(
+                'SELECT * FROM po_items WHERE po_id = ? ORDER BY id ASC FOR UPDATE',
+                [po.id]
+            );
+
+            const orderFullyReceived = isFullyReceived(thisOrderItems);
+            const poFullyReceived = isFullyReceived(allPoItems);
+            const nextStatus = orderFullyReceived ? 'Delivered' : 'Partially Delivered';
+            const lifecycle = validateOrderTransition(order.status, nextStatus, {
+                hasPurchaseOrder: true,
+                actualDeliveryDate,
+                hasDeliveryProof: true
+            });
+            if (!lifecycle.ok) throw new HttpError(409, lifecycle.message);
+
+            await connection.query(
+                'UPDATE purchase_orders SET actual_delivery_date = ?, status = ? WHERE id = ?',
+                [actualDeliveryDate, poFullyReceived ? 'delivered' : 'partially_delivered', po.id]
+            );
+            await connection.query(
+                `UPDATE orders
+                 SET status = ?, delivery_confirmed_at = NOW(), delivery_confirmed_by = ?, updated_at = NOW()
+                 WHERE id = ?`,
+                [nextStatus, req.user.id, orderId]
+            );
+            await writeOrderHistory(connection, orderId, req.user.name || req.user.username, 'status', order.status, nextStatus);
+            await writeOrderAudit(connection, orderId, 'status', order.status, nextStatus, req.user.id, 'Delivery confirmed');
+            await writeOrderAudit(connection, orderId, 'delivery_confirmed_at', null, actualDeliveryDate, req.user.id, 'Delivery confirmed');
+
+            const [[updatedOrder]] = await connection.query('SELECT * FROM orders WHERE id = ?', [orderId]);
+            const [[updatedPo]] = await connection.query('SELECT * FROM purchase_orders WHERE id = ?', [po.id]);
+            const [updatedItems] = await connection.query(
+                'SELECT * FROM po_items WHERE po_id = ? AND order_id = ? ORDER BY id ASC',
+                [po.id, orderId]
+            );
+            return { order: updatedOrder, po: updatedPo, poItems: updatedItems };
+        });
+        res.json({ success: true, ...delivery });
+    } catch (error) {
+        sendHttpError(res, error, 'Failed to confirm delivery');
+    }
+};
+
+exports.bulkAssignSupplier = async (req, res) => {
+    const rawOrderIds = req.body?.order_ids;
+    const supplierId = Number(req.body?.supplier_id);
+    if (!Array.isArray(rawOrderIds) || !rawOrderIds.length || !validPositiveInteger(supplierId)) {
+        return res.status(422).json({ success: false, message: 'order_ids and a valid supplier_id are required' });
+    }
+    const orderIds = [...new Set(rawOrderIds.map(Number))];
+    if (orderIds.length !== rawOrderIds.length || orderIds.some(id => !validPositiveInteger(id))) {
+        return res.status(422).json({ success: false, message: 'order_ids must contain unique positive integers' });
+    }
+
+    try {
+        // Keep the policy centralized in authz, while returning all bad IDs rather
+        // than changing a subset before the caller can correct its selection.
+        const access = await Promise.all(orderIds.map(id => canAccessOrder(id, req.user)));
+        const inaccessible = access
+            .map((result, index) => ({ id: orderIds[index], reason: result.reason }))
+            .filter(result => result.reason);
+        if (inaccessible.length) {
+            return res.status(inaccessible.some(item => item.reason === 'not_found') ? 404 : 403).json({
+                success: false,
+                message: 'One or more orders are unavailable',
+                offending_orders: inaccessible
+            });
+        }
+
+        const updated = await withTransaction(db, async connection => {
+            const [[supplier]] = await connection.query(
+                'SELECT id, name FROM suppliers WHERE id = ? AND active = 1 FOR UPDATE',
+                [supplierId]
+            );
+            if (!supplier) throw new HttpError(422, 'Supplier does not exist or is inactive');
+            const [orders] = await connection.query(
+                'SELECT * FROM orders WHERE id IN (?) ORDER BY id ASC FOR UPDATE',
+                [orderIds]
+            );
+            const rowsById = new Map(orders.map(order => [Number(order.id), order]));
+            const offending = orderIds
+                .filter(id => !rowsById.has(id))
+                .map(id => ({ id, reason: 'not_found' }));
+            const assignableStatuses = new Set(['New', 'Pending', 'Quote Requested']);
+            for (const order of orders) {
+                if (!assignableStatuses.has(order.status)) {
+                    offending.push({ id: order.id, reason: `supplier_assignment_not_allowed_in_${order.status}` });
+                }
+            }
+            if (offending.length) {
+                const error = new HttpError(409, 'No orders were changed because one or more orders are not eligible for supplier assignment');
+                error.offendingOrders = offending;
+                throw error;
+            }
+
+            for (const order of orders) {
+                await connection.query(
+                    `UPDATE orders SET supplier_id = ?, supplier = ?, last_activity_at = NOW(), updated_at = NOW()
+                     WHERE id = ?`,
+                    [supplier.id, supplier.name, order.id]
+                );
+                await writeOrderHistory(connection, order.id, req.user.name || req.user.username, 'supplier_id', order.supplier_id, supplier.id);
+                await writeOrderAudit(connection, order.id, 'supplier_id', order.supplier_id, supplier.id, req.user.id, 'Bulk supplier assignment');
+            }
+            return orders.length;
+        });
+        res.json({ success: true, updated, order_ids: orderIds });
+    } catch (error) {
+        if (error instanceof HttpError && error.offendingOrders) {
+            return res.status(error.status).json({
+                success: false,
+                message: error.message,
+                offending_orders: error.offendingOrders
+            });
+        }
+        sendHttpError(res, error, 'Failed to assign supplier');
+    }
+};
+
+exports.submitApproval = async (req, res) => {
+    const orderId = Number(req.params.orderId);
+    try {
+        await withTransaction(db, async connection => {
+            const [[order]] = await connection.query('SELECT * FROM orders WHERE id = ? FOR UPDATE', [orderId]);
+            if (!order) throw new HttpError(404, 'Order not found');
+            const lifecycle = validateOrderTransition(
+                order.status,
+                'Quote Under Approval',
+                await getLifecycleContext(connection, order)
+            );
+            if (!lifecycle.ok) throw new HttpError(409, lifecycle.message);
+
+            await connection.query(
+                `UPDATE orders SET status = 'Quote Under Approval', approval_status = 'pending', updated_at = NOW()
+                 WHERE id = ?`,
+                [orderId]
+            );
+            await writeOrderHistory(connection, orderId, req.user.name || req.user.username, 'status', order.status, 'Quote Under Approval');
+            await writeOrderAudit(connection, orderId, 'status', order.status, 'Quote Under Approval', req.user.id, 'Submitted for approval');
+        });
+        res.json({ success: true, message: 'Order submitted for approval' });
+    } catch (error) {
+        sendHttpError(res, error, 'Failed to submit order for approval');
+    }
+};
+
+exports.approveOrder = async (req, res) => {
+    const orderId = Number(req.params.orderId);
+    try {
+        await withTransaction(db, async connection => {
+            const [[order]] = await connection.query('SELECT * FROM orders WHERE id = ? FOR UPDATE', [orderId]);
+            if (!order) throw new HttpError(404, 'Order not found');
+            const [[approval]] = await connection.query(
+                `SELECT * FROM approvals
+                 WHERE order_id = ? AND status = 'pending'
+                 ORDER BY requested_at DESC, id DESC LIMIT 1 FOR UPDATE`,
+                [orderId]
+            );
+            if (!approval) throw new HttpError(409, 'Cannot approve this order: missing prerequisite a pending approval request');
+            if (req.user.role !== 'admin' && Number(approval.assigned_to) !== Number(req.user.id)) {
+                throw new HttpError(403, 'This approval is assigned to another manager');
+            }
+            const lifecycle = validateOrderTransition(
+                order.status,
+                'Approved',
+                await getLifecycleContext(connection, order, { approvalApproved: true })
+            );
+            if (!lifecycle.ok) throw new HttpError(409, lifecycle.message);
+
+            const [approvalUpdate] = await connection.query(
+                `UPDATE approvals SET status = 'approved', approved_by = ?, approved_at = NOW(),
+                 comments = CONCAT(COALESCE(comments, ''), ?)
+                 WHERE id = ? AND status = 'pending'${req.user.role === 'admin' ? '' : ' AND assigned_to = ?'}`,
+                req.user.role === 'admin'
+                    ? [req.user.id, req.body?.comments ? `\n\nApproved: ${req.body.comments}` : '', approval.id]
+                    : [req.user.id, req.body?.comments ? `\n\nApproved: ${req.body.comments}` : '', approval.id, req.user.id]
+            );
+            if (approvalUpdate.affectedRows !== 1) throw new HttpError(409, 'This request has already been decided');
+            await connection.query(
+                `INSERT INTO approval_history (approval_id, action, performed_by, old_status, new_status, comments)
+                 VALUES (?, 'approved', ?, 'pending', 'approved', ?)`,
+                [approval.id, req.user.id, req.body?.comments || null]
+            );
+            await connection.query(
+                `UPDATE orders
+                 SET status = 'Approved', approval_status = 'approved', approved_by = ?, approved_at = NOW(), updated_at = NOW()
+                 WHERE id = ?`,
+                [req.user.id, orderId]
+            );
+            await writeOrderHistory(connection, orderId, req.user.name || req.user.username, 'status', order.status, 'Approved');
+            await writeOrderAudit(connection, orderId, 'status', order.status, 'Approved', req.user.id, 'Approval granted');
+        });
+        res.json({ success: true, message: 'Order approved' });
+    } catch (error) {
+        sendHttpError(res, error, 'Failed to approve order');
     }
 };
 
@@ -704,8 +1020,8 @@ exports.cancelOrderByManager = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Cancellation reason is required.' });
         }
 
-        // Only building managers can call this endpoint
-        if (!req.user.isBuildingManager || !req.user.managedBuilding) {
+        const managedBuildings = await getManagedBuildingCodes(req.user.id);
+        if (!managedBuildings.length) {
             await connection.rollback();
             return res.status(403).json({ success: false, message: 'Access denied. Building manager only.' });
         }
@@ -722,8 +1038,7 @@ exports.cancelOrderByManager = async (req, res) => {
 
         const order = orders[0];
 
-        // Verify the order belongs to the manager's building
-        if (order.building !== req.user.managedBuilding) {
+        if (!managedBuildings.includes(order.building)) {
             await connection.rollback();
             return res.status(403).json({ success: false, message: 'You can only cancel orders from your own building.' });
         }

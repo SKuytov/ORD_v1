@@ -23,10 +23,29 @@ function buildDateFilter(query, dateColumn = 'submission_date') {
     return { clause: clauses.join(''), params };
 }
 
+function buildAnalyticsScope(req, alias = '') {
+    if (!req.user || req.user.role !== 'manager') return { clause: '', params: [] };
+    if (!Array.isArray(req.authzBuildingCodes) || !req.authzBuildingCodes.length) {
+        return { clause: ' AND 1 = 0', params: [] };
+    }
+    const column = alias ? `${alias}.building` : 'building';
+    return { clause: ` AND ${column} IN (?)`, params: [req.authzBuildingCodes] };
+}
+
+function scopedFilter(req, dateFilter, alias = '') {
+    const scope = buildAnalyticsScope(req, alias);
+    return {
+        clause: `${dateFilter.clause}${scope.clause}`,
+        params: [...dateFilter.params, ...scope.params]
+    };
+}
+
 // GET /api/analytics/summary
 exports.getSummary = async (req, res) => {
     try {
         const df = buildDateFilter(req.query);
+        const scopedDf = scopedFilter(req, df);
+        const scopedODf = scopedFilter(req, df, 'o');
 
         // Compute previous period params for comparison
         let prevDf = { clause: '', params: [] };
@@ -52,8 +71,8 @@ exports.getSummary = async (req, res) => {
                 `SELECT COUNT(*) AS totalOrders,
                  COALESCE(SUM(CASE WHEN total_price > 0 THEN total_price ELSE 0 END),0) AS totalSpend,
                  COALESCE(AVG(CASE WHEN total_price > 0 THEN total_price ELSE NULL END),0) AS avgOrderValue
-                 FROM orders WHERE 1=1${prevDf.clause}`,
-                prevDf.params
+                 FROM orders WHERE 1=1${prevDf.clause}${buildAnalyticsScope(req).clause}`,
+                [...prevDf.params, ...buildAnalyticsScope(req).params]
             );
         }
 
@@ -65,8 +84,8 @@ exports.getSummary = async (req, res) => {
                 COUNT(CASE WHEN DATE_FORMAT(submission_date, '%Y-%m') = DATE_FORMAT(NOW(), '%Y-%m') THEN 1 END) AS ordersThisMonth,
                 COALESCE(SUM(CASE WHEN DATE_FORMAT(submission_date, '%Y-%m') = DATE_FORMAT(NOW(), '%Y-%m') AND total_price > 0 THEN total_price ELSE 0 END), 0) AS spendThisMonth,
                 COUNT(CASE WHEN status NOT IN ('Delivered','Cancelled') THEN 1 END) AS ordersInProgress
-            FROM orders WHERE 1=1${df.clause}`,
-            df.params
+            FROM orders WHERE 1=1${scopedDf.clause}`,
+            scopedDf.params
         );
 
         // BUG FIX: use order_history transitions for accurate lead time
@@ -89,31 +108,35 @@ exports.getSummary = async (req, res) => {
                     SELECT MIN(hh.id) FROM order_history hh
                     WHERE hh.order_id = o.id AND hh.new_value = 'Delivered'
                 )
-            WHERE 1=1${df.clause}`,
-            df.params
+            WHERE 1=1${scopedODf.clause}`,
+            scopedODf.params
         );
 
         const [[pendingRow]] = await db.query(
-            `SELECT COUNT(*) AS pendingApprovals FROM approvals WHERE status = 'pending'`
+            `SELECT COUNT(*) AS pendingApprovals
+             FROM approvals a
+             INNER JOIN orders o ON o.id = a.order_id
+             WHERE a.status = 'pending'${buildAnalyticsScope(req, 'o').clause}`,
+            buildAnalyticsScope(req, 'o').params
         );
 
         const [topSupplierRows] = await db.query(
             `SELECT s.name AS topSupplierName, COALESCE(SUM(o.total_price), 0) AS topSupplierSpend
             FROM orders o
             JOIN suppliers s ON o.supplier_id = s.id
-            WHERE o.total_price > 0${df.clause.replace(/submission_date/g, 'o.submission_date')}
+            WHERE o.total_price > 0${scopedODf.clause}
             GROUP BY o.supplier_id, s.name
             ORDER BY topSupplierSpend DESC
             LIMIT 1`,
-            df.params
+            scopedODf.params
         );
 
         // NEW: Active suppliers count
         const [[suppliersRow]] = await db.query(
             `SELECT COUNT(DISTINCT o.supplier_id) AS activeSuppliers
              FROM orders o
-             WHERE o.supplier_id IS NOT NULL${df.clause.replace(/submission_date/g, 'o.submission_date')}`,
-            df.params
+             WHERE o.supplier_id IS NOT NULL${scopedODf.clause}`,
+            scopedODf.params
         );
 
         // On-time rate: delivered within 14 days of submission (no expected_delivery_date column)
@@ -135,8 +158,8 @@ exports.getSummary = async (req, res) => {
                     SELECT MIN(hh.id) FROM order_history hh
                     WHERE hh.order_id = o.id AND hh.new_value = 'Delivered'
                 )
-            WHERE 1=1${df.clause.replace(/submission_date/g, 'o.submission_date')}`,
-            df.params
+            WHERE 1=1${scopedODf.clause}`,
+            scopedODf.params
         );
 
         res.json({
@@ -170,16 +193,18 @@ exports.getSummary = async (req, res) => {
 exports.getSpendOverTime = async (req, res) => {
     try {
         const df = buildDateFilter(req.query);
+        const scope = buildAnalyticsScope(req);
         const hasDateFilter = df.clause.length > 0;
         let whereClause = 'WHERE submission_date IS NOT NULL';
         let queryParams;
         if (hasDateFilter) {
             whereClause += df.clause;
-            queryParams = df.params;
+            queryParams = [...df.params, ...scope.params];
         } else {
             whereClause += ' AND submission_date >= DATE_SUB(NOW(), INTERVAL ? MONTH)';
-            queryParams = [12];
+            queryParams = [12, ...scope.params];
         }
+        whereClause += scope.clause;
         const [rows] = await db.query(
             `SELECT DATE_FORMAT(submission_date, '%Y-%m') AS period,
                 COALESCE(SUM(CASE WHEN total_price > 0 THEN total_price ELSE 0 END), 0) AS total,
@@ -201,6 +226,7 @@ exports.getSpendOverTime = async (req, res) => {
 exports.getSpendByBuilding = async (req, res) => {
     try {
         const df = buildDateFilter(req.query);
+        const scopedDf = scopedFilter(req, df, 'o');
         const [rows] = await db.query(
             `SELECT
                 COALESCE(o.building, 'Unknown') AS building,
@@ -209,10 +235,10 @@ exports.getSpendByBuilding = async (req, res) => {
                 COUNT(*) AS count
             FROM orders o
             LEFT JOIN buildings b ON o.building = b.code
-            WHERE 1=1${df.clause.replace(/submission_date/g, 'o.submission_date')}
+            WHERE 1=1${scopedDf.clause}
             GROUP BY o.building, b.name
             ORDER BY total DESC`,
-            df.params
+            scopedDf.params
         );
         const grandTotal = rows.reduce((sum, r) => sum + parseFloat(r.total), 0);
         res.json(rows.map(r => ({
@@ -233,6 +259,7 @@ exports.getSpendBySupplier = async (req, res) => {
     try {
         const limit = parseInt(req.query.limit) || 10;
         const df = buildDateFilter(req.query);
+        const scopedDf = scopedFilter(req, df, 'o');
         const [rows] = await db.query(
             `SELECT
                 o.supplier_id AS supplierId,
@@ -242,11 +269,11 @@ exports.getSpendBySupplier = async (req, res) => {
                 COALESCE(AVG(CASE WHEN o.total_price > 0 THEN o.total_price ELSE NULL END), 0) AS avgValue
             FROM orders o
             LEFT JOIN suppliers s ON o.supplier_id = s.id
-            WHERE o.supplier_id IS NOT NULL${df.clause.replace(/submission_date/g, 'o.submission_date')}
+            WHERE o.supplier_id IS NOT NULL${scopedDf.clause}
             GROUP BY o.supplier_id, s.name
             ORDER BY total DESC
             LIMIT ?`,
-            [...df.params, limit]
+            [...scopedDf.params, limit]
         );
         res.json(rows.map(r => ({
             supplierId: r.supplierId,
@@ -265,16 +292,17 @@ exports.getSpendBySupplier = async (req, res) => {
 exports.getSpendByCategory = async (req, res) => {
     try {
         const df = buildDateFilter(req.query);
+        const scopedDf = scopedFilter(req, df);
         const [rows] = await db.query(
             `SELECT
                 COALESCE(NULLIF(TRIM(category), ''), 'Uncategorized') AS category,
                 COALESCE(SUM(CASE WHEN total_price > 0 THEN total_price ELSE 0 END), 0) AS total,
                 COUNT(*) AS count
             FROM orders
-            WHERE 1=1${df.clause}
+            WHERE 1=1${scopedDf.clause}
             GROUP BY category
             ORDER BY total DESC`,
-            df.params
+            scopedDf.params
         );
         const grandTotal = rows.reduce((sum, r) => sum + parseFloat(r.total), 0);
         res.json(rows.map(r => ({
@@ -293,6 +321,7 @@ exports.getSpendByCategory = async (req, res) => {
 exports.getSpendByCostCenter = async (req, res) => {
     try {
         const df = buildDateFilter(req.query);
+        const scopedDf = scopedFilter(req, df, 'o');
         const [rows] = await db.query(
             `SELECT
                 COALESCE(cc.code, 'Unknown') AS costCenterCode,
@@ -303,10 +332,10 @@ exports.getSpendByCostCenter = async (req, res) => {
             FROM orders o
             LEFT JOIN cost_centers cc ON o.cost_center_id = cc.id
             LEFT JOIN buildings b ON cc.building_code = b.code
-            WHERE 1=1${df.clause.replace(/submission_date/g, 'o.submission_date')}
+            WHERE 1=1${scopedDf.clause}
             GROUP BY cc.code, cc.name, b.code, o.building
             ORDER BY total DESC`,
-            df.params
+            scopedDf.params
         );
         res.json(rows.map(r => ({
             costCenterCode: r.costCenterCode,
@@ -325,15 +354,16 @@ exports.getSpendByCostCenter = async (req, res) => {
 exports.getOrderStatusDistribution = async (req, res) => {
     try {
         const df = buildDateFilter(req.query);
+        const scopedDf = scopedFilter(req, df);
         const [rows] = await db.query(
             `SELECT
                 COALESCE(status, 'Unknown') AS status,
                 COUNT(*) AS count
             FROM orders
-            WHERE 1=1${df.clause}
+            WHERE 1=1${scopedDf.clause}
             GROUP BY status
             ORDER BY count DESC`,
-            df.params
+            scopedDf.params
         );
         const total = rows.reduce((sum, r) => sum + r.count, 0);
         res.json(rows.map(r => ({
@@ -353,6 +383,7 @@ exports.getSupplierPerformance = async (req, res) => {
     try {
         const limit = parseInt(req.query.limit) || 10;
         const df = buildDateFilter(req.query);
+        const scopedDf = scopedFilter(req, df, 'o');
         const [rows] = await db.query(
             `SELECT
                 o.supplier_id AS supplierId,
@@ -376,11 +407,11 @@ exports.getSupplierPerformance = async (req, res) => {
                     SELECT MIN(hh.id) FROM order_history hh
                     WHERE hh.order_id = o.id AND hh.new_value = 'Delivered'
                 )
-            WHERE o.supplier_id IS NOT NULL${df.clause.replace(/submission_date/g, 'o.submission_date')}
+            WHERE o.supplier_id IS NOT NULL${scopedDf.clause}
             GROUP BY o.supplier_id, s.name
             ORDER BY totalOrders DESC
             LIMIT ?`,
-            [...df.params, limit]
+            [...scopedDf.params, limit]
         );
         res.json(rows.map(r => ({
             supplierId: r.supplierId,
@@ -402,16 +433,18 @@ exports.getSupplierPerformance = async (req, res) => {
 exports.getMonthlyOrdersCount = async (req, res) => {
     try {
         const df = buildDateFilter(req.query);
+        const scope = buildAnalyticsScope(req);
         const hasDateFilter = df.clause.length > 0;
         let whereClause = 'WHERE submission_date IS NOT NULL';
         let queryParams;
         if (hasDateFilter) {
             whereClause += df.clause;
-            queryParams = df.params;
+            queryParams = [...df.params, ...scope.params];
         } else {
             whereClause += ' AND submission_date >= DATE_SUB(NOW(), INTERVAL ? MONTH)';
-            queryParams = [12];
+            queryParams = [12, ...scope.params];
         }
+        whereClause += scope.clause;
         const [rows] = await db.query(
             `SELECT
                 DATE_FORMAT(submission_date, '%Y-%m') AS period,
@@ -444,6 +477,7 @@ exports.getMonthlyOrdersCount = async (req, res) => {
 exports.getApprovalStats = async (req, res) => {
     try {
         const df = buildDateFilter(req.query, 'created_at');
+        const scope = buildAnalyticsScope(req, 'o');
         const [[row]] = await db.query(
             `SELECT
                 COUNT(*) AS totalApprovals,
@@ -452,9 +486,10 @@ exports.getApprovalStats = async (req, res) => {
                 COUNT(CASE WHEN status = 'pending' THEN 1 END) AS pending,
                 COALESCE(AVG(CASE WHEN approved_at IS NOT NULL
                     THEN TIMESTAMPDIFF(HOUR, created_at, approved_at) END), 0) AS avgApprovalHours
-            FROM approvals
-            WHERE 1=1${df.clause}`,
-            df.params
+            FROM approvals a
+            INNER JOIN orders o ON o.id = a.order_id
+            WHERE 1=1${df.clause}${scope.clause}`,
+            [...df.params, ...scope.params]
         );
         res.json({
             totalApprovals: row.totalApprovals,
@@ -474,6 +509,7 @@ exports.getTopParts = async (req, res) => {
     try {
         const limit = parseInt(req.query.limit) || 20;
         const df = buildDateFilter(req.query);
+        const scopedDf = scopedFilter(req, df);
         const [rows] = await db.query(
             `SELECT
                 COALESCE(item_description, 'Unknown') AS itemDescription,
@@ -482,11 +518,11 @@ exports.getTopParts = async (req, res) => {
                 COALESCE(SUM(CASE WHEN total_price > 0 THEN total_price ELSE 0 END), 0) AS totalSpend,
                 COALESCE(AVG(CASE WHEN unit_price > 0 THEN unit_price ELSE NULL END), 0) AS avgUnitPrice
             FROM orders
-            WHERE 1=1${df.clause}
+            WHERE 1=1${scopedDf.clause}
             GROUP BY item_description
             ORDER BY orderCount DESC
             LIMIT ?`,
-            [...df.params, limit]
+            [...scopedDf.params, limit]
         );
         res.json(rows.map(r => ({
             itemDescription: r.itemDescription,
@@ -510,6 +546,7 @@ exports.getTopParts = async (req, res) => {
 exports.getDeliveryTimeDistribution = async (req, res) => {
     try {
         const df = buildDateFilter(req.query);
+        const scopedDf = scopedFilter(req, df, 'o');
         const [rows] = await db.query(
             `SELECT
                 o.supplier_id AS supplierId,
@@ -527,9 +564,9 @@ exports.getDeliveryTimeDistribution = async (req, res) => {
                     WHERE hh.order_id = o.id AND hh.new_value = 'Delivered'
                 )
             WHERE o.status = 'Delivered'
-            ${df.clause.replace(/submission_date/g, 'o.submission_date').replace('AND', 'AND')}
+            ${scopedDf.clause}
             ORDER BY leadDays`,
-            df.params
+            scopedDf.params
         );
 
         // Buckets: 0-3d, 4-7d, 8-14d, 15-30d, 30+d
@@ -571,6 +608,7 @@ exports.getDeliveryTimeDistribution = async (req, res) => {
 exports.getSLABreach = async (req, res) => {
     try {
         const df = buildDateFilter(req.query);
+        const scopedDf = scopedFilter(req, df, 'o');
         const thresholds = {
             'New': 2,
             'Pending': 3,
@@ -607,9 +645,9 @@ exports.getSLABreach = async (req, res) => {
             LEFT JOIN users u ON o.requester_id = u.id
             LEFT JOIN suppliers s ON o.supplier_id = s.id
             WHERE o.status IN (${statusList})
-            ${df.clause.replace(/submission_date/g, 'o.submission_date')}
+            ${scopedDf.clause}
             ORDER BY daysInCurrentStatus DESC`,
-            df.params
+            scopedDf.params
         );
 
         // Add threshold and breach flag
@@ -639,16 +677,17 @@ exports.getSLABreach = async (req, res) => {
 exports.getSupplierConcentration = async (req, res) => {
     try {
         const df = buildDateFilter(req.query);
+        const scopedDf = scopedFilter(req, df, 'o');
         const [rows] = await db.query(
             `SELECT
                 COALESCE(s.name, 'Unassigned') AS supplierName,
                 COALESCE(SUM(CASE WHEN o.total_price > 0 THEN o.total_price ELSE 0 END), 0) AS total
             FROM orders o
             LEFT JOIN suppliers s ON o.supplier_id = s.id
-            WHERE o.supplier_id IS NOT NULL${df.clause.replace(/submission_date/g, 'o.submission_date')}
+            WHERE o.supplier_id IS NOT NULL${scopedDf.clause}
             GROUP BY o.supplier_id, s.name
             ORDER BY total DESC`,
-            df.params
+            scopedDf.params
         );
 
         const grandTotal = rows.reduce((s, r) => s + parseFloat(r.total), 0);
@@ -687,7 +726,8 @@ exports.getAIAcceptanceRate = async (req, res) => {
     try {
         // Uses actual supplier_selection_log columns:
         // order_id, supplier_id, selected_by_user_id, from_suggestion, suggestion_rank, selected_at
-        const df = buildDateFilter(req.query, 'selected_at');
+        const df = buildDateFilter(req.query, 'ssl.selected_at');
+        const scope = buildAnalyticsScope(req, 'o');
 
         // Overall stats — from_suggestion=1 means AI suggestion was accepted (user picked it)
         const [[overall]] = await db.query(
@@ -696,9 +736,10 @@ exports.getAIAcceptanceRate = async (req, res) => {
                 SUM(CASE WHEN from_suggestion = 1 THEN 1 ELSE 0 END) AS fromSuggestion,
                 SUM(CASE WHEN from_suggestion = 0 THEN 1 ELSE 0 END) AS manualSelections,
                 COALESCE(AVG(CASE WHEN from_suggestion = 1 THEN suggestion_rank END), 0) AS avgAcceptedRank
-            FROM supplier_selection_log
-            WHERE 1=1${df.clause}`,
-            df.params
+            FROM supplier_selection_log ssl
+            INNER JOIN orders o ON o.id = ssl.order_id
+            WHERE 1=1${df.clause}${scope.clause}`,
+            [...df.params, ...scope.params]
         );
 
         // By month
@@ -708,11 +749,12 @@ exports.getAIAcceptanceRate = async (req, res) => {
                 COUNT(*) AS total,
                 SUM(CASE WHEN from_suggestion = 1 THEN 1 ELSE 0 END) AS accepted,
                 SUM(CASE WHEN from_suggestion = 0 THEN 1 ELSE 0 END) AS manual
-            FROM supplier_selection_log
-            WHERE 1=1${df.clause}
+            FROM supplier_selection_log ssl
+            INNER JOIN orders o ON o.id = ssl.order_id
+            WHERE 1=1${df.clause}${scope.clause}
             GROUP BY period
             ORDER BY period`,
-            df.params
+            [...df.params, ...scope.params]
         );
 
         // Top AI-accepted suppliers
@@ -722,11 +764,12 @@ exports.getAIAcceptanceRate = async (req, res) => {
                 COUNT(*) AS acceptedCount
             FROM supplier_selection_log ssl
             LEFT JOIN suppliers s ON ssl.supplier_id = s.id
-            WHERE ssl.from_suggestion = 1${df.clause ? ' AND 1=1' + df.clause : ''}
+            INNER JOIN orders o ON o.id = ssl.order_id
+            WHERE ssl.from_suggestion = 1${df.clause ? ' AND 1=1' + df.clause : ''}${scope.clause}
             GROUP BY ssl.supplier_id, s.name
             ORDER BY acceptedCount DESC
             LIMIT 5`,
-            df.params
+            [...df.params, ...scope.params]
         );
 
         const acceptanceRate = overall.totalSelections > 0
@@ -761,6 +804,7 @@ exports.getAIAcceptanceRate = async (req, res) => {
 exports.getRecurringItems = async (req, res) => {
     try {
         const df = buildDateFilter(req.query);
+        const scopedDf = scopedFilter(req, df);
         const [rows] = await db.query(
             `SELECT
                 COALESCE(item_description, 'Unknown') AS itemDescription,
@@ -774,12 +818,12 @@ exports.getRecurringItems = async (req, res) => {
                 MAX(submission_date) AS lastOrdered,
                 DATEDIFF(MAX(submission_date), MIN(submission_date)) AS daySpan
             FROM orders
-            WHERE 1=1${df.clause}
+            WHERE 1=1${scopedDf.clause}
             GROUP BY item_description
             HAVING COUNT(*) >= 3
             ORDER BY COUNT(*) DESC
             LIMIT 30`,
-            df.params
+            scopedDf.params
         );
 
         res.json(rows.map(r => {
@@ -815,6 +859,7 @@ exports.getDrillDown = async (req, res) => {
         }
 
         const df = buildDateFilter(req.query, 'o.submission_date');
+        const scope = buildAnalyticsScope(req, 'o');
         let typeClause = '';
         const typeParams = [];
 
@@ -855,7 +900,7 @@ exports.getDrillDown = async (req, res) => {
                 return res.status(400).json({ success: false, message: 'Invalid drill-down type' });
         }
 
-        const allParams = [...df.params, ...typeParams];
+        const allParams = [...df.params, ...scope.params, ...typeParams];
 
         const [rows] = await db.query(
             `SELECT
@@ -875,7 +920,7 @@ exports.getDrillDown = async (req, res) => {
             FROM orders o
             LEFT JOIN suppliers s ON o.supplier_id = s.id
             LEFT JOIN cost_centers cc ON o.cost_center_id = cc.id
-            WHERE 1=1${df.clause}${typeClause}
+            WHERE 1=1${df.clause}${scope.clause}${typeClause}
             ORDER BY o.submission_date DESC
             LIMIT 200`,
             allParams

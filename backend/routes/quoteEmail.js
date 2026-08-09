@@ -7,7 +7,8 @@
 
 const express = require('express');
 const router = express.Router();
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, authorizeRoles } = require('../middleware/auth');
+const { requireQuoteAccess } = require('../middleware/authz');
 const {
     getQuoteEmailData,
     logQuoteSend,
@@ -18,18 +19,19 @@ const db = require('../config/database');
 
 // All routes require auth
 router.use(authenticateToken);
+router.use(authorizeRoles('admin', 'procurement'));
 
 // GET /api/quotes/:id/email-data — full data for email composition
-router.get('/:id/email-data', getQuoteEmailData);
+router.get('/:id/email-data', requireQuoteAccess('id'), getQuoteEmailData);
 
 // POST /api/quotes/:id/send-log — record a send action
-router.post('/:id/send-log', logQuoteSend);
+router.post('/:id/send-log', requireQuoteAccess('id'), logQuoteSend);
 
 // GET /api/quotes/:id/send-log — get send history
-router.get('/:id/send-log', getQuoteSendLog);
+router.get('/:id/send-log', requireQuoteAccess('id'), getQuoteSendLog);
 
 // POST /api/quotes/:id/send-rfq-email — actually sends SMTP email to supplier
-router.post('/:id/send-rfq-email', authenticateToken, async (req, res) => {
+router.post('/:id/send-rfq-email', requireQuoteAccess('id'), async (req, res) => {
     try {
         const { id } = req.params;
         const { notes, attachFiles, supplierEmailOverride } = req.body;

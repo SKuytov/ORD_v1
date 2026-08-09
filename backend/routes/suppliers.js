@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const supplierController = require('../controllers/supplierController');
 const { authenticateToken, authorizeRoles } = require('../middleware/auth');
+const { requireOrderAccess } = require('../middleware/authz');
 
 // Get all suppliers
 router.get('/',
@@ -15,6 +16,7 @@ router.get('/',
 router.get('/suggestions/:orderId',
     authenticateToken,
     authorizeRoles('admin', 'procurement'),
+    requireOrderAccess('orderId'),
     supplierController.getSupplierSuggestions
 );
 

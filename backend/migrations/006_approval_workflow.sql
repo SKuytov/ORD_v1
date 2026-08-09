@@ -186,7 +186,7 @@ DEALLOCATE PREPARE stmt;
 -- ========================================
 
 -- Approval status index on orders
-CREATE INDEX IF NOT EXISTS idx_orders_approval_status ON orders(approval_status);
+CREATE INDEX idx_orders_approval_status ON orders(approval_status);
 
 -- ========================================
 -- 8. Insert Sample Manager User (Optional)

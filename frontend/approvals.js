@@ -81,9 +81,8 @@ async function loadApprovals() {
         }
     } catch (err) {
         console.error('loadApprovals error:', err);
-        if (approvalsTable) {
-            approvalsTable.innerHTML = '<p class="text-muted">Failed to load approvals.</p>';
-        }
+        const _tbody = document.getElementById('approvalsTableBody');
+        if (_tbody) _tbody.innerHTML = '<tr><td colspan="10" class="text-center text-red-400 py-4">Failed to load approvals.</td></tr>';
     }
 }
 
@@ -149,26 +148,15 @@ function clearApprovalFilters() {
 
 // Render approvals table
 function renderApprovalsTable() {
-    if (!approvalsTable) return;
+    const tbody = document.getElementById('approvalsTableBody');
+    if (!tbody) return;
 
     if (!filteredApprovals.length) {
-        approvalsTable.innerHTML = '<p class="text-muted">No approvals found.</p>';
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-gray-400 py-8">No approvals found.</td></tr>';
         return;
     }
 
-    let html = '<div class="table-wrapper"><table><thead><tr>';
-    html += '<th>Order ID</th>';
-    html += '<th>Item</th>';
-    html += '<th>Building</th>';
-    html += '<th>Supplier</th>';
-    html += '<th>Est. Cost</th>';
-    html += '<th>Priority</th>';
-    html += '<th>Status</th>';
-    html += '<th>Requested By</th>';
-    html += '<th>Requested</th>';
-    html += '<th></th>';
-    html += '</tr></thead><tbody>';
-
+    let html = '';
     for (const approval of filteredApprovals) {
         const statusClass = `approval-status-${approval.status}`;
         const priorityClass = `priority-${(approval.priority || 'Normal').toLowerCase()}`;
@@ -187,8 +175,7 @@ function renderApprovalsTable() {
         html += '</tr>';
     }
 
-    html += '</tbody></table></div>';
-    approvalsTable.innerHTML = html;
+    tbody.innerHTML = html;
 
     // Attach event listeners to review buttons
     document.querySelectorAll('.btn-view-approval').forEach(btn => {

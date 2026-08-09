@@ -137,35 +137,71 @@ async function handleApprovalSubmission(quoteId, overlay) {
     btnSubmit.textContent = 'Submitting...';
 
     try {
-        const payload = {
-            quote_id: quoteId,
-            manager_id: parseInt(managerId, 10),
-            priority: priority,
-            comments: comments || null
-        };
+        // Fetch quote items to get the order_ids (backend requires order_id, not quote_id)
+        const quoteRes = await apiGet(`/quotes/${quoteId}`);
+        const quoteItems = (quoteRes.success && quoteRes.quote && quoteRes.quote.items)
+            ? quoteRes.quote.items
+            : [];
 
-        const res = await apiPost('/approvals', payload);
+        // Collect unique order IDs from quote items
+        let orderIds = [...new Set(quoteItems.map(i => i.order_id).filter(Boolean))];
 
-        if (res.success) {
+        // Fallback: if no items, try fetching quote items separately
+        if (!orderIds.length) {
+            try {
+                const itemsRes = await apiGet(`/quotes/${quoteId}/items`);
+                if (itemsRes.success && itemsRes.items) {
+                    orderIds = [...new Set(itemsRes.items.map(i => i.order_id).filter(Boolean))];
+                }
+            } catch (_) { /* ignore */ }
+        }
+
+        // If still no order IDs, submit a single approval with quote_id as fallback
+        // (ensures backward compatibility if quote has no items yet)
+        const payloads = orderIds.length
+            ? orderIds.map(order_id => ({
+                order_id,
+                quote_id: quoteId,
+                manager_id: parseInt(managerId, 10),
+                priority,
+                comments: comments || null
+            }))
+            : [{
+                order_id: null,
+                quote_id: quoteId,
+                manager_id: parseInt(managerId, 10),
+                priority,
+                comments: comments || null
+            }];
+
+        // Submit one approval per order_id
+        const results = await Promise.all(payloads.map(p => apiPost('/approvals', p).catch(e => ({ success: false, message: e.message }))));
+        const failed = results.filter(r => !r.success);
+        const succeeded = results.filter(r => r.success);
+
+        if (succeeded.length > 0) {
             // Close dialog
             document.body.removeChild(overlay);
-            
-            // Show success message
-            alert(`Approval request submitted successfully!\n\nApproval ID: ${res.approval.id}\nManager: ${res.approval.manager_name}`);
-            
+
+            const approvalInfo = succeeded[0].approval
+                ? `\n\nApproval ID: ${succeeded[0].approval.id}\nManager: ${succeeded[0].approval.manager_name}`
+                : '';
+            alert(`Approval request submitted successfully! (${succeeded.length} order(s) submitted)${approvalInfo}${failed.length ? `\n\nWarning: ${failed.length} failed.` : ''}`);
+
             // Reload quotes to update status
             await loadQuotes();
-            
+
             // Update the quote status to "Under Approval"
             await apiPut(`/quotes/${quoteId}`, { status: 'Under Approval' });
             await loadQuotes();
-            
+
             // If quote detail panel is open, refresh it
-            if (!quoteDetailPanel.classList.contains('hidden')) {
+            if (typeof quoteDetailPanel !== 'undefined' && !quoteDetailPanel.classList.contains('hidden')) {
                 openQuoteDetail(quoteId);
             }
         } else {
-            alert('Failed to submit approval request: ' + (res.message || 'Unknown error'));
+            const errMsg = failed.map(r => r.message || 'Unknown error').join('; ');
+            alert('Failed to submit approval request: ' + errMsg);
             btnSubmit.disabled = false;
             btnSubmit.textContent = 'Submit for Approval';
         }

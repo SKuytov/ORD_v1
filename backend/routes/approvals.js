@@ -1,546 +1,150 @@
-// backend/routes/approvals.js - Phase 3: Approval Workflow
+'use strict';
+
 const express = require('express');
 const router = express.Router();
 const pool = require('../config/database');
-const { authenticateToken } = require('../middleware/auth');
-const nodemailer = require('nodemailer');
+const { withTransaction } = require('../utils/withTransaction');
+const { authenticateToken, authorizeRoles } = require('../middleware/auth');
+const email = require('../utils/emailService');
 
-// Email transporter (configure in .env)
-const createTransporter = () => {
-    if (!process.env.SMTP_HOST) {
-        console.warn('SMTP not configured, email notifications disabled');
-        return null;
-    }
-    
-    return nodemailer.createTransporter({
-        host: process.env.SMTP_HOST,
-        port: process.env.SMTP_PORT || 587,
-        secure: process.env.SMTP_SECURE === 'true',
-        auth: {
-            user: process.env.SMTP_USER,
-            pass: process.env.SMTP_PASS
-        }
-    });
-};
+class HttpError extends Error {
+    constructor(status, message) { super(message); this.status = status; }
+}
+function sendError(res, error, fallback) {
+    console.error(`[Approvals] ${fallback}:`, error);
+    const isExpected = error instanceof HttpError;
+    res.status(isExpected ? error.status : 500).json({ success: false, message: isExpected ? error.message : fallback });
+}
+function scopeForUser(user, params) {
+    if (user.role === 'manager') { params.push(user.id); return ' AND a.assigned_to = ?'; }
+    if (user.role === 'requester') { params.push(user.id); return ' AND a.requested_by = ?'; }
+    if (user.role === 'admin' || user.role === 'procurement') return '';
+    return ' AND 1 = 0';
+}
 
-// ========== GET: List approvals with filters ==========
 router.get('/', authenticateToken, async (req, res) => {
     try {
         const { status, assigned_to, order_id, from_date, to_date } = req.query;
-        const user = req.user;
-        
-        let query = `
-            SELECT 
-                a.*,
-                o.item_description,
-                o.building,
-                o.cost_center_code,
-                s.name as supplier_name,
-                u_req.name as requested_by_name,
-                u_req.email as requested_by_email,
-                u_assigned.name as assigned_to_name,
-                u_approved.name as approved_by_name,
-                d.file_name as quote_file_name,
-                d.id as quote_document_id
-            FROM approvals a
-            INNER JOIN orders o ON a.order_id = o.id
-            LEFT JOIN suppliers s ON a.supplier_id = s.id
-            LEFT JOIN users u_req ON a.requested_by = u_req.id
-            LEFT JOIN users u_assigned ON a.assigned_to = u_assigned.id
-            LEFT JOIN users u_approved ON a.approved_by = u_approved.id
-            LEFT JOIN documents d ON a.quote_document_id = d.id
-            WHERE 1=1
-        `;
-        
         const params = [];
-        
-        // Filter by assigned manager (managers only see their assignments)
-        if (user.role === 'manager') {
-            query += ' AND a.assigned_to = ?';
-            params.push(user.id);
-        }
-        
-        // Requesters only see their own requests
-        if (user.role === 'requester') {
-            query += ' AND a.requested_by = ?';
-            params.push(user.id);
-        }
-        
-        if (status) {
-            query += ' AND a.status = ?';
-            params.push(status);
-        }
-        
-        if (assigned_to) {
-            query += ' AND a.assigned_to = ?';
-            params.push(assigned_to);
-        }
-        
-        if (order_id) {
-            query += ' AND a.order_id = ?';
-            params.push(order_id);
-        }
-        
-        if (from_date) {
-            query += ' AND a.requested_at >= ?';
-            params.push(from_date);
-        }
-        
-        if (to_date) {
-            query += ' AND a.requested_at <= ?';
-            params.push(to_date);
-        }
-        
+        let query = `SELECT a.*, o.item_description, o.building, cc.code AS cost_center_code,
+            s.name AS supplier_name, u_req.name AS requested_by_name, u_req.email AS requested_by_email,
+            u_assigned.name AS assigned_to_name, u_approved.name AS approved_by_name,
+            d.file_name AS quote_file_name, d.id AS quote_document_id
+            FROM approvals a JOIN orders o ON a.order_id=o.id
+            LEFT JOIN cost_centers cc ON cc.id=o.cost_center_id LEFT JOIN suppliers s ON a.supplier_id=s.id
+            LEFT JOIN users u_req ON a.requested_by=u_req.id LEFT JOIN users u_assigned ON a.assigned_to=u_assigned.id
+            LEFT JOIN users u_approved ON a.approved_by=u_approved.id LEFT JOIN documents d ON a.quote_document_id=d.id WHERE 1=1`;
+        query += scopeForUser(req.user, params);
+        if (status) { query += ' AND a.status=?'; params.push(status); }
+        if (assigned_to && req.user.role === 'admin') { query += ' AND a.assigned_to=?'; params.push(assigned_to); }
+        if (order_id) { query += ' AND a.order_id=?'; params.push(order_id); }
+        if (from_date) { query += ' AND a.requested_at>=?'; params.push(from_date); }
+        if (to_date) { query += ' AND a.requested_at<=?'; params.push(to_date); }
         query += ' ORDER BY a.requested_at DESC';
-        
         const [approvals] = await pool.query(query, params);
-        
-        res.json({
-            success: true,
-            approvals
-        });
-    } catch (error) {
-        console.error('Error fetching approvals:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch approvals'
-        });
-    }
+        res.json({ success:true, approvals });
+    } catch (error) { sendError(res, error, 'Failed to fetch approvals'); }
 });
 
-// ========== GET: Count pending approvals for manager ==========
 router.get('/pending-count', authenticateToken, async (req, res) => {
     try {
-        if (req.user.role !== 'manager' && req.user.role !== 'admin') {
-            return res.json({ success: true, count: 0 });
-        }
-        
-        let query = "SELECT COUNT(*) as count FROM approvals WHERE status = 'pending'";
-        const params = [];
-        
-        if (req.user.role === 'manager') {
-            query += ' AND assigned_to = ?';
-            params.push(req.user.id);
-        }
-        
-        const [result] = await pool.query(query, params);
-        
-        res.json({
-            success: true,
-            count: result[0].count
-        });
-    } catch (error) {
-        console.error('Error counting pending approvals:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to count pending approvals'
-        });
-    }
+        if (!['manager','admin','procurement'].includes(req.user.role)) return res.json({success:true,count:0});
+        const params = []; let where = "WHERE status='pending'";
+        if (req.user.role === 'manager') { where += ' AND assigned_to=?'; params.push(req.user.id); }
+        const [[row]] = await pool.query(`SELECT COUNT(*) AS count FROM approvals ${where}`, params);
+        res.json({ success:true, count:row.count });
+    } catch (error) { sendError(res, error, 'Failed to count pending approvals'); }
 });
 
-// ========== GET: Single approval details ==========
 router.get('/:id', authenticateToken, async (req, res) => {
     try {
-        const { id } = req.params;
-        
-        const [approvals] = await pool.query(`
-            SELECT 
-                a.*,
-                o.item_description,
-                o.part_number,
-                o.quantity,
-                o.building,
-                o.cost_center_code,
-                o.cost_center_name,
-                o.notes as order_notes,
-                s.name as supplier_name,
-                s.email as supplier_email,
-                u_req.name as requested_by_name,
-                u_req.email as requested_by_email,
-                u_assigned.name as assigned_to_name,
-                u_approved.name as approved_by_name,
-                d.file_name as quote_file_name,
-                d.file_path as quote_file_path,
-                d.id as quote_document_id
-            FROM approvals a
-            INNER JOIN orders o ON a.order_id = o.id
-            LEFT JOIN suppliers s ON a.supplier_id = s.id
-            LEFT JOIN users u_req ON a.requested_by = u_req.id
-            LEFT JOIN users u_assigned ON a.assigned_to = u_assigned.id
-            LEFT JOIN users u_approved ON a.approved_by = u_approved.id
-            LEFT JOIN documents d ON a.quote_document_id = d.id
-            WHERE a.id = ?
-        `, [id]);
-        
-        if (approvals.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: 'Approval not found'
-            });
-        }
-        
-        // Get approval history
-        const [history] = await pool.query(`
-            SELECT 
-                ah.*,
-                u.name as performed_by_name
-            FROM approval_history ah
-            LEFT JOIN users u ON ah.performed_by = u.id
-            WHERE ah.approval_id = ?
-            ORDER BY ah.performed_at DESC
-        `, [id]);
-        
-        res.json({
-            success: true,
-            approval: {
-                ...approvals[0],
-                history
-            }
-        });
-    } catch (error) {
-        console.error('Error fetching approval details:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch approval details'
-        });
-    }
+        const params = [req.params.id];
+        const scope = scopeForUser(req.user, params);
+        const [approvals] = await pool.query(`SELECT a.*,o.item_description,o.part_number,o.quantity,o.building,cc.code AS cost_center_code,cc.name AS cost_center_name,
+            o.notes AS order_notes,s.name AS supplier_name,s.email AS supplier_email,u_req.name AS requested_by_name,u_req.email AS requested_by_email,
+            u_assigned.name AS assigned_to_name,u_approved.name AS approved_by_name,d.file_name AS quote_file_name,d.id AS quote_document_id
+            FROM approvals a JOIN orders o ON a.order_id=o.id LEFT JOIN cost_centers cc ON cc.id=o.cost_center_id
+            LEFT JOIN suppliers s ON a.supplier_id=s.id LEFT JOIN users u_req ON a.requested_by=u_req.id
+            LEFT JOIN users u_assigned ON a.assigned_to=u_assigned.id LEFT JOIN users u_approved ON a.approved_by=u_approved.id
+            LEFT JOIN documents d ON a.quote_document_id=d.id WHERE a.id=?${scope}`, params);
+        if (!approvals.length) return res.status(404).json({success:false,message:'Approval not found'});
+        const [history] = await pool.query(`SELECT ah.*,u.name AS performed_by_name FROM approval_history ah LEFT JOIN users u ON ah.performed_by=u.id WHERE ah.approval_id=? ORDER BY ah.performed_at DESC`, [req.params.id]);
+        res.json({ success:true, approval:{...approvals[0], history} });
+    } catch (error) { sendError(res, error, 'Failed to fetch approval details'); }
 });
 
-// ========== POST: Create approval request ==========
 router.post('/', authenticateToken, async (req, res) => {
-    const connection = await pool.getConnection();
-    
+    const { order_id, quote_document_id, assigned_to, estimated_cost, supplier_id, priority, comments } = req.body;
+    if (!Number(order_id)) return res.status(400).json({success:false,message:'Order ID is required'});
     try {
-        const {
-            order_id,
-            quote_document_id,
-            assigned_to,
-            estimated_cost,
-            supplier_id,
-            priority,
-            comments
-        } = req.body;
-        
-        if (!order_id) {
-            return res.status(400).json({
-                success: false,
-                message: 'Order ID is required'
-            });
-        }
-        
-        await connection.beginTransaction();
-        
-        // Create approval request
-        const [result] = await connection.query(`
-            INSERT INTO approvals 
-            (order_id, quote_document_id, requested_by, assigned_to, estimated_cost, supplier_id, priority, comments)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `, [order_id, quote_document_id || null, req.user.id, assigned_to || null, estimated_cost || null, supplier_id || null, priority || 'Normal', comments || null]);
-        
-        const approvalId = result.insertId;
-        
-        // Log to approval history
-        await connection.query(`
-            INSERT INTO approval_history
-            (approval_id, action, performed_by, new_status, comments)
-            VALUES (?, 'created', ?, 'pending', ?)
-        `, [approvalId, req.user.id, comments]);
-        
-        // Update order approval status
-        await connection.query(
-            "UPDATE orders SET approval_status = 'pending' WHERE id = ?",
-            [order_id]
-        );
-        
-        await connection.commit();
-        
-        // Send email notification to manager
-        if (assigned_to) {
-            const [managers] = await pool.query(
-                'SELECT name, email, notification_email, email_notifications_enabled FROM users WHERE id = ?',
-                [assigned_to]
-            );
-            
-            if (managers.length > 0 && managers[0].email_notifications_enabled) {
-                const managerEmail = managers[0].notification_email || managers[0].email;
-                await sendApprovalNotification(approvalId, managerEmail, managers[0].name);
+        const approvalId = await withTransaction(pool, async connection => {
+            const [[order]] = await connection.query('SELECT id, requester_id FROM orders WHERE id=? FOR UPDATE', [order_id]);
+            if (!order) throw new HttpError(404, 'Order not found');
+            if (req.user.role === 'requester' && order.requester_id !== req.user.id) throw new HttpError(403, 'Not allowed to request approval for this order');
+            if (assigned_to) {
+                const [[assignee]] = await connection.query("SELECT id FROM users WHERE id=? AND active=1 AND role='manager'", [assigned_to]);
+                if (!assignee) throw new HttpError(400, 'Assigned manager not found');
             }
-        }
-        
-        res.json({
-            success: true,
-            message: 'Approval request created',
-            approvalId
+            const [result] = await connection.query(`INSERT INTO approvals (order_id,quote_document_id,requested_by,assigned_to,estimated_cost,supplier_id,priority,comments)
+                VALUES (?,?,?,?,?,?,?,?)`, [order_id, quote_document_id || null, req.user.id, assigned_to || null, estimated_cost || null, supplier_id || null, priority || 'Normal', comments || null]);
+            await connection.query(`INSERT INTO approval_history (approval_id,action,performed_by,new_status,comments) VALUES (?, 'created', ?, 'pending', ?)`, [result.insertId, req.user.id, comments || null]);
+            await connection.query("UPDATE orders SET approval_status='pending' WHERE id=?", [order_id]);
+            return result.insertId;
         });
-    } catch (error) {
-        await connection.rollback();
-        console.error('Error creating approval request:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to create approval request'
-        });
-    } finally {
-        connection.release();
-    }
+        if (assigned_to) notifyApprovalRequest(approvalId).catch(error => console.error('[Approvals] notification failed:', error.message));
+        res.json({ success:true, message:'Approval request created', approvalId });
+    } catch (error) { sendError(res, error, 'Failed to create approval request'); }
 });
 
-// ========== PUT: Approve request ==========
-router.put('/:id/approve', authenticateToken, async (req, res) => {
-    const connection = await pool.getConnection();
-    
+async function decideApproval(req, res, decision) {
+    const comment = decision === 'approved' ? (req.body.comments || '') : (req.body.rejection_reason || '');
+    if (decision === 'rejected' && !comment.trim()) return res.status(400).json({success:false,message:'Rejection reason is required'});
     try {
-        const { id } = req.params;
-        const { comments } = req.body;
-        
-        // Verify approval exists and is pending
-        const [approvals] = await connection.query(
-            'SELECT * FROM approvals WHERE id = ? AND status = "pending"',
-            [id]
-        );
-        
-        if (approvals.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: 'Pending approval not found'
-            });
-        }
-        
-        const approval = approvals[0];
-        
-        await connection.beginTransaction();
-        
-        // Update approval
-        await connection.query(`
-            UPDATE approvals 
-            SET status = 'approved', 
-                approved_by = ?, 
-                approved_at = NOW(),
-                comments = CONCAT(COALESCE(comments, ''), '\n\nApproved: ', ?)
-            WHERE id = ?
-        `, [req.user.id, comments || '', id]);
-        
-        // Log to history
-        await connection.query(`
-            INSERT INTO approval_history
-            (approval_id, action, performed_by, old_status, new_status, comments)
-            VALUES (?, 'approved', ?, 'pending', 'approved', ?)
-        `, [id, req.user.id, comments]);
-        
-        // Update order
-        await connection.query(`
-            UPDATE orders 
-            SET approval_status = 'approved',
-                approved_by = ?,
-                approved_at = NOW(),
-                status = 'Approved'
-            WHERE id = ?
-        `, [req.user.id, approval.order_id]);
-        
-        await connection.commit();
-        
-        // Notify requester
-        const [requesters] = await pool.query(
-            'SELECT name, email FROM users WHERE id = ?',
-            [approval.requested_by]
-        );
-        
-        if (requesters.length > 0) {
-            await sendApprovalDecisionNotification(id, requesters[0].email, 'approved', comments);
-        }
-        
-        res.json({
-            success: true,
-            message: 'Approval granted'
+        const approval = await withTransaction(pool, async connection => {
+            // Conditional update is both the authorization and the cross-worker claim.
+            const assignedPredicate = req.user.role === 'admin' ? '' : ' AND assigned_to = ?';
+            const params = decision === 'approved'
+                ? [req.user.id, comment, req.params.id]
+                : [req.user.id, comment, req.params.id];
+            if (req.user.role !== 'admin') params.push(req.user.id);
+            const [result] = await connection.query(`UPDATE approvals SET status='${decision}', approved_by=?, approved_at=NOW(),
+                ${decision === 'approved' ? "comments=CONCAT(COALESCE(comments,''), '\n\nApproved: ', ?)" : 'rejection_reason=?'}
+                WHERE id=? AND status='pending'${assignedPredicate}`, params);
+            if (result.affectedRows !== 1) {
+                const [[existing]] = await connection.query('SELECT status,assigned_to FROM approvals WHERE id=?', [req.params.id]);
+                if (!existing) throw new HttpError(404, 'Approval not found');
+                if (existing.status !== 'pending') throw new HttpError(409, 'This request has already been decided');
+                throw new HttpError(403, 'This approval is assigned to another manager');
+            }
+            const [[approval]] = await connection.query('SELECT order_id,requested_by,estimated_cost,supplier_id FROM approvals WHERE id=?', [req.params.id]);
+            await connection.query(`INSERT INTO approval_history (approval_id,action,performed_by,old_status,new_status,comments)
+                VALUES (?, ?, ?, 'pending', ?, ?)`, [req.params.id, decision, req.user.id, decision, comment || null]);
+            if (decision === 'approved') await connection.query("UPDATE orders SET approval_status='approved',approved_by=?,approved_at=NOW(),status='Approved' WHERE id=?", [req.user.id, approval.order_id]);
+            else await connection.query("UPDATE orders SET approval_status='rejected',status='On Hold' WHERE id=?", [approval.order_id]);
+            return approval;
         });
-    } catch (error) {
-        await connection.rollback();
-        console.error('Error approving request:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to approve request'
-        });
-    } finally {
-        connection.release();
-    }
-});
-
-// ========== PUT: Reject request ==========
-router.put('/:id/reject', authenticateToken, async (req, res) => {
-    const connection = await pool.getConnection();
-    
-    try {
-        const { id } = req.params;
-        const { rejection_reason } = req.body;
-        
-        if (!rejection_reason) {
-            return res.status(400).json({
-                success: false,
-                message: 'Rejection reason is required'
-            });
-        }
-        
-        // Verify approval exists and is pending
-        const [approvals] = await connection.query(
-            'SELECT * FROM approvals WHERE id = ? AND status = "pending"',
-            [id]
-        );
-        
-        if (approvals.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: 'Pending approval not found'
-            });
-        }
-        
-        const approval = approvals[0];
-        
-        await connection.beginTransaction();
-        
-        // Update approval
-        await connection.query(`
-            UPDATE approvals 
-            SET status = 'rejected', 
-                approved_by = ?, 
-                approved_at = NOW(),
-                rejection_reason = ?
-            WHERE id = ?
-        `, [req.user.id, rejection_reason, id]);
-        
-        // Log to history
-        await connection.query(`
-            INSERT INTO approval_history
-            (approval_id, action, performed_by, old_status, new_status, comments)
-            VALUES (?, 'rejected', ?, 'pending', 'rejected', ?)
-        `, [id, req.user.id, rejection_reason]);
-        
-        // Update order
-        await connection.query(`
-            UPDATE orders 
-            SET approval_status = 'rejected',
-                status = 'On Hold'
-            WHERE id = ?
-        `, [approval.order_id]);
-        
-        await connection.commit();
-        
-        // Notify requester
-        const [requesters] = await pool.query(
-            'SELECT name, email FROM users WHERE id = ?',
-            [approval.requested_by]
-        );
-        
-        if (requesters.length > 0) {
-            await sendApprovalDecisionNotification(id, requesters[0].email, 'rejected', rejection_reason);
-        }
-        
-        res.json({
-            success: true,
-            message: 'Approval rejected'
-        });
-    } catch (error) {
-        await connection.rollback();
-        console.error('Error rejecting request:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to reject request'
-        });
-    } finally {
-        connection.release();
-    }
-});
-
-// ========== Helper: Send approval notification email ==========
-async function sendApprovalNotification(approvalId, managerEmail, managerName) {
-    const transporter = createTransporter();
-    if (!transporter) return;
-    
-    try {
-        const [approvals] = await pool.query(`
-            SELECT 
-                a.*,
-                o.item_description,
-                o.building,
-                u.name as requested_by_name
-            FROM approvals a
-            INNER JOIN orders o ON a.order_id = o.id
-            INNER JOIN users u ON a.requested_by = u.id
-            WHERE a.id = ?
-        `, [approvalId]);
-        
-        if (approvals.length === 0) return;
-        
-        const approval = approvals[0];
-        const appUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-        
-        await transporter.sendMail({
-            from: process.env.SMTP_FROM || 'noreply@partpulse.eu',
-            to: managerEmail,
-            subject: `[PartPulse] Approval Required: Order #${approval.order_id}`,
-            html: `
-                <h2>New Approval Request</h2>
-                <p>Hello ${managerName},</p>
-                <p>A new quote approval is awaiting your review:</p>
-                <ul>
-                    <li><strong>Order ID:</strong> #${approval.order_id}</li>
-                    <li><strong>Item:</strong> ${approval.item_description}</li>
-                    <li><strong>Building:</strong> ${approval.building}</li>
-                    <li><strong>Estimated Cost:</strong> ${approval.estimated_cost ? '$' + approval.estimated_cost : 'N/A'}</li>
-                    <li><strong>Requested by:</strong> ${approval.requested_by_name}</li>
-                    <li><strong>Priority:</strong> ${approval.priority}</li>
-                </ul>
-                <p><a href="${appUrl}" style="background:#3b82f6;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;">Review in PartPulse</a></p>
-                <p style="color:#666;font-size:0.9em;">Please log in to PartPulse to review and approve or reject this request.</p>
-            `
-        });
-        
-        console.log('Approval notification sent to:', managerEmail);
-    } catch (error) {
-        console.error('Error sending approval notification:', error);
-    }
+        notifyApprovalDecision(req.params.id, decision, comment).catch(error => console.error('[Approvals] decision notification failed:', error.message));
+        res.json({ success:true, message: decision === 'approved' ? 'Approval granted' : 'Approval rejected' });
+    } catch (error) { sendError(res, error, decision === 'approved' ? 'Failed to approve request' : 'Failed to reject request'); }
 }
+router.put('/:id/approve', authenticateToken, authorizeRoles('admin','manager'), (req,res) => decideApproval(req,res,'approved'));
+router.put('/:id/reject', authenticateToken, authorizeRoles('admin','manager'), (req,res) => decideApproval(req,res,'rejected'));
 
-// ========== Helper: Send approval decision notification ==========
-async function sendApprovalDecisionNotification(approvalId, requesterEmail, decision, comments) {
-    const transporter = createTransporter();
-    if (!transporter) return;
-    
-    try {
-        const [approvals] = await pool.query(`
-            SELECT 
-                a.*,
-                o.item_description,
-                u.name as approved_by_name
-            FROM approvals a
-            INNER JOIN orders o ON a.order_id = o.id
-            LEFT JOIN users u ON a.approved_by = u.id
-            WHERE a.id = ?
-        `, [approvalId]);
-        
-        if (approvals.length === 0) return;
-        
-        const approval = approvals[0];
-        const isApproved = decision === 'approved';
-        
-        await transporter.sendMail({
-            from: process.env.SMTP_FROM || 'noreply@partpulse.eu',
-            to: requesterEmail,
-            subject: `[PartPulse] Order #${approval.order_id} ${isApproved ? 'Approved' : 'Rejected'}`,
-            html: `
-                <h2>Approval ${isApproved ? 'Granted' : 'Rejected'}</h2>
-                <p>Your quote request for Order #${approval.order_id} has been <strong>${decision}</strong>.</p>
-                <ul>
-                    <li><strong>Item:</strong> ${approval.item_description}</li>
-                    <li><strong>Decision by:</strong> ${approval.approved_by_name}</li>
-                    <li><strong>Comments:</strong> ${comments || 'None'}</li>
-                </ul>
-                ${isApproved ? '<p>You can now proceed to send the purchase order to the supplier.</p>' : '<p>Please review the rejection reason and resubmit if needed.</p>'}
-            `
-        });
-        
-        console.log('Decision notification sent to:', requesterEmail);
-    } catch (error) {
-        console.error('Error sending decision notification:', error);
-    }
+async function notifyApprovalRequest(approvalId) {
+    const [[approval]] = await pool.query(`SELECT a.id,a.order_id,a.estimated_cost,a.priority,a.comments,o.item_description,s.name AS supplier_name,u.email AS manager_email
+        FROM approvals a JOIN orders o ON a.order_id=o.id LEFT JOIN suppliers s ON a.supplier_id=s.id JOIN users u ON a.assigned_to=u.id WHERE a.id=?`, [approvalId]);
+    if (!approval?.manager_email) return;
+    await email.sendApprovalRequest({ orderId:approval.order_id,itemDescription:approval.item_description,quoteAmount:approval.estimated_cost,
+        supplierName:approval.supplier_name,notes:approval.comments,approverEmails:[approval.manager_email] });
+}
+async function notifyApprovalDecision(approvalId, decision, comment) {
+    const [[approval]] = await pool.query(`SELECT a.order_id,a.estimated_cost,a.rejection_reason,a.comments,o.item_description,
+        requester.email AS requester_email, requester.name AS requester_name, approver.name AS approver_name
+        FROM approvals a JOIN orders o ON a.order_id=o.id JOIN users requester ON a.requested_by=requester.id
+        LEFT JOIN users approver ON a.approved_by=approver.id WHERE a.id=?`, [approvalId]);
+    if (!approval?.requester_email) return;
+    await email.sendApprovalDecision({ orderId:approval.order_id,requesterEmail:approval.requester_email,requesterName:approval.requester_name,
+        decision,approverName:approval.approver_name,quoteAmount:approval.estimated_cost,notes:approval.comments,rejectionReason: decision === 'rejected' ? comment : approval.rejection_reason });
 }
 
 module.exports = router;

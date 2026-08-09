@@ -28,3 +28,11 @@ uploads/*
 !uploads/.gitkeep
 backend/uploads/*
 !backend/uploads/.gitkeep
+
+# local env
+.env
+*.env
+!.env.example
+backups/
+backend/uploads/
+backend/node_modules/

@@ -1,8 +1,10 @@
 -- Migration 006: Phase 3 - Approval Workflow
 -- Run: mysql -u partpulse_user -p'410010Kuyto-' partpulse_orders < backend/migrations/006_approval_workflow.sql
 
-USE partpulse_orders;
-
+-- Deliberately no `USE partpulse_orders;` here. This migration runs against
+-- whichever database the client selects, so the same file can be applied to the
+-- staging database and to production. With the USE statement in place, running
+-- this against staging silently altered the production database instead.
 -- ========================================
 -- 1. Add Manager Role Support
 -- ========================================
@@ -10,7 +12,7 @@ USE partpulse_orders;
 -- Check if 'manager' role needs to be added to users table enum
 -- Note: MySQL doesn't support ALTER ENUM directly, so we check first
 SET @check_role := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
-    WHERE TABLE_SCHEMA = 'partpulse_orders' 
+    WHERE TABLE_SCHEMA = DATABASE() 
     AND TABLE_NAME = 'users' 
     AND COLUMN_NAME = 'role' 
     AND COLUMN_TYPE LIKE '%manager%');
@@ -109,7 +111,7 @@ CREATE TABLE IF NOT EXISTS communications (
 
 -- Check and add approval_status column
 SET @check_approval_status := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
-    WHERE TABLE_SCHEMA = 'partpulse_orders' 
+    WHERE TABLE_SCHEMA = DATABASE() 
     AND TABLE_NAME = 'orders' 
     AND COLUMN_NAME = 'approval_status');
 
@@ -123,7 +125,7 @@ DEALLOCATE PREPARE stmt;
 
 -- Check and add approved_by column
 SET @check_approved_by := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
-    WHERE TABLE_SCHEMA = 'partpulse_orders' 
+    WHERE TABLE_SCHEMA = DATABASE() 
     AND TABLE_NAME = 'orders' 
     AND COLUMN_NAME = 'approved_by');
 
@@ -137,7 +139,7 @@ DEALLOCATE PREPARE stmt;
 
 -- Check and add approved_at column
 SET @check_approved_at := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
-    WHERE TABLE_SCHEMA = 'partpulse_orders' 
+    WHERE TABLE_SCHEMA = DATABASE() 
     AND TABLE_NAME = 'orders' 
     AND COLUMN_NAME = 'approved_at');
 
@@ -155,7 +157,7 @@ DEALLOCATE PREPARE stmt;
 
 -- Check and add notification_email column
 SET @check_notif_email := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
-    WHERE TABLE_SCHEMA = 'partpulse_orders' 
+    WHERE TABLE_SCHEMA = DATABASE() 
     AND TABLE_NAME = 'users' 
     AND COLUMN_NAME = 'notification_email');
 
@@ -169,7 +171,7 @@ DEALLOCATE PREPARE stmt;
 
 -- Check and add email_notifications_enabled column
 SET @check_email_enabled := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
-    WHERE TABLE_SCHEMA = 'partpulse_orders' 
+    WHERE TABLE_SCHEMA = DATABASE() 
     AND TABLE_NAME = 'users' 
     AND COLUMN_NAME = 'email_notifications_enabled');
 
@@ -185,8 +187,27 @@ DEALLOCATE PREPARE stmt;
 -- 7. Create Indexes for Performance
 -- ========================================
 
--- Approval status index on orders
-CREATE INDEX idx_orders_approval_status ON orders(approval_status);
+-- Approval status index on orders.
+--
+-- Neither earlier version of this statement was safe. `CREATE INDEX IF NOT
+-- EXISTS` is MariaDB syntax and is a parse error on the MySQL 8 server this app
+-- runs against, while the bare `CREATE INDEX` fails with "Duplicate key name"
+-- the second time the migration is applied. Both broke a rebuild.
+--
+-- The guarded form below matches the pattern already used for the column
+-- additions above, so the migration is idempotent on MySQL 8.
+SET @check_approval_idx := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
+    WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'orders'
+    AND INDEX_NAME = 'idx_orders_approval_status');
+
+SET @sql_approval_idx := IF(@check_approval_idx = 0,
+    'CREATE INDEX idx_orders_approval_status ON orders(approval_status)',
+    'SELECT "idx_orders_approval_status already exists"');
+
+PREPARE stmt FROM @sql_approval_idx;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
 -- ========================================
 -- 8. Insert Sample Manager User (Optional)

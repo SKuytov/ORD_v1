@@ -521,6 +521,14 @@ async function confirmSupplierSelection() {
         console.log('📡 Update response:', res);
         
         if (res.success) {
+            // ⭐ Log selection for AI learning (manual browse, not from AI suggestion)
+            apiPost('/orders/supplier-selection-log', {
+                orderId: orderId,
+                supplierId: supplierId,
+                wasFromSuggestion: false,
+                suggestionRank: null
+            }).catch(err => console.warn('[AI] Failed to log supplier selection:', err));
+
             showNotification('✅ Supplier assigned successfully', 'success');
             closeSupplierSelector();
             

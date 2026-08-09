@@ -3,6 +3,14 @@
 // Handles: quote responses, purchase orders, invoices, accounting handoff
 const db = require('../config/database');
 
+function managerOrderScope(req, alias = 'o') {
+    if (req.user.role !== 'manager') return { clause: '', params: [] };
+    if (!Array.isArray(req.authzBuildingCodes) || !req.authzBuildingCodes.length) {
+        return { clause: ' AND 1 = 0', params: [] };
+    }
+    return { clause: ` AND ${alias}.building IN (?)`, params: [req.authzBuildingCodes] };
+}
+
 // ===== HELPER =====
 function generatePONumber() {
     const year = new Date().getFullYear();
@@ -29,9 +37,33 @@ exports.recordQuoteResponse = async (req, res) => {
             status, response_document_id
         } = req.body;
 
-        // Verify quote exists
+        // Verify quote and every supplied child relationship belongs together.
         const [quotes] = await connection.query('SELECT id, supplier_id FROM quotes WHERE id = ?', [quoteId]);
-        if (!quotes.length) return res.status(404).json({ success: false, message: 'Quote not found' });
+        if (!quotes.length) {
+            await connection.rollback();
+            return res.status(404).json({ success: false, message: 'Quote not found' });
+        }
+
+        if (quote_item_id || order_id) {
+            const [items] = await connection.query(
+                `SELECT id, order_id FROM quote_items
+                 WHERE quote_id = ?
+                   AND (? IS NULL OR id = ?)
+                   AND (? IS NULL OR order_id = ?)`,
+                [quoteId, quote_item_id || null, quote_item_id || null, order_id || null, order_id || null]
+            );
+            if (!items.length) {
+                await connection.rollback();
+                return res.status(409).json({ success: false, message: 'Quote item and order do not belong to this quote' });
+            }
+        }
+        if (response_document_id) {
+            const [[document]] = await connection.query('SELECT id FROM documents WHERE id = ?', [response_document_id]);
+            if (!document) {
+                await connection.rollback();
+                return res.status(404).json({ success: false, message: 'Response document not found' });
+            }
+        }
 
         const [result] = await connection.query(`
             INSERT INTO quote_responses 
@@ -52,8 +84,9 @@ exports.recordQuoteResponse = async (req, res) => {
         if (unit_price && order_id) {
             const calcTotal = total_price || (unit_price * (req.body.quantity || 1));
             await connection.query(
-                'UPDATE quote_items SET unit_price = ?, total_price = ? WHERE quote_id = ? AND order_id = ?',
-                [unit_price, calcTotal, quoteId, order_id]
+                `UPDATE quote_items SET unit_price = ?, total_price = ?
+                 WHERE quote_id = ? AND order_id = ? AND (? IS NULL OR id = ?)`,
+                [unit_price, calcTotal, quoteId, order_id, quote_item_id || null, quote_item_id || null]
             );
             await connection.query(
                 'UPDATE orders SET unit_price = ?, total_price = ? WHERE id = ?',
@@ -94,6 +127,7 @@ exports.recordQuoteResponse = async (req, res) => {
 exports.getQuoteResponses = async (req, res) => {
     try {
         const { quoteId } = req.params;
+        const scope = managerOrderScope(req, 'o');
         const [responses] = await db.query(`
             SELECT qr.*, 
                    u.name as recorded_by_name,
@@ -103,9 +137,9 @@ exports.getQuoteResponses = async (req, res) => {
             LEFT JOIN users u ON qr.recorded_by = u.id
             LEFT JOIN orders o ON qr.order_id = o.id
             LEFT JOIN quote_items qi ON qr.quote_item_id = qi.id
-            WHERE qr.quote_id = ?
+            WHERE qr.quote_id = ?${scope.clause}
             ORDER BY qr.responded_at DESC
-        `, [quoteId]);
+        `, [quoteId, ...scope.params]);
         res.json({ success: true, responses });
     } catch (err) {
         console.error('getQuoteResponses error:', err);
@@ -143,7 +177,50 @@ exports.createPO = async (req, res) => {
     try {
         await connection.beginTransaction();
         const { quote_id, supplier_id, currency, delivery_address, payment_terms, notes, items, expected_delivery_date } = req.body;
-        if (!supplier_id) return res.status(400).json({ success: false, message: 'supplier_id required' });
+        if (!supplier_id) {
+            await connection.rollback();
+            return res.status(400).json({ success: false, message: 'supplier_id required' });
+        }
+        const [[supplier]] = await connection.query('SELECT id FROM suppliers WHERE id = ? AND active = 1', [supplier_id]);
+        if (!supplier) {
+            await connection.rollback();
+            return res.status(404).json({ success: false, message: 'Supplier not found' });
+        }
+        if (!Array.isArray(items) && !quote_id) {
+            await connection.rollback();
+            return res.status(400).json({ success: false, message: 'Quote or at least one order item is required' });
+        }
+        if (quote_id) {
+            const [[quote]] = await connection.query('SELECT id FROM quotes WHERE id = ? AND supplier_id = ?', [quote_id, supplier_id]);
+            if (!quote) {
+                await connection.rollback();
+                return res.status(409).json({ success: false, message: 'Quote does not belong to the selected supplier' });
+            }
+        }
+        if (Array.isArray(items)) {
+            for (const item of items) {
+                if (!item.order_id || !item.item_description || !item.quantity) {
+                    await connection.rollback();
+                    return res.status(400).json({ success: false, message: 'Each PO item requires order_id, item_description and quantity' });
+                }
+                const [[order]] = await connection.query('SELECT id FROM orders WHERE id = ?', [item.order_id]);
+                if (!order) {
+                    await connection.rollback();
+                    return res.status(404).json({ success: false, message: 'Order not found' });
+                }
+                if (item.quote_item_id) {
+                    const [[quoteItem]] = await connection.query(
+                        `SELECT id FROM quote_items
+                         WHERE id = ? AND order_id = ? AND (? IS NULL OR quote_id = ?)`,
+                        [item.quote_item_id, item.order_id, quote_id || null, quote_id || null]
+                    );
+                    if (!quoteItem) {
+                        await connection.rollback();
+                        return res.status(409).json({ success: false, message: 'Quote item does not belong to the supplied order and quote' });
+                    }
+                }
+            }
+        }
 
         const poNumber = generatePONumber();
         let totalAmount = 0;
@@ -238,6 +315,22 @@ exports.getPOs = async (req, res) => {
         if (quote_id) { query += ' AND po.quote_id = ?'; params.push(quote_id); }
         if (supplier_id) { query += ' AND po.supplier_id = ?'; params.push(supplier_id); }
         if (status) { query += ' AND po.status = ?'; params.push(status); }
+        if (req.user.role === 'manager') {
+            if (!req.authzBuildingCodes || !req.authzBuildingCodes.length) {
+                query += ' AND 1 = 0';
+            } else {
+                query += ` AND EXISTS (
+                    SELECT 1 FROM po_items scope_pi
+                    INNER JOIN orders scope_o ON scope_o.id = scope_pi.order_id
+                    WHERE scope_pi.po_id = po.id AND scope_o.building IN (?)
+                ) AND NOT EXISTS (
+                    SELECT 1 FROM po_items other_pi
+                    INNER JOIN orders other_o ON other_o.id = other_pi.order_id
+                    WHERE other_pi.po_id = po.id AND other_o.building NOT IN (?)
+                )`;
+                params.push(req.authzBuildingCodes, req.authzBuildingCodes);
+            }
+        }
         query += ' GROUP BY po.id ORDER BY po.created_at DESC';
         const [pos] = await db.query(query, params);
         res.json({ success: true, purchase_orders: pos });
@@ -314,7 +407,6 @@ exports.updatePO = async (req, res) => {
                 UPDATE orders SET status = 'In Transit' WHERE po_id = ? AND status = 'Ordered'
             `, [id]);
         }
-
         await connection.commit();
         res.json({ success: true });
     } catch (err) {
@@ -335,7 +427,43 @@ exports.createInvoice = async (req, res) => {
         await connection.beginTransaction();
         const { po_id, quote_id, supplier_id, invoice_number, invoice_date, due_date,
                 currency, amount, vat_amount, total_amount, notes } = req.body;
-        if (!supplier_id) return res.status(400).json({ success: false, message: 'supplier_id required' });
+        if (!supplier_id) {
+            await connection.rollback();
+            return res.status(400).json({ success: false, message: 'supplier_id required' });
+        }
+        const [[supplier]] = await connection.query('SELECT id FROM suppliers WHERE id = ? AND active = 1', [supplier_id]);
+        if (!supplier) {
+            await connection.rollback();
+            return res.status(404).json({ success: false, message: 'Supplier not found' });
+        }
+        let po = null;
+        let quote = null;
+        if (po_id) {
+            [[po]] = await connection.query('SELECT id, quote_id, supplier_id FROM purchase_orders WHERE id = ?', [po_id]);
+            if (!po) {
+                await connection.rollback();
+                return res.status(404).json({ success: false, message: 'PO not found' });
+            }
+            if (Number(po.supplier_id) !== Number(supplier_id)) {
+                await connection.rollback();
+                return res.status(409).json({ success: false, message: 'PO does not belong to the selected supplier' });
+            }
+        }
+        if (quote_id) {
+            [[quote]] = await connection.query('SELECT id, supplier_id FROM quotes WHERE id = ?', [quote_id]);
+            if (!quote) {
+                await connection.rollback();
+                return res.status(404).json({ success: false, message: 'Quote not found' });
+            }
+            if (Number(quote.supplier_id) !== Number(supplier_id)) {
+                await connection.rollback();
+                return res.status(409).json({ success: false, message: 'Quote does not belong to the selected supplier' });
+            }
+        }
+        if (po && quote && Number(po.quote_id) !== Number(quote.id)) {
+            await connection.rollback();
+            return res.status(409).json({ success: false, message: 'PO and quote do not belong together' });
+        }
 
         const [result] = await connection.query(`
             INSERT INTO invoices (po_id, quote_id, supplier_id, received_by, invoice_number,
@@ -379,6 +507,33 @@ exports.getInvoices = async (req, res) => {
         if (po_id) { query += ' AND i.po_id = ?'; params.push(po_id); }
         if (quote_id) { query += ' AND i.quote_id = ?'; params.push(quote_id); }
         if (status) { query += ' AND i.status = ?'; params.push(status); }
+        if (req.user.role === 'manager') {
+            if (!req.authzBuildingCodes || !req.authzBuildingCodes.length) {
+                query += ' AND 1 = 0';
+            } else {
+                query += ` AND (
+                    (i.po_id IS NOT NULL AND EXISTS (
+                        SELECT 1 FROM po_items scope_pi
+                        INNER JOIN orders scope_o ON scope_o.id = scope_pi.order_id
+                        WHERE scope_pi.po_id = i.po_id AND scope_o.building IN (?)
+                    ))
+                    OR (i.quote_id IS NOT NULL AND EXISTS (
+                        SELECT 1 FROM quote_items scope_qi
+                        INNER JOIN orders scope_qo ON scope_qo.id = scope_qi.order_id
+                        WHERE scope_qi.quote_id = i.quote_id AND scope_qo.building IN (?)
+                    ))
+                ) AND NOT EXISTS (
+                    SELECT 1 FROM po_items other_pi
+                    INNER JOIN orders other_o ON other_o.id = other_pi.order_id
+                    WHERE other_pi.po_id = i.po_id AND other_o.building NOT IN (?)
+                ) AND NOT EXISTS (
+                    SELECT 1 FROM quote_items other_qi
+                    INNER JOIN orders other_qo ON other_qo.id = other_qi.order_id
+                    WHERE other_qi.quote_id = i.quote_id AND other_qo.building NOT IN (?)
+                )`;
+                params.push(req.authzBuildingCodes, req.authzBuildingCodes, req.authzBuildingCodes, req.authzBuildingCodes);
+            }
+        }
         query += ' ORDER BY i.received_at DESC';
         const [invoices] = await db.query(query, params);
         res.json({ success: true, invoices });

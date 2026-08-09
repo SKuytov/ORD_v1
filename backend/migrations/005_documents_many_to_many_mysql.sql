@@ -1,8 +1,10 @@
 -- Migration 005: Many-to-Many Documents System (MySQL)
 -- This allows one document to be linked to multiple orders (invoices, delivery notes, etc.)
 
-USE partpulse_orders;
-
+-- Deliberately no `USE partpulse_orders;` here. This migration runs against
+-- whichever database the client selects, so the same file can be applied to the
+-- staging database and to production. With the USE statement in place, running
+-- this against staging silently altered the production database instead.
 -- Create junction table for many-to-many relationships
 CREATE TABLE IF NOT EXISTS order_documents_link (
     id INT AUTO_INCREMENT PRIMARY KEY,

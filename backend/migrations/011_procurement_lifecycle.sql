@@ -3,8 +3,10 @@
 -- Idempotent: safe to run multiple times
 -- Fixed: uses INFORMATION_SCHEMA checks instead of ADD COLUMN IF NOT EXISTS
 
-USE partpulse_orders;
-
+-- Deliberately no `USE partpulse_orders;` here. This migration runs against
+-- whichever database the client selects, so the same file can be applied to the
+-- staging database and to production. With the USE statement in place, running
+-- this against staging silently altered the production database instead.
 -- ============================================================
 -- 1. quote_responses: records supplier replies to quote requests
 -- ============================================================

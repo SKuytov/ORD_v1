@@ -109,10 +109,11 @@ class IntelligentAutocomplete {
     }
 
     handleBlur() {
-        // Delay to allow click on suggestion
+        // Delay to allow click on suggestion (mousedown preventDefault handles it,
+        // but keep a longer delay as safety net for touch devices)
         setTimeout(() => {
             this.hideSuggestions();
-        }, 200);
+        }, 300);
     }
 
     handleFocus() {
@@ -216,6 +217,11 @@ class IntelligentAutocomplete {
                 badge.title = `Used ${suggestion.usage_count} times`;
                 item.appendChild(badge);
             }
+
+            // Prevent blur from firing before click (mousedown fires before blur)
+            item.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+            });
 
             // Click handler
             item.addEventListener('click', () => {

@@ -7,7 +7,8 @@ module.exports = {
     exec_mode: 'cluster',
     env: {
       NODE_ENV: 'production',
-      PORT: 3000
+      PORT: 3000,
+      UPLOAD_DIR: '/var/www/partpulse-orders/backend/uploads'
     },
     error_file: '/var/log/partpulse-orders/pm2-err.log',
     out_file: '/var/log/partpulse-orders/pm2-out.log',

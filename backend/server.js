@@ -1,1 +1,208 @@
-Ly8gYmFja2VuZC9zZXJ2ZXIuanMKY29uc3QgZXhwcmVzcyA9IHJlcXVpcmUoJ2V4cHJlc3MnKTsKY29uc3QgY29ycyA9IHJlcXVpcmUoJ2NvcnMnKTsKY29uc3QgaGVsbWV0ID0gcmVxdWlyZSgnaGVsbWV0Jyk7CmNvbnN0IGNvbXByZXNzaW9uID0gcmVxdWlyZSgnY29tcHJlc3Npb24nKTsKY29uc3QgcGF0aCA9IHJlcXVpcmUoJ3BhdGgnKTsKcmVxdWlyZSgnZG90ZW52JykuY29uZmlnKCk7Cgpjb25zdCBhdXRoUm91dGVzID0gcmVxdWlyZSgnLi9yb3V0ZXMvYXV0aCcpOwpjb25zdCBvcmRlclJvdXRlcyA9IHJlcXVpcmUoJy4vcm91dGVzL29yZGVycycpOwpjb25zdCBvcmRlckFzc2lnbm1lbnRSb3V0ZXMgPSByZXF1aXJlKCcuL3JvdXRlcy9vcmRlckFzc2lnbm1lbnRzJyk7CmNvbnN0IHN1cHBsaWVyUm91dGVzID0gcmVxdWlyZSgnLi9yb3V0ZXMvc3VwcGxpZXJzJyk7CmNvbnN0IHF1b3RlUm91dGVzID0gcmVxdWlyZSgnLi9yb3V0ZXMvcXVvdGVzJyk7CmNvbnN0IHF1b3RlRW1haWxSb3V0ZXMgPSByZXF1aXJlKCcuL3JvdXRlcy9xdW90ZUVtYWlsJyk7IC8vIOKtkCBTbWFydCBRdW90ZSBTZW5kCmNvbnN0IHVzZXJSb3V0ZXMgPSByZXF1aXJlKCcuL3JvdXRlcy91c2VycycpOwpjb25zdCBidWlsZGluZ1JvdXRlcyA9IHJlcXVpcmUoJy4vcm91dGVzL2J1aWxkaW5ncycpOwpjb25zdCBjb3N0Q2VudGVyUm91dGVzID0gcmVxdWlyZSgnLi9yb3V0ZXMvY29zdENlbnRlcnMnKTsKY29uc3QgZG9jdW1lbnRzUm91dGVzID0gcmVxdWlyZSgnLi9yb3V0ZXMvZG9jdW1lbnRzJyk7CmNvbnN0IGFwcHJvdmFsc1JvdXRlcyA9IHJlcXVpcmUoJy4vcm91dGVzL2FwcHJvdmFscycpOwpjb25zdCBhdXRvY29tcGxldGVSb3V0ZXMgPSByZXF1aXJlKCcuL3JvdXRlcy9hdXRvY29tcGxldGUnKTsKY29uc3QgdGVzdFJvdXRlcyA9IHJlcXVpcmUoJy4vcm91dGVzL3Rlc3QnKTsKY29uc3QgcHJvY3VyZW1lbnRSb3V0ZXMgPSByZXF1aXJlKCcuL3JvdXRlcy9wcm9jdXJlbWVudCcpOyAvLyDirZAgdjMuMCBQcm9jdXJlbWVudCBMaWZlY3ljbGUKCmNvbnN0IGFwcCA9IGV4cHJlc3MoKTsKY29uc3QgUE9SVCA9IHByb2Nlc3MuZW52LlBPUlQgfHwgMzAwMDsKCi8vIFNlY3VyaXR5IG1pZGRsZXdhcmUKYXBwLnVzZShoZWxtZXQoeyBjb250ZW50U2VjdXJpdHlQb2xpY3k6IGZhbHNlIH0pKTsKYXBwLnVzZShjb3JzKHsKICAgIG9yaWdpbjogcHJvY2Vzcy5lbnYuRlJPTlRFTkRfVVJMIHx8ICcqJywKICAgIGNyZWRlbnRpYWxzOiB0cnVlCn0pKTsKCi8vIEJvZHkgcGFyc2luZyBtaWRkbGV3YXJlCmFwcC51c2UoZXhwcmVzcy5qc29uKCkpOwphcHAudXNlKGV4cHJlc3MudXJsZW5jb2RlZCh7IGV4dGVuZGVkOiB0cnVlIH0pKTsKYXBwLnVzZShjb21wcmVzc2lvbigpKTsKCi8vIFN0YXRpYyBmaWxlcyAtIHVwbG9hZHMgc2VydmVkIHdpdGggb3JpZ2luYWwgbmFtZXMKYXBwLnVzZSgnL3VwbG9hZHMnLCBleHByZXNzLnN0YXRpYyhwYXRoLmpvaW4oX19kaXJuYW1lLCAndXBsb2FkcycpKSk7CmFwcC51c2UoZXhwcmVzcy5zdGF0aWMocGF0aC5qb2luKF9fZGlybmFtZSwgJy4uL2Zyb250ZW5kJykpKTsKCi8vIEFQSSBSb3V0ZXMKYXBwLnVzZSgnL2FwaS9hdXRoJywgYXV0aFJvdXRlcyk7CmFwcC51c2UoJy9hcGkvb3JkZXJzJywgb3JkZXJSb3V0ZXMpOwphcHAudXNlKCcvYXBpL29yZGVyLWFzc2lnbm1lbnRzJywgb3JkZXJBc3NpZ25tZW50Um91dGVzKTsgLy8g4q2QIEFzc2lnbm1lbnQgc3lzdGVtCmFwcC51c2UoJy9hcGkvc3VwcGxpZXJzJywgc3VwcGxpZXJSb3V0ZXMpOwphcHAudXNlKCcvYXBpL3F1b3RlcycsIHF1b3RlRW1haWxSb3V0ZXMpOyAvLyDirZAgU21hcnQgUXVvdGUgU2VuZCAobXVzdCBiZSBiZWZvcmUgcXVvdGVSb3V0ZXMpCmFwcC51c2UoJy9hcGkvcXVvdGVzJywgcXVvdGVSb3V0ZXMpOwphcHAudXNlKCcvYXBpL3VzZXJzJywgdXNlclJvdXRlcyk7CmFwcC51c2UoJy9hcGkvYnVpbGRpbmdzJywgYnVpbGRpbmdSb3V0ZXMpOwphcHAudXNlKCcvYXBpL2Nvc3QtY2VudGVycycsIGNvc3RDZW50ZXJSb3V0ZXMpOwphcHAudXNlKCcvYXBpL2RvY3VtZW50cycsIGRvY3VtZW50c1JvdXRlcyk7CmFwcC51c2UoJy9hcGkvYXBwcm92YWxzJywgYXBwcm92YWxzUm91dGVzKTsKYXBwLnVzZSgnL2FwaS9hdXRvY29tcGxldGUnLCBhdXRvY29tcGxldGVSb3V0ZXMpOyAvLyDirZAgSW50ZWxsaWdlbnQgYXV0b2NvbXBsZXRlCmFwcC51c2UoJy9hcGkvdGVzdCcsIHRlc3RSb3V0ZXMpOwphcHAudXNlKCcvYXBpL3Byb2N1cmVtZW50JywgcHJvY3VyZW1lbnRSb3V0ZXMpOyAvLyDirZAgdjMuMCBQcm9jdXJlbWVudCBMaWZlY3ljbGUKCi8vIEhlYWx0aCBjaGVjawphcHAuZ2V0KCcvYXBpL2hlYWx0aCcsIChyZXEsIHJlcykgPT4gewogICAgcmVzLmpzb24oewogICAgICAgIHN0YXR1czogJ09LJywKICAgICAgICB0aW1lc3RhbXA6IG5ldyBEYXRlKCkudG9JU09TdHJpbmcoKSwKICAgICAgICBlbnZpcm9ubWVudDogcHJvY2Vzcy5lbnYuTk9ERV9FTlYsCiAgICAgICAgdmVyc2lvbjogJzMuMC4wJyAvLyB2My4wOiBQcm9jdXJlbWVudCBMaWZlY3ljbGUKICAgIH0pOwp9KTsKCi8vIFNlcnZlIGZyb250ZW5kCmFwcC5nZXQoJyonLCAocmVxLCByZXMpID0+IHsKICAgIHJlcy5zZW5kRmlsZShwYXRoLmpvaW4oX19kaXJuYW1lLCAnLi4vZnJvbnRlbmQvaW5kZXguaHRtbCcpKTsKfSk7CgovLyBFcnJvciBoYW5kbGluZwphcHAudXNlKChlcnIsIHJlcSwgcmVzLCBuZXh0KSA9PiB7CiAgICBjb25zb2xlLmVycm9yKCdFcnJvcjonLCBlcnIpOwogICAgcmVzLnN0YXR1cyhlcnIuc3RhdHVzIHx8IDUwMCkuanNvbih7CiAgICAgICAgc3VjY2VzczogZmFsc2UsCiAgICAgICAgbWVzc2FnZTogZXJyLm1lc3NhZ2UgfHwgJ0ludGVybmFsIHNlcnZlciBlcnJvcicsCiAgICAgICAgLi4uKHByb2Nlc3MuZW52Lk5PREVfRU5WID09PSAnZGV2ZWxvcG1lbnQnICYmIHsgc3RhY2s6IGVyci5zdGFjayB9KQogICAgfSk7Cn0pOwoKYXBwLmxpc3RlbihQT1JULCAoKSA9PiB7CiAgICBjb25zb2xlLmxvZyhgUGFydFB1bHNlIE9yZGVycyBTZXJ2ZXIgdjMuMC4wIHJ1bm5pbmcgb24gcG9ydCAke1BPUlR9YCk7CiAgICBjb25zb2xlLmxvZyhgRW52aXJvbm1lbnQ6ICR7cHJvY2Vzcy5lbnYuTk9ERV9FTlZ9YCk7CiAgICBjb25zb2xlLmxvZyhgRnJvbnRlbmQgVVJMOiAke3Byb2Nlc3MuZW52LkZST05URU5EX1VSTH1gKTsKICAgIGNvbnNvbGUubG9nKGBGZWF0dXJlczogUHJvY3VyZW1lbnQgTGlmZWN5Y2xlICsgU21hcnQgUXVvdGUgU2VuZCArIFNtYXJ0IEF1dG9jb21wbGV0ZSArIERvY3VtZW50IE1hbmFnZW1lbnQgKyBBcHByb3ZhbHNgKTsKfSk7Cgptb2R1bGUuZXhwb3J0cyA9IGFwcDsK
+// backend/server.js
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const compression = require('compression');
+const path = require('path');
+const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
+require('dotenv').config();
+const db = require('./config/database');
+
+const authRoutes = require('./routes/auth');
+const orderRoutes = require('./routes/orders');
+const orderAssignmentRoutes = require('./routes/orderAssignments');
+const supplierRoutes = require('./routes/suppliers');
+const quoteRoutes = require('./routes/quotes');
+const quoteEmailRoutes = require('./routes/quoteEmail'); // ⭐ Smart Quote Send
+const userRoutes = require('./routes/users');
+const buildingRoutes = require('./routes/buildings');
+const costCenterRoutes = require('./routes/costCenters');
+const documentsRoutes = require('./routes/documents');
+const approvalsRoutes = require('./routes/approvals');
+const autocompleteRoutes = require('./routes/autocomplete');
+const testRoutes = require('./routes/test');
+const analyticsRoutes = require('./routes/analytics');
+const procurementRoutes = require('./routes/procurement'); // ⭐ PO + Quote Responses + Invoices
+const accountingRoutes = require('./routes/accounting');
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Security middleware
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://www.googletagmanager.com", "https://www.google-analytics.com"],
+            styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdnjs.cloudflare.com"],
+            fontSrc: ["'self'", "https://fonts.gstatic.com", "https://raw.githubusercontent.com"],
+            imgSrc: ["'self'", "data:", "blob:", "https://partpulse.eu"],
+            connectSrc: ["'self'", "https://www.google-analytics.com"],
+            frameSrc: ["'none'"],
+            objectSrc: ["'none'"],
+            baseUri: ["'self'"]
+        }
+    },
+    crossOriginEmbedderPolicy: false
+}));
+app.use(cors({
+    origin: (process.env.FRONTEND_URL || false).split ? (process.env.FRONTEND_URL || '').split(',').filter(Boolean) : false,
+    credentials: true
+}));
+
+// Body parsing middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(compression());
+app.use((req, res, next) => {
+    req.requestId = req.headers['x-request-id'] || crypto.randomUUID();
+    res.setHeader('X-Request-ID', req.requestId);
+    next();
+});
+
+// The existing route middleware verifies JWT signatures. This lightweight
+// state check is deliberately mounted before every API router so revocation,
+// role/building changes, and disabled accounts take effect across both PM2
+// workers without editing that shared middleware. Public endpoints remain
+// available without an Authorization header.
+async function getTokenState(userId) {
+    try {
+        const [rows] = await db.query(
+            'SELECT id, role, building, active, token_version FROM users WHERE id=?',
+            [userId]
+        );
+        return { user: rows[0] || null, tokenVersionSupported: true };
+    } catch (error) {
+        if (error.code !== 'ER_BAD_FIELD_ERROR' && !/token_version/i.test(error.message || '')) throw error;
+        const [rows] = await db.query(
+            'SELECT id, role, building, active FROM users WHERE id=?',
+            [userId]
+        );
+        return { user: rows[0] || null, tokenVersionSupported: false };
+    }
+}
+app.use('/api', async (req, res, next) => {
+    if (req.path === '/health' || req.path === '/auth/login') return next();
+    const header = req.headers.authorization;
+    if (!header?.startsWith('Bearer ')) return next();
+    try {
+        const payload = jwt.verify(header.slice(7), process.env.JWT_SECRET);
+        const { user, tokenVersionSupported } = await getTokenState(payload.id);
+        const stale = !user || !user.active ||
+            user.role !== payload.role ||
+            (user.building || null) !== (payload.building || null) ||
+            (tokenVersionSupported && Number(payload.tokenVersion) !== Number(user.token_version || 0));
+        if (stale) return res.status(401).json({ success: false, message: 'Session is no longer valid', requestId: req.requestId });
+        next();
+    } catch (error) {
+        // Signature failures are handled consistently by the existing route
+        // middleware. Database failures should not silently bypass revocation.
+        if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') return next();
+        console.error(`[${req.requestId}] token state check failed:`, error.stack || error);
+        res.status(503).json({ success: false, message: 'Authentication service unavailable', requestId: req.requestId });
+    }
+});
+
+// Uploaded documents are NOT served statically. Invoices, quotes, delivery
+// notes and customs declarations are only reachable through the authenticated
+// streaming routes in routes/documents.js, which check the caller's role and
+// their relationship to the order. The matching Nginx `location /uploads`
+// alias must be removed too, or it will keep serving these files directly.
+app.use(express.static(path.join(__dirname, '../frontend'), { dotfiles: 'deny' }));
+
+// API Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/order-assignments', orderAssignmentRoutes); // ⭐ Assignment system
+app.use('/api/suppliers', supplierRoutes);
+app.use('/api/quotes', quoteEmailRoutes); // ⭐ Smart Quote Send (must be before quoteRoutes)
+app.use('/api/quotes', quoteRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/buildings', buildingRoutes);
+app.use('/api/cost-centers', costCenterRoutes);
+app.use('/api/documents', documentsRoutes);
+app.use('/api/approvals', approvalsRoutes);
+app.use('/api/autocomplete', autocompleteRoutes); // ⭐ NEW: Intelligent autocomplete
+app.use('/api/test', testRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/procurement', procurementRoutes); // ⭐ PO creation, supplier responses, invoices
+app.use('/api/accounting', accountingRoutes);
+
+// Health check: PM2/load balancers must only receive OK after MySQL responds.
+app.get('/api/health', async (req, res) => {
+    let timer;
+    try {
+        await Promise.race([
+            db.query('SELECT 1 AS ok'),
+            new Promise((_, reject) => {
+                timer = setTimeout(() => reject(new Error('database health timeout')), 2_000);
+            }),
+        ]);
+        res.json({ success: true, status: 'OK', timestamp: new Date().toISOString(), environment: process.env.NODE_ENV, version: '2.6.0' });
+    } catch (error) {
+        console.error('[Health] database check failed:', error.message);
+        res.status(503).json({ success: false, status: 'UNAVAILABLE', message: 'Service temporarily unavailable' });
+    } finally {
+        clearTimeout(timer);
+    }
+});
+
+// Serve frontend.
+//
+// The catch-all must never answer for API or upload paths. Before this guard a
+// mistyped endpoint returned index.html with status 200, so the client tried to
+// JSON.parse a page of HTML and reported a confusing parse error instead of a
+// 404. Uploads are equally important: they are served only by the authenticated
+// routes in routes/documents.js, and a 200 here made it look as though a public
+// upload directory still existed.
+app.use('/api', (req, res) => {
+    res.status(404).json({ success: false, message: 'Endpoint not found' });
+});
+
+app.use('/uploads', (req, res) => {
+    res.status(404).json({ success: false, message: 'Not found' });
+});
+
+app.get('*', (req, res) => {
+    if (path.basename(req.path).startsWith('.')) {
+        return res.status(404).json({ success: false, message: 'Not found' });
+    }
+    res.sendFile(path.join(__dirname, '../frontend/index.html'));
+});
+
+// Error handling: never expose driver messages, SQL, or stack traces.
+app.use((err, req, res, next) => {
+    if (res.headersSent) return next(err);
+    const requestId = req.requestId || crypto.randomUUID();
+    const status = Number.isInteger(err.status) && err.status >= 400 && err.status < 500 ? err.status : 500;
+    console.error(`[${requestId}] ${req.method} ${req.originalUrl}:`, err.stack || err);
+    res.status(status).json({ success: false, message: status === 500 ? 'Internal server error' : (err.publicMessage || 'Request could not be completed'), requestId });
+});
+
+const server = app.listen(PORT, () => {
+    console.log(`PartPulse Orders Server v2.6.0 running on port ${PORT}`);
+    console.log(`Environment: ${process.env.NODE_ENV}`);
+});
+
+let shuttingDown = false;
+async function shutdown(signal) {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`${signal} received; draining in-flight requests`);
+    const forceTimer = setTimeout(() => {
+        console.error('Graceful shutdown timed out; forcing process exit');
+        process.exit(1);
+    }, 30_000).unref();
+    server.close(async error => {
+        try { await db.end(); }
+        catch (dbError) { console.error('Database pool close failed:', dbError.message); }
+        clearTimeout(forceTimer);
+        if (error) { console.error('HTTP server close failed:', error.message); process.exitCode = 1; }
+        process.exit();
+    });
+}
+process.once('SIGTERM', () => shutdown('SIGTERM'));
+process.once('SIGINT', () => shutdown('SIGINT'));
+
+module.exports = app;

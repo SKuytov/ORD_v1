@@ -2,43 +2,52 @@
 <html lang="bg">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PartPulse Order Management v3.1.0</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PartPulse Order Management v2.6.3</title>
     <link rel="stylesheet" href="styles.css">
     <!-- File Upload Enhancement Styles -->
     <link rel="stylesheet" href="css/order-form-enhanced.css">
     <link rel="stylesheet" href="documents.css">
     <link rel="stylesheet" href="approvals.css">
     <link rel="stylesheet" href="brand-training.css">
+    <!-- ⭐ Smart Quote Send Panel -->
+    <link rel="stylesheet" href="quote-send.css">
+    <!-- Analytics Module -->
+    <link rel="stylesheet" href="analytics.css">
     <!-- ⭐ NEW: Intelligent Autocomplete -->
     <link rel="stylesheet" href="css/intelligent-autocomplete.css">
-    <!-- ⭐ NEW: Procurement Workspace -->
-    <link rel="stylesheet" href="procurement-workspace.css">
-    <!-- ⭐ NEW: Quote Send -->
-    <link rel="stylesheet" href="quote-send.css">
-    <script src="upload-progress.js"></script>
+    <link rel="stylesheet" href="css/requester-dashboard.css">
+    <link rel="stylesheet" href="css/accessibility.css">
+    <link rel="stylesheet" href="admin-cockpit.css">
 </head>
 <body>
+<a class="skip-link" href="#mainContent">Skip to main content</a>
 <div id="app">
+    <main id="mainContent" tabindex="-1">
+    <div id="appStatus" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
     <!-- Login Screen -->
     <div id="loginScreen" class="screen">
         <div class="login-container">
-            <h1>PartPulse Orders</h1>
+            <img src="https://partpulse.eu/images/Partpulse-logo-vertical.jpg" alt="PartPulse" style="display:block;margin:0 auto 1.5rem;width:120px;height:auto;border-radius:8px;">
+            <h1>Welcome back</h1>
             <form id="loginForm">
                 <div class="form-group">
                     <label for="username" data-i18n="login.username">Username</label>
-                    <input type="text" id="username" class="form-control" required>
+                    <input type="text" id="username" class="form-control" required autocomplete="username">
                 </div>
                 <div class="form-group">
                     <label for="password" data-i18n="login.password">Password</label>
-                    <input type="password" id="password" class="form-control" required>
+                    <input type="password" id="password" class="form-control" required autocomplete="current-password">
                 </div>
                 <button type="submit" class="btn btn-primary btn-block" data-i18n="login.button">Login</button>
+                <div style="text-align:center;margin-top:0.75rem;">
+                    <a href="#" style="font-size:0.8rem;color:#64748b;text-decoration:none;" tabindex="-1">Forgot password?</a>
+                </div>
                 <div id="loginError" class="error-message hidden"></div>
             </form>
             <!-- Language Selector on Login Screen -->
-            <div style="margin-top: 1rem; text-align: center;">
-                <select id="languageSelectorLogin" class="form-control" style="width: auto; display: inline-block; font-size: 0.85rem;">
+            <div style="margin-top: 1.25rem; text-align: center; border-top: 1px solid rgba(148,163,184,0.15); padding-top: 1rem;">
+                <select id="languageSelectorLogin" style="background:transparent;border:1px solid rgba(148,163,184,0.2);border-radius:6px;color:#9ca3af;font-size:0.82rem;padding:0.25rem 0.5rem;cursor:pointer;">
                     <option value="bg">🇧🇬 Български</option>
                     <option value="en">🇬🇧 English</option>
                 </select>
@@ -50,8 +59,8 @@
     <div id="dashboardScreen" class="screen hidden">
         <header>
             <div class="container header-row">
-                <div>
-                    <h1>PartPulse Orders v3.1.0</h1>
+                <div style="display:flex;align-items:center;gap:0.75rem;">
+                    <img src="https://partpulse.eu/images/Partpulse-logo-vertical.jpg" alt="PartPulse" style="height:52px;width:auto;border-radius:6px;">
                     <div id="userRole" class="badge-role"></div>
                 </div>
                 <div class="user-info">
@@ -61,6 +70,7 @@
                         <option value="bg">🇧🇬 BG</option>
                         <option value="en">🇬🇧 EN</option>
                     </select>
+                    <button id="btnTodayActions" class="btn btn-primary btn-sm" style="display:none;" title="View today's action list">📋 Today's Actions</button>
                     <button id="logoutBtn" class="btn btn-secondary" data-i18n="nav.logout">Logout</button>
                 </div>
             </div>
@@ -79,8 +89,11 @@
                 <button class="tab" data-tab="buildingsTab" id="buildingsTabButton" hidden data-i18n="nav.buildings">Buildings</button>
                 <button class="tab" data-tab="costCentersTab" id="costCentersTabButton" hidden data-i18n="nav.costCenters">Cost Centers</button>
                 <button class="tab" data-tab="usersTab" id="usersTabButton" hidden data-i18n="nav.users">Users</button>
-                <button class="tab" id="procurementTabButton" data-tab="procurementTab" hidden>Procurement</button>
-                <button id="btnProcurementCreateOrder" class="btn btn-primary" style="margin-left:auto;" hidden>➕ Create Order</button>
+                <button class="tab" data-tab="analyticsTab" id="analyticsTabButton" hidden data-i18n="nav.analytics">Analytics</button>
+                <button class="tab" data-tab="supplierGroupTab" id="supplierGroupTabButton" hidden>По доставчик</button>
+                <button class="tab" data-tab="accountingTab" id="accountingTabButton" hidden>🧾 Счетоводство</button>
+                <!-- ⭐ ENHANCEMENT #1: Create Order Button -->
+                <button id="btnProcurementCreateOrder" class="btn btn-primary" style="margin-left: auto;" hidden>➕ Create Order</button>
             </div>
 
             <!-- Requester: Create Order -->
@@ -107,23 +120,39 @@
                             <label for="itemDescription" data-i18n="order.create.itemDescription">Item Description</label>
                             <textarea id="itemDescription" class="form-control" rows="3" required data-i18n="order.create.itemDescription.placeholder"></textarea>
                         </div>
+                        <!-- Duplicate detection warning panel -->
+                        <div id="dupWarningPanel" style="display:none;"></div>
                         <div class="form-group">
                             <label for="partNumber" data-i18n="order.create.partNumber">Part Number (optional)</label>
                             <input type="text" id="partNumber" class="form-control" data-i18n="order.create.partNumber.placeholder">
                         </div>
                         <div class="form-group">
-                            <label for="category" data-i18n="order.create.category">Category (optional)</label>
-                            <input type="text" id="category" class="form-control" data-i18n="order.create.category.placeholder">
+                            <label for="category" data-i18n="order.create.category">Category</label>
+                            <select id="category" class="form-control">
+                                <option value="">Select Category</option>
+                                <option value="Bearings">Bearings</option>
+                                <option value="Seals &amp; Gaskets">Seals &amp; Gaskets</option>
+                                <option value="Belts &amp; Chains">Belts &amp; Chains</option>
+                                <option value="Pneumatics">Pneumatics</option>
+                                <option value="Hydraulics">Hydraulics</option>
+                                <option value="Electrical Components">Electrical Components</option>
+                                <option value="Motors &amp; Drives">Motors &amp; Drives</option>
+                                <option value="Sensors &amp; Switches">Sensors &amp; Switches</option>
+                                <option value="Filters">Filters</option>
+                                <option value="Lubricants &amp; Chemicals">Lubricants &amp; Chemicals</option>
+                                <option value="Fasteners &amp; Hardware">Fasteners &amp; Hardware</option>
+                                <option value="Pipes &amp; Fittings">Pipes &amp; Fittings</option>
+                                <option value="Safety Equipment">Safety Equipment</option>
+                                <option value="Tools">Tools</option>
+                                <option value="Spare Parts">Spare Parts</option>
+                                <option value="Other">Other</option>
+                            </select>
                         </div>
                     </div>
                     <div>
                         <div class="form-group">
                             <label for="quantity" data-i18n="order.create.quantity">Quantity</label>
                             <input type="number" id="quantity" class="form-control" min="1" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="dateNeeded" data-i18n="order.create.dateNeeded">Date Needed</label>
-                            <input type="date" id="dateNeeded" class="form-control date-picker">
                         </div>
                         <div class="form-group">
                             <label for="priority" data-i18n="order.create.priority">Priority</label>
@@ -146,7 +175,11 @@
                             <!-- Upload progress will be inserted here by JavaScript -->
                             <div id="upload-progress-container" style="display: none;"></div>
                         </div>
-                        <button type="submit" class="btn btn-primary" data-i18n="order.create.submit">Submit Order</button>
+                        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+                            <button type="submit" class="btn btn-primary" data-i18n="order.create.submit">Submit Order</button>
+                            <button type="button" id="btnUseTemplate" class="btn btn-secondary">🔁 Use Template</button>
+                            <button type="button" id="btnSaveAsTemplate" class="btn btn-secondary" style="display:none;" title="Save this order as a reusable template">💾 Save as Template</button>
+                        </div>
                     </div>
                 </form>
             </section>
@@ -162,8 +195,20 @@
                                 <button id="btnViewGrouped" class="btn-view-mode" data-i18n="orders.view.grouped" title="Group by status">⊞</button>
                             </div>
                             <div id="orderActionsBar" class="order-actions-inner" hidden>
-                                <span id="selectedCount" class="badge-muted">0 <span data-i18n="orders.selected">selected</span></span>
-                                <button id="btnCreateQuote" class="btn btn-primary btn-sm" data-i18n="orders.actions.createQuote">Create Quote from Selected</button>
+                                <span id="selectedCount" class="badge-muted">0 selected</span>
+                                <select id="bulkStatusSelect" class="form-control form-control-sm" style="width:auto;min-width:140px;">
+                                    <option value="">Bulk: Change Status</option>
+                                    <option value="Pending">Pending</option>
+                                    <option value="Pending CAD">Pending CAD</option>
+                                    <option value="Ordered">Ordered</option>
+                                    <option value="In Transit">In Transit</option>
+                                    <option value="Delivered">Delivered</option>
+                                    <option value="Cancelled">Cancelled</option>
+                                    <option value="On Hold">On Hold</option>
+                                </select>
+                                <button id="btnBulkStatus" class="btn btn-secondary btn-sm">Apply</button>
+                                <button id="btnSendRfq" class="btn btn-primary btn-sm">📧 Send RFQ to Supplier</button>
+                                <button id="btnExportOrders" class="btn btn-secondary btn-sm">↓ Export</button>
                             </div>
                         </div>
                     </div>
@@ -178,11 +223,29 @@
                             <button class="quick-filter-chip" data-filter="new" data-i18n="orders.quickFilter.new">🆕 New</button>
                             <button class="quick-filter-chip" data-filter="ordered" data-i18n="orders.quickFilter.ordered">📦 Ordered</button>
                             <button class="quick-filter-chip" data-filter="transit" data-i18n="orders.quickFilter.transit">🚚 In Transit</button>
+                            <button class="quick-filter-chip" data-filter="cad">🔧 CAD</button>
                         </div>
 
                         <!-- Detailed Filters -->
                         <div class="filters-grid">
-                            <input type="text" id="filterSearch" class="form-control form-control-sm" data-i18n="orders.search">
+                            <!-- Power Search with hint tooltip -->
+                            <div class="search-with-hint" style="position:relative;display:flex;align-items:center;gap:4px;">
+                                <input type="text" id="filterSearch" class="form-control form-control-sm" placeholder="Search orders..." style="flex:1;" data-i18n="orders.search">
+                                <span class="search-hint-icon" id="searchHintToggle" title="Search syntax help" style="cursor:pointer;font-size:1rem;color:#94a3b8;padding:0 4px;flex-shrink:0;" tabindex="0" role="button" aria-label="Search help">ℹ️</span>
+                                <!-- Tooltip is INSIDE the wrapper so position:absolute works correctly -->
+                                <div id="searchHintTooltip" class="search-hint-tooltip" style="display:none;">
+                                    <div class="hint-title">Power Search Syntax</div>
+                                    <table class="hint-table">
+                                        <tr><td><code>#42</code></td><td>Order by ID</td></tr>
+                                        <tr><td><code>@John</code></td><td>By requester name</td></tr>
+                                        <tr><td><code>pn:ABC-123</code></td><td>By part number</td></tr>
+                                        <tr><td><code>was:Approved</code></td><td>Was ever in this status</td></tr>
+                                        <tr><td><code>by:Salim</code></td><td>Touched by this person</td></tr>
+                                        <tr><td><code>pump bearing</code></td><td>AND: both words must match</td></tr>
+                                    </table>
+                                    <div class="hint-tip">Combine: <code>@John pump</code> &rarr; John's pump orders</div>
+                                </div>
+                            </div>
                             <select id="filterStatus" class="form-control form-control-sm">
                                 <option value="" data-i18n="orders.filter.status">Status: All</option>
                             </select>
@@ -206,20 +269,36 @@
                                 <option value="due14" data-i18n="orders.quickFilter.due14">Due in 14 days</option>
                                 <option value="ontrack">On Track</option>
                             </select>
+                            <!-- ⭐ Date range pickers -->
+                            <input type="date" id="filterDateFrom" class="form-control form-control-sm" title="Submitted from date" placeholder="From date">
+                            <input type="date" id="filterDateTo" class="form-control form-control-sm" title="Submitted until date" placeholder="To date">
                         </div>
                         <div class="filters-actions">
+                            <select id="filterOrdered" class="form-control form-control-sm" style="min-width:120px"><option value="">Ordered: All</option><option value="today">Today</option><option value="week">This Week</option><option value="month">This Month</option></select>
+                            <button id="btnSaveSearch" class="btn-link btn-sm" title="Save current search query" style="color:#e8682a;">&#128278; Save Search</button>
                             <button id="btnClearFilters" class="btn-link btn-sm" data-i18n="orders.filter.clear">Clear All Filters</button>
+                        </div>
+                        <!-- ⭐ Saved Searches panel -->
+                        <div id="savedSearchesPanel" class="saved-searches-panel">
+                            <div id="savedSearchesList"><span style="color:#64748b;font-size:0.78rem;">No saved searches yet</span></div>
                         </div>
                     </div>
 
-                    <div id="ordersTable"></div>
+                    <div id="requesterDashboard"></div>
+            <div id="requesterAttentionBanner" class="req-attention-banner" style="display:none"></div>
+            <div id="ordersTable"></div>
+            <div id="ordersEmptyState" class="hidden" style="text-align:center;padding:4rem 1rem;">
+              <div style="font-size:3.5rem;margin-bottom:1rem;opacity:0.4;">📦</div>
+              <div style="font-size:1rem;font-weight:600;color:#e5e7eb;margin-bottom:0.4rem;">No orders found</div>
+              <div style="font-size:0.85rem;color:#64748b;">Try adjusting your filters or creating a new order.</div>
+            </div>
                 </div>
 
                 <!-- Order Detail Panel -->
                 <div id="orderDetailPanel" class="side-panel hidden">
                     <div class="side-panel-header">
                         <h3 id="detailTitle" data-i18n="orderDetail.title">Order Details</h3>
-                        <button id="btnCloseDetail" class="btn-icon">✕</button>
+                    <button id="btnCloseDetail" class="btn-icon" aria-label="Close order details">✕</button>
                     </div>
                     <div id="orderDetailBody" class="side-panel-body">
                         <!-- Order details will be rendered here by app.js -->
@@ -230,7 +309,7 @@
                     </div>
                 </div>
             </section>
-
+            
             <!-- Approvals Tab (Phase 3) -->
             <section id="approvalsTab" class="tab-content hidden">
                 <div class="card">
@@ -269,20 +348,23 @@
                 <div id="approvalDetailPanel" class="side-panel hidden">
                     <div class="side-panel-header">
                         <h3>Approval Request</h3>
-                        <button id="btnCloseApprovalDetail" class="btn-icon">✕</button>
+                    <button id="btnCloseApprovalDetail" class="btn-icon" aria-label="Close approval details">✕</button>
                     </div>
                     <div id="approvalDetailBody" class="side-panel-body">
                         <!-- Approval details will be rendered here by approvals.js -->
                     </div>
                 </div>
             </section>
-
+            
             <!-- Quotes Tab -->
             <section id="quotesTab" class="tab-content hidden">
                 <div class="card">
                     <div class="card-header-row">
                         <h2 data-i18n="quotes.title">Quotes</h2>
-                        <button id="btnRefreshQuotes" class="btn btn-secondary btn-sm" data-i18n="quotes.refresh">Refresh</button>
+                        <div style="display:flex;gap:0.5rem;">
+                            <button id="btnNewQuoteFromQuotesTab" class="btn btn-primary btn-sm">➕ New Quote</button>
+                            <button id="btnRefreshQuotes" class="btn btn-secondary btn-sm" data-i18n="quotes.refresh">Refresh</button>
+                        </div>
                     </div>
                     <div id="quotesTable"></div>
                 </div>
@@ -290,7 +372,7 @@
                 <div id="quoteDetailPanel" class="side-panel hidden">
                     <div class="side-panel-header">
                         <h3 id="quoteDetailTitle" data-i18n="quoteDetail.title">Quote Details</h3>
-                        <button id="btnCloseQuoteDetail" class="btn-icon">✕</button>
+                    <button id="btnCloseQuoteDetail" class="btn-icon" aria-label="Close quote details">✕</button>
                     </div>
                     <div id="quoteDetailBody" class="side-panel-body"></div>
                 </div>
@@ -304,7 +386,7 @@
                         <!-- Brand training UI will be loaded here -->
                     </div>
                 </div>
-
+                
                 <div class="grid-2">
                     <div class="card">
                         <div class="card-header-row">
@@ -403,6 +485,23 @@
                 </div>
             </section>
 
+            <!-- Building Managers Panel (shown when Manage button clicked) -->
+            <div id="buildingManagersOverlay" class="card" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:1000;min-width:420px;max-width:560px;width:90%;box-shadow:0 8px 48px rgba(0,0,0,.28)">
+                <div class="card-header-row">
+                    <h2 style="margin:0">Managers — <span id="bmBuildingLabel" style="color:var(--primary)"></span></h2>
+                    <button type="button" id="btnCloseBmPanel" class="btn btn-secondary btn-sm" aria-label="Close building manager panel">✕</button>
+                </div>
+                <div id="bmCurrentList" style="margin-bottom:1rem;min-height:2rem"></div>
+                <div class="form-group" style="display:flex;gap:.5rem;align-items:flex-end">
+                    <div style="flex:1">
+                        <label>Add manager / user</label>
+                        <select id="bmUserSelect" class="form-control"><option value="">— select —</option></select>
+                    </div>
+                    <button type="button" id="btnAddBmManager" class="btn btn-primary btn-sm">Add</button>
+                </div>
+            </div>
+            <div id="bmBackdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999"></div>
+
             <!-- Cost Centers Tab (admin only) -->
             <section id="costCentersTab" class="tab-content hidden">
                 <div class="grid-2">
@@ -454,6 +553,13 @@
                             </div>
                         </form>
                     </div>
+                </div>
+            </section>
+
+            <!-- Analytics Tab -->
+            <section id="analyticsTab" class="tab-content hidden">
+                <div id="analyticsTabContent">
+                    <!-- Rendered by analytics.js -->
                 </div>
             </section>
 
@@ -517,143 +623,174 @@
                     </div>
                 </div>
             </section>
-
-            <!-- Procurement Tab -->
-            <section id="procurementTab" class="tab-content hidden">
-                <div id="procurementDashboardContainer"></div>
-            </section>
         </div>
     </div>
+    </main>
 </div>
 
-<!-- Procurement Create Order Modal -->
-<div id="procCreateOrderModal" class="modal-overlay hidden">
-    <div class="modal-card" style="width: 700px; max-width: 95%;">
+<!-- ⭐ Smart Quote Send Panel -->
+<div id="quoteSendPanel" class="quote-send-panel hidden"></div>
+
+<!-- ⭐ ENHANCEMENT #2: Procurement Create Order Modal (ENHANCED) -->
+<div id="procCreateOrderModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="procCreateOrderTitle">
+    <div class="modal-card" style="max-width: 580px;">
         <div class="modal-header">
-            <h3>Create New Order</h3>
-            <button id="btnCloseProcModal" class="btn-icon">✕</button>
+            <h3 id="procCreateOrderTitle">➕ Create Order</h3>
+            <button class="btn-close" aria-label="Close create order dialog" onclick="closeProcCreateOrderModal()">✕</button>
         </div>
         <div class="modal-body">
-            <form id="procCreateOrderForm" class="grid-2">
-                <div>
-                    <div class="form-group">
-                        <label for="procBuilding">Building</label>
-                        <select id="procBuilding" class="form-control" required>
-                            <option value="">Select Building</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Cost Center <span style="color:#ef4444;">*</span></label>
-                        <div id="procCostCenterRadios" class="radio-group">
-                            <span class="text-muted">Select a building first</span>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label for="procItemDescription">Item Description</label>
-                        <textarea id="procItemDescription" class="form-control" rows="3" required></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label for="procPartNumber">Part Number (optional)</label>
-                        <input type="text" id="procPartNumber" class="form-control">
-                    </div>
-                    <div class="form-group">
-                        <label for="procCategory">Category (optional)</label>
-                        <input type="text" id="procCategory" class="form-control">
+            <form id="procCreateOrderForm">
+                <div class="form-group">
+                    <label>Building *</label>
+                    <select id="procBuilding" class="form-control" required>
+                        <option value="">Select Building</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Cost Center *</label>
+                    <div id="procCostCenterRadios" class="radio-group">
+                        <span class="text-muted">Select a building first</span>
                     </div>
                 </div>
-                <div>
+                <div class="form-group">
+                    <label>Item Description *</label>
+                    <textarea id="procItemDescription" class="form-control" rows="2" required placeholder="Describe the item you need..."></textarea>
+                </div>
+                <div class="form-row">
                     <div class="form-group">
-                        <label for="procQuantity">Quantity</label>
+                        <label>Part Number</label>
+                        <input type="text" id="procPartNumber" class="form-control" placeholder="Optional">
+                    </div>
+                    <div class="form-group">
+                        <label>Category</label>
+                        <input type="text" id="procCategory" class="form-control" placeholder="Optional">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Quantity *</label>
                         <input type="number" id="procQuantity" class="form-control" min="1" required>
                     </div>
                     <div class="form-group">
-                        <label for="procDateNeeded">Date Needed</label>
-                        <input type="date" id="procDateNeeded" class="form-control date-picker">
+                        <label>Date Needed *</label>
+                        <input type="date" id="procDateNeeded" class="form-control date-picker" required>
                     </div>
-                    <div class="form-group">
-                        <label for="procPriority">Priority</label>
-                        <select id="procPriority" class="form-control">
-                            <option value="Normal">Normal</option>
-                            <option value="Low">Low</option>
-                            <option value="High">High</option>
-                            <option value="Urgent">Urgent</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="procNotes">Additional Notes</label>
-                        <textarea id="procNotes" class="form-control" rows="2"></textarea>
-                    </div>
-                    <div class="form-actions">
-                        <button type="submit" class="btn btn-primary">Submit Order</button>
-                        <button type="button" id="btnCancelProcModal" class="btn btn-secondary">Cancel</button>
-                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Priority</label>
+                    <select id="procPriority" class="form-control">
+                        <option value="Normal">Normal</option>
+                        <option value="High">High</option>
+                        <option value="Urgent">Urgent</option>
+                        <option value="Low">Low</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea id="procNotes" class="form-control" rows="2" placeholder="Additional information..."></textarea>
+                </div>
+                <!-- ⭐ NEW: File Upload -->
+                <div class="form-group">
+                    <label>Attach Files</label>
+                    <input type="file" id="procAttachments" name="procAttachments" multiple>
+                    <div id="proc-file-preview-container"></div>
+                    <div id="proc-upload-progress-container" style="display: none;"></div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeProcCreateOrderModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Order</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
 
-<!-- Toast Container -->
-<div id="toastContainer" class="toast-container"></div>
+<!-- ⭐ ENHANCEMENT #3: Create Quote Modal -->
+<div id="createQuoteModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="createQuoteTitle">
+    <div class="modal-card" style="max-width: 520px;">
+        <div class="modal-header">
+            <h3 id="createQuoteTitle">📋 Create Quote</h3>
+            <button class="btn-close" aria-label="Close create quote dialog" onclick="closeCreateQuoteModal()">✕</button>
+        </div>
+        <div class="modal-body">
+            <div class="text-muted" style="margin-bottom: 0.75rem;">
+              Creating quote for <strong id="cqOrderCount">0</strong> selected order(s)
+            </div>
+            <form id="createQuoteForm">
+                <div class="form-group">
+                    <label>Supplier *</label>
+                    <select id="cqSupplier" class="form-control" required></select>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Currency</label>
+                        <select id="cqCurrency" class="form-control">
+                            <option value="EUR">EUR</option>
+                            <option value="USD">USD</option>
+                            <option value="BGN">BGN</option>
+                            <option value="GBP">GBP</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Valid Until</label>
+                        <input type="date" id="cqValidUntil" class="form-control date-picker">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea id="cqNotes" class="form-control" rows="2" placeholder="Internal notes about this quote..."></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeCreateQuoteModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Quote</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
-<style>
-/* Toast styles */
-.toast-container {
-    position: fixed;
-    bottom: 1.5rem;
-    right: 1.5rem;
-    z-index: 9999;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    pointer-events: none;
-}
-.toast {
-    background: #1e293b;
-    border: 1px solid rgba(148,163,184,0.3);
-    border-radius: 8px;
-    padding: 0.75rem 1rem;
-    color: #f1f5f9;
-    font-size: 0.875rem;
-    min-width: 220px;
-    max-width: 360px;
-    opacity: 0;
-    transform: translateX(20px);
-    transition: opacity 0.3s ease, transform 0.3s ease;
-    pointer-events: auto;
-}
-.toast.toast-visible {
-    opacity: 1;
-    transform: translateX(0);
-}
-.toast.toast-success { border-left: 4px solid #22c55e; }
-.toast.toast-error   { border-left: 4px solid #ef4444; }
-.toast.toast-warning { border-left: 4px solid #f59e0b; }
-.toast.toast-info    { border-left: 4px solid #3b82f6; }
-</style>
+<!-- Analytics Drill-Down Modal -->
+<div id="analyticsDrillModal" class="analytics-drill-modal hidden" role="dialog" aria-modal="true" aria-labelledby="analyticsDrillTitle">
+    <div class="analytics-drill-backdrop" id="analyticsDrillBackdrop"></div>
+    <div class="analytics-drill-content">
+        <div class="analytics-drill-header">
+            <h3 id="analyticsDrillTitle">Orders</h3>
+            <div class="analytics-drill-summary" id="analyticsDrillSummary"></div>
+            <button class="analytics-drill-close" id="analyticsDrillClose" aria-label="Close analytics details">&times;</button>
+        </div>
+        <div class="analytics-drill-body" id="analyticsDrillBody">
+            <div class="analytics-loading"><div class="spinner"></div><div>Loading...</div></div>
+        </div>
+    </div>
+</div>
 
-<!-- ⭐ LOAD I18N FIRST -->
+<!-- Shared request layer: load before every application script. -->
+<script src="api-client.js"></script>
+<!-- Analytics dependencies must precede the modules that use them. -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+<script src="upload-progress.js"></script>
+<script src="analytics-cache.js"></script>
+<script src="analytics-charts.js"></script>
+<script src="analytics-insights.js"></script>
+<script src="analytics-forecasting.js"></script>
+<script src="analytics-export.js"></script>
+<script src="analytics.js"></script>
+<!-- i18n defines the global used by app.js and the language-selector handler. -->
 <script src="i18n.js"></script>
 <script src="app.js"></script>
-<!-- File Upload Enhancement Script -->
 <script src="js/order-form-enhanced.js"></script>
 <script src="documents.js"></script>
 <script src="approvals.js"></script>
 <script src="approval-submission.js"></script>
-<!-- ⭐ Order Assignment System (Phase 4) -->
 <script src="order-assignment.js"></script>
-<!-- ⭐ Professional Supplier Selector -->
 <script src="supplier-selector.js"></script>
-<!-- ⭐ Smart Supplier Suggestions -->
 <script src="supplier-suggestions.js"></script>
-<!-- ⭐ Brand Training UI -->
 <script src="brand-training.js"></script>
-<!-- ⭐ NEW: Intelligent Autocomplete (Phase 5) -->
-<script src="js/intelligent-autocomplete.js"></script>
-<!-- ⭐ NEW: Quote Send -->
 <script src="quote-send.js"></script>
-<!-- ⭐ NEW: Procurement Workspace -->
-<script src="procurement-workspace.js"></script>
+<script src="js/intelligent-autocomplete.js"></script>
 
 <!-- ⭐ Language Selector Event Handlers -->
 <script>
@@ -687,5 +824,196 @@ setTimeout(() => {
     }
 }, 100);
 </script>
+
+<!-- KPI Drill-Down Panel -->
+<div id="kpiDrillPanel" class="side-panel hidden">
+  <div class="side-panel-header">
+    <h3 id="kpiDrillTitle">Orders</h3>
+    <button id="btnCloseKpiDrill" class="btn-icon" aria-label="Close KPI details">&times;</button>
+  </div>
+  <div id="kpiDrillBody" class="side-panel-body"></div>
+</div>
+<div id="kpiDrillBackdrop" class="kpi-drill-backdrop hidden"></div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     MOBILE BOTTOM NAVIGATION
+     Hidden on desktop (≥769px), shown on mobile via CSS
+     ═══════════════════════════════════════════════════════════ -->
+<nav id="mobileBottomNav" class="mobile-nav" role="navigation" aria-label="Mobile navigation">
+  <div class="mobile-nav-inner">
+
+    <!-- Orders -->
+    <button class="mobile-nav-btn active" data-mob-tab="ordersTab" aria-label="Orders">
+      <span class="mob-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
+          <rect x="9" y="3" width="6" height="4" rx="1"/>
+          <line x1="9" y1="12" x2="15" y2="12"/>
+          <line x1="9" y1="16" x2="13" y2="16"/>
+        </svg>
+      </span>
+      <span>Orders</span>
+    </button>
+
+    <!-- Approvals -->
+    <button class="mobile-nav-btn" data-mob-tab="approvalsTab" aria-label="Approvals" style="position:relative">
+      <span class="mob-icon" style="position:relative">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="9 11 12 14 22 4"/>
+          <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+        </svg>
+        <span id="mobApprovalsBadge" class="mobile-nav-badge hidden">0</span>
+      </span>
+      <span>Approvals</span>
+    </button>
+
+    <!-- FAB: New Order (center) -->
+    <div class="mob-fab-wrap">
+      <button id="mobFabNewOrder" class="mob-fab" aria-label="New Order" title="Create New Order">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="5" x2="12" y2="19"/>
+          <line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+      </button>
+      <span class="mob-fab-label">New</span>
+    </div>
+
+    <!-- Quotes -->
+    <button class="mobile-nav-btn" data-mob-tab="quotesTab" aria-label="Quotes">
+      <span class="mob-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="12" y1="18" x2="12" y2="12"/>
+          <line x1="9" y1="15" x2="15" y2="15"/>
+        </svg>
+      </span>
+      <span>Quotes</span>
+    </button>
+
+    <!-- Analytics -->
+    <button id="mobAnalyticsBtn" class="mobile-nav-btn" data-mob-tab="analyticsTab" aria-label="Analytics">
+      <span class="mob-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="20" x2="18" y2="10"/>
+          <line x1="12" y1="20" x2="12" y2="4"/>
+          <line x1="6" y1="20" x2="6" y2="14"/>
+        </svg>
+      </span>
+      <span>Аналитика</span>
+    </button>
+
+    <!-- ⭐ Accounting -->
+    <button id="mobAccountingBtn" class="mobile-nav-btn" data-mob-tab="accountingTab" aria-label="Счетоводство" hidden>
+      <span class="mob-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/>
+          <line x1="16" y1="17" x2="8" y2="17"/>
+          <polyline points="10 9 9 9 8 9"/>
+        </svg>
+      </span>
+      <span>Счетоводство</span>
+    </button>
+
+  </div>
+</nav>
+<!-- END MOBILE BOTTOM NAV -->
+
+<!-- ═══════════════════════════════════════════════════════════
+     RFQ WIZARD MODAL — Send Request For Quotation to Supplier
+     ═══════════════════════════════════════════════════════════ -->
+<div id="rfqWizardModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="rfqWizardTitle">
+  <div class="modal-card rfq-wizard-card">
+    <div class="modal-header">
+      <div>
+        <h3 id="rfqWizardTitle">📧 Send RFQ to Supplier</h3>
+        <div class="rfq-wizard-subtitle" id="rfqWizardSubtitle">Step 1 of 3 — Review Orders &amp; AI Supplier Assignment</div>
+      </div>
+      <button class="btn-close" aria-label="Close RFQ wizard" onclick="closeRfqWizard()">✕</button>
+    </div>
+    <div class="modal-body rfq-wizard-body" id="rfqWizardBody">
+      <!-- Dynamically rendered by JS -->
+    </div>
+    <div class="modal-footer rfq-wizard-footer" id="rfqWizardFooter">
+      <!-- Navigation buttons rendered by JS -->
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     PROCUREMENT TODAY PANEL — action dashboard
+     ═══════════════════════════════════════════════════════════ -->
+<div id="procTodayPanel" class="side-panel hidden">
+  <div class="side-panel-header">
+    <h3>📋 Today's Actions</h3>
+    <button class="btn-icon" onclick="closeProcTodayPanel()">✕</button>
+  </div>
+  <div class="side-panel-body" id="procTodayBody">
+    <div class="text-muted">Loading...</div>
+  </div>
+</div>
+<div id="procTodayBackdrop" class="kpi-drill-backdrop hidden" onclick="closeProcTodayPanel()"></div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SUPPLIER RESPONSE MODAL — enter prices after supplier replies
+     ═══════════════════════════════════════════════════════════ -->
+<div id="supplierResponseModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="supplierResponseTitle">
+  <div class="modal-card" style="max-width:580px;">
+    <div class="modal-header">
+      <h3 id="supplierResponseTitle">💬 Enter Supplier Response</h3>
+      <button class="btn-close" aria-label="Close supplier response dialog" onclick="closeSupplierResponseModal()">✕</button>
+    </div>
+    <div class="modal-body" id="supplierResponseBody">
+      <!-- Dynamically rendered -->
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     ORDER TEMPLATES MODAL — repeat/template orders
+     ═══════════════════════════════════════════════════════════ -->
+<div id="orderTemplatesModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="orderTemplatesTitle">
+  <div class="modal-card" style="max-width:520px;">
+    <div class="modal-header">
+      <h3 id="orderTemplatesTitle">🔁 Order Templates</h3>
+      <button class="btn-close" aria-label="Close order templates dialog" onclick="document.getElementById('orderTemplatesModal').classList.add('hidden')">✕</button>
+    </div>
+    <div class="modal-body" id="orderTemplatesBody">
+      <!-- Dynamically rendered -->
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     DUPLICATE ORDER WARNING MODAL
+     ═══════════════════════════════════════════════════════════ -->
+<div id="duplicateOrderModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="duplicateOrderTitle">
+  <div class="modal-card" style="max-width:480px;">
+    <div class="modal-header">
+      <h3 id="duplicateOrderTitle" style="color:#f59e0b;">⚠ Possible Duplicate Order</h3>
+      <button class="btn-close" aria-label="Close duplicate order dialog" onclick="document.getElementById('duplicateOrderModal').classList.add('hidden')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p id="duplicateOrderMsg" style="color:#f1f5f9;margin-bottom:1rem;"></p>
+      <div id="duplicateOrderList" style="margin-bottom:1.25rem;"></div>
+      <div class="form-actions">
+        <button class="btn btn-secondary" onclick="document.getElementById('duplicateOrderModal').classList.add('hidden')">Cancel</button>
+        <button class="btn btn-primary" id="btnSubmitAnyway">Submit Anyway</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ⭐ PartPulse Features — RFQ Wizard, Bulk Status, PO Gen, Templates, Supplier Response, Today's Actions, Export, Duplicate Detection -->
+<script src="partpulse-features.js"></script>
+<!-- Admin cockpit is maintained as a separate classic-script module. -->
+<script src="admin-cockpit.js"></script>
+
+<!-- Side panel backdrops -->
+<div id="orderDetailBackdrop" class="side-panel-backdrop hidden" onclick="document.getElementById('orderDetailPanel').classList.add('hidden');this.classList.add('hidden');"></div>
+<div id="approvalDetailBackdrop" class="side-panel-backdrop hidden" onclick="document.getElementById('approvalDetailPanel').classList.add('hidden');this.classList.add('hidden');"></div>
+
 </body>
 </html>

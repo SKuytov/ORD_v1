@@ -1,16 +1,19 @@
 // frontend/i18n.js - Internationalization System
 // Bulgarian (default) and English language support
+// v3.0 — Full coverage including power search, cancellation, audit trail, alerts & toasts
 
 const translations = {
     bg: {
-        // Login Screen
+        // ── Login ──────────────────────────────────────────────────────────────
         'login.title': 'Вход в системата',
         'login.username': 'Потребителско име',
         'login.password': 'Парола',
         'login.button': 'Вход',
-        'login.error': 'Грешка при влизане',
-        
-        // Navigation
+        'login.error': 'Грешна парола или потребителско име',
+        'login.failed': 'Неуспешен вход. Моля опитайте отново.',
+        'login.forgotPassword': 'Забравена парола?',
+
+        // ── Navigation ─────────────────────────────────────────────────────────
         'nav.orders': 'Поръчки',
         'nav.quotes': 'Оферти',
         'nav.approvals': 'Одобрения',
@@ -20,30 +23,34 @@ const translations = {
         'nav.costCenters': 'Разходни центрове',
         'nav.users': 'Потребители',
         'nav.logout': 'Изход',
-        
-        // User Roles
+        'nav.analytics': '📊 Анализи',
+        'nav.todayActions': '📋 Задачи за днес',
+
+        // ── User Roles ─────────────────────────────────────────────────────────
         'role.admin': 'Администратор',
         'role.procurement': 'Снабдяване',
         'role.manager': 'Мениджър',
         'role.requester': 'Заявител',
-        
-        // Order Creation
-        'order.create.title': 'Създаване на поръчка',
+
+        // ── Order Creation ─────────────────────────────────────────────────────
+        'order.create.title': 'Нова поръчка',
         'order.create.building': 'Сграда',
         'order.create.costCenter': 'Разходен център',
         'order.create.costCenter.select': 'Изберете разходен център:',
         'order.create.costCenter.none': 'Няма дефинирани разходни центрове за тази сграда',
-        'order.create.costCenter.selectBuilding': 'Изберете сграда първо',
+        'order.create.costCenter.selectBuilding': 'Първо изберете сграда',
         'order.create.itemDescription': 'Описание на артикула',
         'order.create.itemDescription.placeholder': 'Опишете детайлно нужния артикул...',
-        'order.create.partNumber': 'Код на производителя/Каталожен номер',
+        'order.create.partNumber': 'Каталожен номер / Код на производителя',
         'order.create.partNumber.placeholder': 'Ако е приложимо',
         'order.create.category': 'Категория',
-        'order.create.category.placeholder': 'напр. Лагер, Цилиндри, Електрически материали, Инструменти...',
+        'order.create.category.placeholder': 'напр. Лагер, Цилиндри, Ел. материали, Инструменти...',
         'order.create.quantity': 'Количество',
         'order.create.dateNeeded': 'Нужно до дата',
         'order.create.priority': 'Приоритет',
+        'order.create.priority.low': 'Нисък',
         'order.create.priority.normal': 'Нормален',
+        'order.create.priority.high': 'Висок',
         'order.create.priority.urgent': 'Спешен',
         'order.create.priority.critical': 'Критичен',
         'order.create.notes': 'Бележки',
@@ -53,33 +60,68 @@ const translations = {
         'order.create.submit': 'Създай поръчка',
         'order.create.success': 'Поръчката е създадена успешно!',
         'order.create.error': 'Грешка при създаване на поръчка',
-        'order.create.selectCostCenter': 'Моля изберете Разходен център',
-        
-        // Orders Table
+        'order.create.networkError': 'Мрежова грешка при създаване на поръчка.',
+        'order.create.uploadCancelled': 'Качването е отменено.',
+        'order.create.selectCostCenter': 'Моля изберете разходен център',
+        'order.create.selectBuilding': 'Моля изберете сграда',
+        'order.create.selectCostCenterFirst': 'Моля изберете разходен център',
+        'order.create.itemRequired': 'Описанието на артикула е задължително',
+        'order.create.dateRequired': 'Датата „Нужно до" е задължителна',
+        'order.create.serverError': 'Грешка при обработка на отговора от сървъра.',
+
+        // ── Orders Table ───────────────────────────────────────────────────────
         'orders.title': 'Поръчки',
-        'orders.search': 'Търсене...',
+        'orders.search': 'Търсене на поръчки...',
         'orders.filter.status': 'Статус: Всички',
         'orders.filter.building': 'Сграда: Всички',
         'orders.filter.priority': 'Приоритет: Всички',
         'orders.filter.supplier': 'Доставчик: Всички',
         'orders.filter.delivery': 'Доставка: Всички',
-        'orders.filter.clear': 'Изчисти филтрите',
+        'orders.filter.clear': 'Изчисти всички филтри',
+        'orders.filter.saveSearch': '🔖 Запази търсенето',
+        'orders.filter.from': 'От дата',
+        'orders.filter.to': 'До дата',
+        'orders.filter.ordered': 'Поръчани:',
+        'orders.filter.ordered.all': 'Всички',
+        'orders.filter.ordered.today': 'Днес',
+        'orders.filter.ordered.week': 'Тази седмица',
+        'orders.filter.ordered.month': 'Този месец',
         'orders.view.flat': 'Плосък изглед',
         'orders.view.grouped': 'Групиран изглед',
-        'orders.quickFilter.new': 'Нови',
-        'orders.quickFilter.ordered': 'Поръчани',
-        'orders.quickFilter.transit': 'В транзит',
-        'orders.quickFilter.late': 'Закъснели',
-        'orders.quickFilter.due7': 'Пристигащи до 7 дни',
-        'orders.quickFilter.due14': 'Пристигащи до 14 дни',
+        'orders.quickFilter.new': '🆕 Нови',
+        'orders.quickFilter.ordered': '📦 Поръчани',
+        'orders.quickFilter.transit': '🚚 В транзит',
+        'orders.quickFilter.late': '⚠ Закъснели',
+        'orders.quickFilter.due7': '🕒 До 7 дни',
+        'orders.quickFilter.due14': '📅 До 14 дни',
         'orders.noOrders': 'Няма намерени поръчки.',
+        'orders.noOrders.hint': 'Опитайте да промените филтрите или да създадете нова поръчка.',
         'orders.selected': 'избрани',
         'orders.actions.createQuote': 'Създай оферта',
-        
-        // Order Columns
+        'orders.selectForQuote': 'Изберете поръчки и натиснете „Създай оферта от избраните"',
+        'orders.selectFirst': 'Първо изберете една или повече поръчки, след това натиснете „Създай оферта от избраните"',
+        'orders.refreshed': 'Поръчките са опреснени',
+        'orders.loadError': 'Грешка при зареждане на поръчките.',
+
+        // ── Power Search ───────────────────────────────────────────────────────
+        'search.hint.title': 'Разширено търсене',
+        'search.hint.id': 'Поръчка по номер',
+        'search.hint.requester': 'По заявител',
+        'search.hint.partnum': 'По каталожен номер',
+        'search.hint.was': 'Беше в този статус',
+        'search.hint.by': 'Обработена от лице',
+        'search.hint.and': 'И: двете думи трябва да съвпадат',
+        'search.hint.combine': 'Комбиниране',
+        'search.saved.none': 'Няма запазени търсения',
+        'search.saved.save': 'Запази търсенето',
+        'search.saved.already': 'Вече е запазено',
+        'search.saved.saved': 'Търсенето е запазено',
+        'search.saved.typeFirst': 'Въведете текст за търсене първо',
+
+        // ── Order Columns ──────────────────────────────────────────────────────
         'orders.col.id': 'ID',
         'orders.col.item': 'Артикул',
-        'orders.col.costCenter': 'Разходен център',
+        'orders.col.costCenter': 'Разх. център',
         'orders.col.qty': 'К-во',
         'orders.col.status': 'Статус',
         'orders.col.priority': 'Приоритет',
@@ -92,13 +134,15 @@ const translations = {
         'orders.col.unit': 'Ед. цена',
         'orders.col.total': 'Обща цена',
         'orders.col.view': 'Преглед',
-        
-        // Order Statuses
+        'orders.col.submitted': 'Подадена на',
+        'orders.col.lastUpdate': 'Последна промяна',
+
+        // ── Order Statuses ─────────────────────────────────────────────────────
         'status.New': 'Нова',
         'status.Pending': 'Чакаща',
         'status.Quote Requested': 'Поискана оферта',
         'status.Quote Received': 'Получена оферта',
-        'status.Quote Under Approval': 'Оферта в процес на одобрение',
+        'status.Quote Under Approval': 'Оферта за одобрение',
         'status.Approved': 'Одобрена',
         'status.Ordered': 'Поръчана',
         'status.In Transit': 'В транзит',
@@ -106,15 +150,15 @@ const translations = {
         'status.Delivered': 'Доставена',
         'status.Cancelled': 'Анулирана',
         'status.On Hold': 'На изчакване',
-        
-        // Delivery Status
+
+        // ── Delivery Status ────────────────────────────────────────────────────
         'delivery.late': '⚠ Закъсняла',
         'delivery.due7': '🕒 До 7 дни',
         'delivery.due14': '📅 До 14 дни',
         'delivery.ontrack': '✓ В график',
-        'delivery.none': '-',
-        
-        // Order Detail Panel
+        'delivery.none': '—',
+
+        // ── Order Detail Panel ─────────────────────────────────────────────────
         'orderDetail.title': 'Детайли на поръчката',
         'orderDetail.orderId': 'Номер на поръчка',
         'orderDetail.building': 'Сграда',
@@ -122,6 +166,9 @@ const translations = {
         'orderDetail.status': 'Статус',
         'orderDetail.priority': 'Приоритет',
         'orderDetail.dateNeeded': 'Нужно до дата',
+        'orderDetail.submittedOn': 'Подадена на',
+        'orderDetail.lastUpdated': 'Последна промяна',
+        'orderDetail.deliveredOn': 'Доставена на',
         'orderDetail.expectedDelivery': 'Очаквана доставка',
         'orderDetail.deliveryStatus': 'Статус на доставка',
         'orderDetail.requester': 'Заявител',
@@ -129,12 +176,18 @@ const translations = {
         'orderDetail.unitPrice': 'Единична цена',
         'orderDetail.totalPrice': 'Обща цена',
         'orderDetail.itemDescription': 'Описание на артикула',
-        'orderDetail.partNumber': 'Партиден номер',
+        'orderDetail.partNumber': 'Каталожен номер',
         'orderDetail.category': 'Категория',
         'orderDetail.notes': 'Бележки',
+        'orderDetail.supplierNotes': 'Бележки за доставчика',
+        'orderDetail.supplierNotes.placeholder': 'Вътрешни бележки за доставчика по тази поръчка',
+        'orderDetail.altProduct': 'Алтернативен продукт',
+        'orderDetail.altProduct.placeholder': 'Наименование на алтернативен продукт',
+        'orderDetail.altProductDesc': 'Описание на алтернативния продукт',
+        'orderDetail.altProductDesc.placeholder': 'Описание на алтернативния продукт',
         'orderDetail.attachments': 'Прикачени файлове',
         'orderDetail.noAttachments': 'Няма прикачени файлове.',
-        'orderDetail.history': 'История',
+        'orderDetail.history': 'История на промените',
         'orderDetail.suggestedSuppliers': '💡 Предложени доставчици',
         'orderDetail.suggestedSuppliers.desc': 'AI препоръки на база описание и история',
         'orderDetail.browseAll': '🏢 Разгледай всички',
@@ -144,22 +197,57 @@ const translations = {
         'orderDetail.save': 'Запази',
         'orderDetail.close': 'Затвори',
         'orderDetail.updated': 'Поръчката е актуализирана',
-        'orderDetail.updateError': 'Грешка при актуализация на поръчка',
-        
-        // Quotes
+        'orderDetail.updateError': 'Грешка при актуализация на поръчката',
+        'orderDetail.loadError': 'Грешка при зареждане на детайлите',
+        'orderDetail.reorder': '📋 Повтори поръчката',
+        'orderDetail.proofNote.placeholder': 'напр. Частична доставка — получени 3 от 5 бр.',
+        'orderDetail.documents': 'Свързани документи',
+        'orderDetail.noDocuments': 'Няма свързани документи за тази поръчка.',
+        'orderDetail.documentsError': 'Грешка при зареждане на документите.',
+        'orderDetail.proof': 'Доказателство за доставка',
+        'orderDetail.noProof': 'Все още няма качено доказателство за доставка.',
+        'orderDetail.proofError': 'Грешка при зареждане на доказателството.',
+        'orderDetail.uploadFile': 'Изберете файл',
+        'orderDetail.uploadSelect': 'Моля изберете поне един файл.',
+        'orderDetail.uploading': 'Качване…',
+        'orderDetail.uploadSuccess': '✅ Качено успешно!',
+        'orderDetail.uploadNetworkError': '❌ Мрежова грешка при качване.',
+
+        // ── Cancellation ───────────────────────────────────────────────────────
+        'cancel.button': 'Анулирай поръчката',
+        'cancel.title': 'Анулиране на поръчката',
+        'cancel.reason.label': 'Причина за анулиране',
+        'cancel.reason.placeholder': 'напр. Вече не е необходимо, намерена алтернатива, грешен артикул...',
+        'cancel.reason.required': 'Моля въведете причина за анулирането.',
+        'cancel.cancelling': 'Анулиране…',
+        'cancel.success': 'Поръчката е анулирана успешно.',
+        'cancel.error': 'Грешка при анулиране',
+        'cancel.banner.title': '🚫 Анулирана поръчка',
+        'cancel.banner.by': 'Анулирана от:',
+        'cancel.banner.at': 'Дата:',
+        'cancel.banner.reason': 'Причина:',
+
+        // ── Quotes ─────────────────────────────────────────────────────────────
         'quotes.title': 'Оферти',
-        'quotes.noQuotes': 'Още няма оферти.',
+        'quotes.noQuotes': 'Все още няма оферти.',
         'quotes.refresh': 'Опресни',
+        'quotes.create': 'Създай оферта',
         'quotes.col.number': 'Номер',
         'quotes.col.supplier': 'Доставчик',
         'quotes.col.status': 'Статус',
         'quotes.col.items': 'Артикули',
         'quotes.col.total': 'Обща сума',
         'quotes.col.validUntil': 'Валидна до',
-        'quotes.col.created': 'Създадена',
+        'quotes.col.created': 'Създадена на',
         'quotes.col.view': 'Преглед',
-        
-        // Quote Detail
+        'quotes.updated': 'Офертата е актуализирана',
+        'quotes.updateError': 'Грешка при актуализация на офертата',
+        'quotes.created': 'Оферта {num} е създадена',
+        'quotes.createError': 'Грешка при създаване на оферта',
+        'quotes.selectSupplier': 'Моля изберете доставчик',
+        'quotes.loadError': 'Грешка при зареждане на детайлите на офертата',
+
+        // ── Quote Detail ───────────────────────────────────────────────────────
         'quoteDetail.title': 'Детайли на офертата',
         'quoteDetail.number': 'Номер на оферта',
         'quoteDetail.status': 'Статус',
@@ -169,37 +257,38 @@ const translations = {
         'quoteDetail.currency': 'Валута',
         'quoteDetail.notes': 'Бележки',
         'quoteDetail.items': 'Артикули',
-        'quoteDetail.approvalWorkflow': 'Работен процес за одобрение',
-        'quoteDetail.approvalWorkflow.desc': 'Изпрати тази оферта към мениджър за одобрение',
+        'quoteDetail.approvalWorkflow': 'Процес на одобрение',
+        'quoteDetail.approvalWorkflow.desc': 'Изпратете тази оферта до мениджър за одобрение',
         'quoteDetail.submitForApproval': '📋 Изпрати за одобрение',
         'quoteDetail.update': 'Актуализирай офертата',
         'quoteDetail.save': 'Запази',
         'quoteDetail.updated': 'Офертата е актуализирана',
         'quoteDetail.updateError': 'Грешка при актуализация на офертата',
-        
-        // Quote Statuses
+
+        // ── Quote Statuses ─────────────────────────────────────────────────────
         'quoteStatus.Draft': 'Чернова',
         'quoteStatus.Sent to Supplier': 'Изпратена до доставчик',
         'quoteStatus.Received': 'Получена',
         'quoteStatus.Under Approval': 'За одобрение',
         'quoteStatus.Approved': 'Одобрена',
         'quoteStatus.Rejected': 'Отхвърлена',
-        
-        // Suppliers
+
+        // ── Suppliers ──────────────────────────────────────────────────────────
         'suppliers.title': 'Доставчици',
-        'suppliers.noSuppliers': 'Още няма доставчици.',
-        'suppliers.new': 'Нов доставчик',
-        'suppliers.col.name': 'Име',
-        'suppliers.col.contact': 'Контакт',
+        'suppliers.noSuppliers': 'Все още няма доставчици.',
+        'suppliers.new': '+ Нов доставчик',
+        'suppliers.col.name': 'Наименование',
+        'suppliers.col.contact': 'Лице за контакт',
         'suppliers.col.email': 'Имейл',
         'suppliers.col.phone': 'Телефон',
         'suppliers.col.active': 'Активен',
         'suppliers.col.edit': 'Редактирай',
-        
-        // Supplier Form
-        'supplierForm.create': 'Създаване на доставчик',
+        'suppliers.loadError': 'Грешка при зареждане на доставчиците.',
+
+        // ── Supplier Form ──────────────────────────────────────────────────────
+        'supplierForm.create': 'Нов доставчик',
         'supplierForm.edit': 'Редактиране на доставчик',
-        'supplierForm.name': 'Име на доставчик',
+        'supplierForm.name': 'Наименование',
         'supplierForm.contact': 'Лице за контакт',
         'supplierForm.email': 'Имейл',
         'supplierForm.phone': 'Телефон',
@@ -213,48 +302,51 @@ const translations = {
         'supplierForm.cancel': 'Отказ',
         'supplierForm.saved': 'Доставчикът е запазен',
         'supplierForm.error': 'Грешка при запазване на доставчик',
-        'supplierForm.nameRequired': 'Името е задължително',
-        
-        // Buildings
+        'supplierForm.nameRequired': 'Наименованието е задължително',
+
+        // ── Buildings ──────────────────────────────────────────────────────────
         'buildings.title': 'Сгради',
-        'buildings.noBuildings': 'Още няма сгради.',
-        'buildings.new': 'Нова сграда',
+        'buildings.noBuildings': 'Все още няма сгради.',
+        'buildings.new': '+ Нова сграда',
         'buildings.col.code': 'Код',
-        'buildings.col.name': 'Име',
+        'buildings.col.name': 'Наименование',
         'buildings.col.active': 'Активна',
         'buildings.col.edit': 'Редактирай',
-        
-        // Building Form
-        'buildingForm.create': 'Създаване на сграда',
+        'buildings.loadError': 'Грешка при зареждане на сградите.',
+
+        // ── Building Form ──────────────────────────────────────────────────────
+        'buildingForm.create': 'Нова сграда',
         'buildingForm.edit': 'Редактиране на сграда',
         'buildingForm.code': 'Код на сграда',
-        'buildingForm.name': 'Име на сграда',
+        'buildingForm.name': 'Наименование на сграда',
         'buildingForm.description': 'Описание',
         'buildingForm.active': 'Активна',
         'buildingForm.save': 'Запази',
         'buildingForm.cancel': 'Отказ',
         'buildingForm.saved': 'Сградата е запазена',
         'buildingForm.error': 'Грешка при запазване на сграда',
-        'buildingForm.required': 'Кодът и името са задължителни',
-        
-        // Cost Centers
+        'buildingForm.required': 'Кодът и наименованието са задължителни',
+
+        // ── Cost Centers ───────────────────────────────────────────────────────
         'costCenters.title': 'Разходни центрове',
         'costCenters.noCostCenters': 'Няма намерени разходни центрове.',
-        'costCenters.new': 'Нов разходен център',
+        'costCenters.new': '+ Нов разходен център',
         'costCenters.filter.building': 'Всички сгради',
         'costCenters.col.building': 'Сграда',
         'costCenters.col.code': 'Код',
-        'costCenters.col.name': 'Име',
+        'costCenters.col.name': 'Наименование',
         'costCenters.col.active': 'Активен',
         'costCenters.col.edit': 'Редактирай',
-        
-        // Cost Center Form
-        'costCenterForm.create': 'Създаване на разходен център',
+        'costCenters.selectBuilding': 'Изберете сграда първо',
+        'costCenters.noneForBuilding': 'Няма разходни центрове за тази сграда',
+
+        // ── Cost Center Form ───────────────────────────────────────────────────
+        'costCenterForm.create': 'Нов разходен център',
         'costCenterForm.edit': 'Редактиране на разходен център',
         'costCenterForm.building': 'Сграда',
-        'costCenterForm.building.select': 'Избери сграда',
+        'costCenterForm.building.select': 'Изберете сграда',
         'costCenterForm.code': 'Код',
-        'costCenterForm.name': 'Име',
+        'costCenterForm.name': 'Наименование',
         'costCenterForm.description': 'Описание',
         'costCenterForm.active': 'Активен',
         'costCenterForm.save': 'Запази',
@@ -262,32 +354,33 @@ const translations = {
         'costCenterForm.delete': 'Изтрий',
         'costCenterForm.saved': 'Разходният център е запазен',
         'costCenterForm.error': 'Грешка при запазване на разходен център',
-        'costCenterForm.required': 'Сградата, кодът и името са задължителни',
+        'costCenterForm.required': 'Сградата, кодът и наименованието са задължителни',
         'costCenterForm.deleteConfirm': 'Сигурни ли сте, че искате да изтриете този разходен център?',
         'costCenterForm.deleted': 'Разходният център е изтрит',
         'costCenterForm.deleteError': 'Грешка при изтриване',
-        
-        // Users
+
+        // ── Users ──────────────────────────────────────────────────────────────
         'users.title': 'Потребители',
-        'users.noUsers': 'Още няма потребители.',
-        'users.new': 'Нов потребител',
+        'users.noUsers': 'Все още няма потребители.',
+        'users.new': '+ Нов потребител',
         'users.col.username': 'Потребителско име',
-        'users.col.name': 'Име',
+        'users.col.name': 'Пълно име',
         'users.col.email': 'Имейл',
         'users.col.role': 'Роля',
         'users.col.building': 'Сграда',
         'users.col.active': 'Активен',
         'users.col.edit': 'Редактирай',
         'users.col.resetPassword': 'Смени парола',
-        
-        // User Form
-        'userForm.create': 'Създаване на потребител',
+        'users.loadError': 'Грешка при зареждане на потребителите.',
+
+        // ── User Form ──────────────────────────────────────────────────────────
+        'userForm.create': 'Нов потребител',
         'userForm.edit': 'Редактиране на потребител',
         'userForm.username': 'Потребителско име',
         'userForm.name': 'Пълно име',
         'userForm.email': 'Имейл',
         'userForm.role': 'Роля',
-        'userForm.role.select': 'Избери роля',
+        'userForm.role.select': 'Изберете роля',
         'userForm.building': 'Сграда',
         'userForm.building.none': 'Няма',
         'userForm.active': 'Активен',
@@ -295,17 +388,17 @@ const translations = {
         'userForm.save': 'Запази',
         'userForm.cancel': 'Отказ',
         'userForm.saved': 'Потребителят е запазен',
-        'userForm.created': 'Потребител създаден. Първоначална парола:',
+        'userForm.created': 'Потребителят е създаден. Начална парола:',
         'userForm.error': 'Грешка при запазване на потребител',
-        'userForm.required': 'Потребителското име, име, имейл и роля са задължителни',
+        'userForm.required': 'Потребителско име, пълно име, имейл и роля са задължителни',
         'userForm.resetPassword': 'Въведете нова парола (минимум 6 символа):',
         'userForm.resetPassword.confirm': 'Потвърдете новата парола:',
         'userForm.resetPassword.short': 'Паролата е твърде кратка. Нищо не е променено.',
         'userForm.resetPassword.mismatch': 'Паролите не съвпадат. Нищо не е променено.',
         'userForm.resetPassword.success': 'Паролата е сменена успешно.',
         'userForm.resetPassword.error': 'Грешка при смяна на парола',
-        
-        // Common
+
+        // ── Common ─────────────────────────────────────────────────────────────
         'common.yes': 'Да',
         'common.no': 'Не',
         'common.save': 'Запази',
@@ -317,26 +410,55 @@ const translations = {
         'common.search': 'Търсене...',
         'common.all': 'Всички',
         'common.none': 'Няма',
-        'common.select': 'Избери',
+        'common.select': 'Изберете',
+        'common.selectBuilding': 'Изберете сграда',
+        'common.selectUser': '— изберете потребител —',
+        'common.allBuildings': 'Всички сгради',
         'common.loading': 'Зареждане...',
         'common.error': 'Грешка',
         'common.success': 'Успешно',
-        
-        // Language
+        'common.refresh': 'Опресни',
+        'common.active': 'Активен',
+        'common.inactive': 'Неактивен',
+        'common.required': 'Задължително поле',
+        'common.serverError': 'Грешка при обработка на отговора от сървъра.',
+        'common.networkError': 'Мрежова грешка. Моля опитайте отново.',
+
+        // ── Language ───────────────────────────────────────────────────────────
         'language.label': 'Език',
         'language.bg': '🇧🇬 Български',
-        'language.en': '🇬🇧 English'
+        'language.en': '🇬🇧 English',
+
+        // ── Requester Dashboard ────────────────────────────────────────────────
+        'requester.kpi.active': 'Активни',
+        'requester.kpi.transit': 'В транзит',
+        'requester.kpi.late': 'Закъснели',
+        'requester.kpi.delivered': 'Доставени',
+        'requester.kpi.pending': 'Чакащи',
+        'requester.noOrders': 'Все още нямате поръчки. Създайте първата си поръчка по-горе.',
+        'requester.building': 'Сграда',
+        'requester.prefilled': 'Формулярът е попълнен от поръчка #{id} — коригирайте и подайте',
+
+        // ── Duplicate Detection ────────────────────────────────────────────────
+        'dup.warning.title': '⚠ Възможен дубликат',
+        'dup.warning.desc': 'Открити са подобни поръчки. Моля проверете преди да продължите.',
+
+        // ── Pull-to-refresh ────────────────────────────────────────────────────
+        'pull.release': '↓ Пуснете за опресняване',
+        'pull.refreshing': '↻ Обновяване...',
     },
-    
+
     en: {
-        // Login Screen
+        // ── Login ──────────────────────────────────────────────────────────────
         'login.title': 'System Login',
         'login.username': 'Username',
         'login.password': 'Password',
         'login.button': 'Login',
-        'login.error': 'Login error',
-        
-        // Navigation
+        'login.error': 'Invalid username or password',
+        'login.failed': 'Login failed. Please try again.',
+        'login.forgotPassword': 'Forgot password?',
+
+        // ── Navigation ─────────────────────────────────────────────────────────
         'nav.orders': 'Orders',
         'nav.quotes': 'Quotes',
         'nav.approvals': 'Approvals',
@@ -346,14 +468,16 @@ const translations = {
         'nav.costCenters': 'Cost Centers',
         'nav.users': 'Users',
         'nav.logout': 'Logout',
-        
-        // User Roles
+        'nav.analytics': '📊 Analytics',
+        'nav.todayActions': '📋 Today\'s Actions',
+
+        // ── User Roles ─────────────────────────────────────────────────────────
         'role.admin': 'Admin',
         'role.procurement': 'Procurement',
         'role.manager': 'Manager',
         'role.requester': 'Requester',
-        
-        // Order Creation
+
+        // ── Order Creation ─────────────────────────────────────────────────────
         'order.create.title': 'Create Order',
         'order.create.building': 'Building',
         'order.create.costCenter': 'Cost Center',
@@ -362,14 +486,16 @@ const translations = {
         'order.create.costCenter.selectBuilding': 'Select a building first',
         'order.create.itemDescription': 'Item Description',
         'order.create.itemDescription.placeholder': 'Describe the needed item in detail...',
-        'order.create.partNumber': 'Part Number',
+        'order.create.partNumber': 'Part Number / Manufacturer Code',
         'order.create.partNumber.placeholder': 'If applicable',
         'order.create.category': 'Category',
-        'order.create.category.placeholder': 'e.g. Electrical, Tools...',
+        'order.create.category.placeholder': 'e.g. Bearing, Cylinder, Electrical, Tools...',
         'order.create.quantity': 'Quantity',
         'order.create.dateNeeded': 'Date Needed',
         'order.create.priority': 'Priority',
+        'order.create.priority.low': 'Low',
         'order.create.priority.normal': 'Normal',
+        'order.create.priority.high': 'High',
         'order.create.priority.urgent': 'Urgent',
         'order.create.priority.critical': 'Critical',
         'order.create.notes': 'Notes',
@@ -379,30 +505,65 @@ const translations = {
         'order.create.submit': 'Create Order',
         'order.create.success': 'Order created successfully!',
         'order.create.error': 'Failed to create order',
+        'order.create.networkError': 'Network error creating order.',
+        'order.create.uploadCancelled': 'Upload cancelled.',
         'order.create.selectCostCenter': 'Please select a Cost Center',
-        
-        // Orders Table
+        'order.create.selectBuilding': 'Please select a Building',
+        'order.create.selectCostCenterFirst': 'Please select a Cost Center',
+        'order.create.itemRequired': 'Item description is required',
+        'order.create.dateRequired': 'Date needed is required',
+        'order.create.serverError': 'Failed to process server response.',
+
+        // ── Orders Table ───────────────────────────────────────────────────────
         'orders.title': 'Orders',
-        'orders.search': 'Search...',
+        'orders.search': 'Search orders...',
         'orders.filter.status': 'Status: All',
         'orders.filter.building': 'Building: All',
         'orders.filter.priority': 'Priority: All',
         'orders.filter.supplier': 'Supplier: All',
         'orders.filter.delivery': 'Delivery: All',
-        'orders.filter.clear': 'Clear Filters',
+        'orders.filter.clear': 'Clear All Filters',
+        'orders.filter.saveSearch': '🔖 Save Search',
+        'orders.filter.from': 'From date',
+        'orders.filter.to': 'To date',
+        'orders.filter.ordered': 'Ordered:',
+        'orders.filter.ordered.all': 'All',
+        'orders.filter.ordered.today': 'Today',
+        'orders.filter.ordered.week': 'This Week',
+        'orders.filter.ordered.month': 'This Month',
         'orders.view.flat': 'Flat View',
         'orders.view.grouped': 'Grouped View',
-        'orders.quickFilter.new': 'New',
-        'orders.quickFilter.ordered': 'Ordered',
-        'orders.quickFilter.transit': 'In Transit',
-        'orders.quickFilter.late': 'Late',
-        'orders.quickFilter.due7': 'Due in 7 days',
-        'orders.quickFilter.due14': 'Due in 14 days',
+        'orders.quickFilter.new': '🆕 New',
+        'orders.quickFilter.ordered': '📦 Ordered',
+        'orders.quickFilter.transit': '🚚 In Transit',
+        'orders.quickFilter.late': '⚠ Late',
+        'orders.quickFilter.due7': '🕒 Due in 7d',
+        'orders.quickFilter.due14': '📅 Due in 14d',
         'orders.noOrders': 'No orders found.',
+        'orders.noOrders.hint': 'Try adjusting your filters or creating a new order.',
         'orders.selected': 'selected',
         'orders.actions.createQuote': 'Create Quote',
-        
-        // Order Columns
+        'orders.selectForQuote': 'Select orders and click "Create Quote from Selected"',
+        'orders.selectFirst': 'Select one or more orders first, then click "Create Quote from Selected"',
+        'orders.refreshed': 'Orders refreshed',
+        'orders.loadError': 'Failed to load orders.',
+
+        // ── Power Search ───────────────────────────────────────────────────────
+        'search.hint.title': 'Power Search Syntax',
+        'search.hint.id': 'Order by ID',
+        'search.hint.requester': 'By requester name',
+        'search.hint.partnum': 'By part number',
+        'search.hint.was': 'Was ever in this status',
+        'search.hint.by': 'Touched by this person',
+        'search.hint.and': 'AND: both words must match',
+        'search.hint.combine': 'Combine',
+        'search.saved.none': 'No saved searches yet',
+        'search.saved.save': 'Save search',
+        'search.saved.already': 'Already saved',
+        'search.saved.saved': 'Search saved',
+        'search.saved.typeFirst': 'Type a search query first',
+
+        // ── Order Columns ──────────────────────────────────────────────────────
         'orders.col.id': 'ID',
         'orders.col.item': 'Item',
         'orders.col.costCenter': 'Cost Center',
@@ -418,8 +579,10 @@ const translations = {
         'orders.col.unit': 'Unit Price',
         'orders.col.total': 'Total',
         'orders.col.view': 'View',
-        
-        // Order Statuses
+        'orders.col.submitted': 'Submitted',
+        'orders.col.lastUpdate': 'Last Update',
+
+        // ── Order Statuses ─────────────────────────────────────────────────────
         'status.New': 'New',
         'status.Pending': 'Pending',
         'status.Quote Requested': 'Quote Requested',
@@ -432,15 +595,15 @@ const translations = {
         'status.Delivered': 'Delivered',
         'status.Cancelled': 'Cancelled',
         'status.On Hold': 'On Hold',
-        
-        // Delivery Status
+
+        // ── Delivery Status ────────────────────────────────────────────────────
         'delivery.late': '⚠ Late',
         'delivery.due7': '🕒 Due 7d',
         'delivery.due14': '📅 Due 14d',
         'delivery.ontrack': '✓ On Track',
-        'delivery.none': '-',
-        
-        // Order Detail Panel
+        'delivery.none': '—',
+
+        // ── Order Detail Panel ─────────────────────────────────────────────────
         'orderDetail.title': 'Order Details',
         'orderDetail.orderId': 'Order ID',
         'orderDetail.building': 'Building',
@@ -448,6 +611,9 @@ const translations = {
         'orderDetail.status': 'Status',
         'orderDetail.priority': 'Priority',
         'orderDetail.dateNeeded': 'Date Needed',
+        'orderDetail.submittedOn': 'Submitted On',
+        'orderDetail.lastUpdated': 'Last Updated',
+        'orderDetail.deliveredOn': 'Delivered On',
         'orderDetail.expectedDelivery': 'Expected Delivery',
         'orderDetail.deliveryStatus': 'Delivery Status',
         'orderDetail.requester': 'Requester',
@@ -458,9 +624,15 @@ const translations = {
         'orderDetail.partNumber': 'Part Number',
         'orderDetail.category': 'Category',
         'orderDetail.notes': 'Notes',
+        'orderDetail.supplierNotes': 'Supplier Notes',
+        'orderDetail.supplierNotes.placeholder': 'Internal notes about the supplier for this order',
+        'orderDetail.altProduct': 'Alternative Product',
+        'orderDetail.altProduct.placeholder': 'Alternative product name',
+        'orderDetail.altProductDesc': 'Alternative Product Description',
+        'orderDetail.altProductDesc.placeholder': 'Description of the alternative product',
         'orderDetail.attachments': 'Attachments',
         'orderDetail.noAttachments': 'No attachments.',
-        'orderDetail.history': 'History',
+        'orderDetail.history': 'Change History',
         'orderDetail.suggestedSuppliers': '💡 Suggested Suppliers',
         'orderDetail.suggestedSuppliers.desc': 'AI-powered recommendations based on description and history',
         'orderDetail.browseAll': '🏢 Browse All',
@@ -471,11 +643,40 @@ const translations = {
         'orderDetail.close': 'Close',
         'orderDetail.updated': 'Order updated',
         'orderDetail.updateError': 'Failed to update order',
-        
-        // Quotes
+        'orderDetail.loadError': 'Failed to load order details',
+        'orderDetail.reorder': '📋 Reorder',
+        'orderDetail.proofNote.placeholder': 'e.g. Partial delivery, 3 of 5 items received',
+        'orderDetail.documents': 'Linked Documents',
+        'orderDetail.noDocuments': 'No documents linked to this order.',
+        'orderDetail.documentsError': 'Could not load documents.',
+        'orderDetail.proof': 'Delivery Proof',
+        'orderDetail.noProof': 'No delivery proof uploaded yet.',
+        'orderDetail.proofError': 'Could not load delivery proof.',
+        'orderDetail.uploadFile': 'Choose file',
+        'orderDetail.uploadSelect': 'Please select at least one file.',
+        'orderDetail.uploading': 'Uploading…',
+        'orderDetail.uploadSuccess': '✅ Uploaded successfully!',
+        'orderDetail.uploadNetworkError': '❌ Network error during upload.',
+
+        // ── Cancellation ───────────────────────────────────────────────────────
+        'cancel.button': 'Cancel This Order',
+        'cancel.title': 'Cancel Order',
+        'cancel.reason.label': 'Reason for cancellation',
+        'cancel.reason.placeholder': 'e.g. No longer needed, found alternative, wrong item...',
+        'cancel.reason.required': 'Please enter a reason for cancellation.',
+        'cancel.cancelling': 'Cancelling…',
+        'cancel.success': 'Order cancelled successfully.',
+        'cancel.error': 'Failed to cancel',
+        'cancel.banner.title': '🚫 Cancelled Order',
+        'cancel.banner.by': 'Cancelled by:',
+        'cancel.banner.at': 'Date:',
+        'cancel.banner.reason': 'Reason:',
+
+        // ── Quotes ─────────────────────────────────────────────────────────────
         'quotes.title': 'Quotes',
         'quotes.noQuotes': 'No quotes yet.',
         'quotes.refresh': 'Refresh',
+        'quotes.create': 'Create Quote',
         'quotes.col.number': 'Quote #',
         'quotes.col.supplier': 'Supplier',
         'quotes.col.status': 'Status',
@@ -484,8 +685,14 @@ const translations = {
         'quotes.col.validUntil': 'Valid Until',
         'quotes.col.created': 'Created',
         'quotes.col.view': 'View',
-        
-        // Quote Detail
+        'quotes.updated': 'Quote updated',
+        'quotes.updateError': 'Failed to update quote',
+        'quotes.created': 'Quote {num} created',
+        'quotes.createError': 'Failed to create quote',
+        'quotes.selectSupplier': 'Please select a supplier',
+        'quotes.loadError': 'Failed to load quote details',
+
+        // ── Quote Detail ───────────────────────────────────────────────────────
         'quoteDetail.title': 'Quote Details',
         'quoteDetail.number': 'Quote #',
         'quoteDetail.status': 'Status',
@@ -502,28 +709,29 @@ const translations = {
         'quoteDetail.save': 'Save',
         'quoteDetail.updated': 'Quote updated',
         'quoteDetail.updateError': 'Failed to update quote',
-        
-        // Quote Statuses
+
+        // ── Quote Statuses ─────────────────────────────────────────────────────
         'quoteStatus.Draft': 'Draft',
         'quoteStatus.Sent to Supplier': 'Sent to Supplier',
         'quoteStatus.Received': 'Received',
         'quoteStatus.Under Approval': 'Under Approval',
         'quoteStatus.Approved': 'Approved',
         'quoteStatus.Rejected': 'Rejected',
-        
-        // Suppliers
+
+        // ── Suppliers ──────────────────────────────────────────────────────────
         'suppliers.title': 'Suppliers',
         'suppliers.noSuppliers': 'No suppliers yet.',
-        'suppliers.new': 'New Supplier',
+        'suppliers.new': '+ New Supplier',
         'suppliers.col.name': 'Name',
         'suppliers.col.contact': 'Contact',
         'suppliers.col.email': 'Email',
         'suppliers.col.phone': 'Phone',
         'suppliers.col.active': 'Active',
         'suppliers.col.edit': 'Edit',
-        
-        // Supplier Form
-        'supplierForm.create': 'Create Supplier',
+        'suppliers.loadError': 'Failed to load suppliers.',
+
+        // ── Supplier Form ──────────────────────────────────────────────────────
+        'supplierForm.create': 'New Supplier',
         'supplierForm.edit': 'Edit Supplier',
         'supplierForm.name': 'Supplier Name',
         'supplierForm.contact': 'Contact Person',
@@ -540,18 +748,19 @@ const translations = {
         'supplierForm.saved': 'Supplier saved',
         'supplierForm.error': 'Failed to save supplier',
         'supplierForm.nameRequired': 'Name is required',
-        
-        // Buildings
+
+        // ── Buildings ──────────────────────────────────────────────────────────
         'buildings.title': 'Buildings',
         'buildings.noBuildings': 'No buildings yet.',
-        'buildings.new': 'New Building',
+        'buildings.new': '+ New Building',
         'buildings.col.code': 'Code',
         'buildings.col.name': 'Name',
         'buildings.col.active': 'Active',
         'buildings.col.edit': 'Edit',
-        
-        // Building Form
-        'buildingForm.create': 'Create Building',
+        'buildings.loadError': 'Failed to load buildings.',
+
+        // ── Building Form ──────────────────────────────────────────────────────
+        'buildingForm.create': 'New Building',
         'buildingForm.edit': 'Edit Building',
         'buildingForm.code': 'Building Code',
         'buildingForm.name': 'Building Name',
@@ -562,20 +771,22 @@ const translations = {
         'buildingForm.saved': 'Building saved',
         'buildingForm.error': 'Failed to save building',
         'buildingForm.required': 'Code and name are required',
-        
-        // Cost Centers
+
+        // ── Cost Centers ───────────────────────────────────────────────────────
         'costCenters.title': 'Cost Centers',
         'costCenters.noCostCenters': 'No cost centers found.',
-        'costCenters.new': 'New Cost Center',
+        'costCenters.new': '+ New Cost Center',
         'costCenters.filter.building': 'All Buildings',
         'costCenters.col.building': 'Building',
         'costCenters.col.code': 'Code',
         'costCenters.col.name': 'Name',
         'costCenters.col.active': 'Active',
         'costCenters.col.edit': 'Edit',
-        
-        // Cost Center Form
-        'costCenterForm.create': 'Create Cost Center',
+        'costCenters.selectBuilding': 'Select a building first',
+        'costCenters.noneForBuilding': 'No cost centers for this building',
+
+        // ── Cost Center Form ───────────────────────────────────────────────────
+        'costCenterForm.create': 'New Cost Center',
         'costCenterForm.edit': 'Edit Cost Center',
         'costCenterForm.building': 'Building',
         'costCenterForm.building.select': 'Select Building',
@@ -592,22 +803,23 @@ const translations = {
         'costCenterForm.deleteConfirm': 'Are you sure you want to delete this cost center?',
         'costCenterForm.deleted': 'Cost center deleted',
         'costCenterForm.deleteError': 'Failed to delete',
-        
-        // Users
+
+        // ── Users ──────────────────────────────────────────────────────────────
         'users.title': 'Users',
         'users.noUsers': 'No users yet.',
-        'users.new': 'New User',
+        'users.new': '+ New User',
         'users.col.username': 'Username',
-        'users.col.name': 'Name',
+        'users.col.name': 'Full Name',
         'users.col.email': 'Email',
         'users.col.role': 'Role',
         'users.col.building': 'Building',
         'users.col.active': 'Active',
         'users.col.edit': 'Edit',
         'users.col.resetPassword': 'Reset Password',
-        
-        // User Form
-        'userForm.create': 'Create User',
+        'users.loadError': 'Failed to load users.',
+
+        // ── User Form ──────────────────────────────────────────────────────────
+        'userForm.create': 'New User',
         'userForm.edit': 'Edit User',
         'userForm.username': 'Username',
         'userForm.name': 'Full Name',
@@ -630,8 +842,8 @@ const translations = {
         'userForm.resetPassword.mismatch': 'Passwords do not match. Nothing changed.',
         'userForm.resetPassword.success': 'Password reset successfully.',
         'userForm.resetPassword.error': 'Failed to reset password',
-        
-        // Common
+
+        // ── Common ─────────────────────────────────────────────────────────────
         'common.yes': 'Yes',
         'common.no': 'No',
         'common.save': 'Save',
@@ -644,70 +856,118 @@ const translations = {
         'common.all': 'All',
         'common.none': 'None',
         'common.select': 'Select',
+        'common.selectBuilding': 'Select Building',
+        'common.selectUser': '— select user —',
+        'common.allBuildings': 'All Buildings',
         'common.loading': 'Loading...',
         'common.error': 'Error',
         'common.success': 'Success',
-        
-        // Language
+        'common.refresh': 'Refresh',
+        'common.active': 'Active',
+        'common.inactive': 'Inactive',
+        'common.required': 'Required field',
+        'common.serverError': 'Failed to process server response.',
+        'common.networkError': 'Network error. Please try again.',
+
+        // ── Language ───────────────────────────────────────────────────────────
         'language.label': 'Language',
         'language.bg': '🇧🇬 Български',
-        'language.en': '🇬🇧 English'
+        'language.en': '🇬🇧 English',
+
+        // ── Requester Dashboard ────────────────────────────────────────────────
+        'requester.kpi.active': 'Active',
+        'requester.kpi.transit': 'In Transit',
+        'requester.kpi.late': 'Late',
+        'requester.kpi.delivered': 'Delivered',
+        'requester.kpi.pending': 'Pending',
+        'requester.noOrders': 'No orders yet. Create your first order above.',
+        'requester.building': 'Building',
+        'requester.prefilled': 'Form pre-filled from order #{id} — adjust and submit',
+
+        // ── Duplicate Detection ────────────────────────────────────────────────
+        'dup.warning.title': '⚠ Possible Duplicate',
+        'dup.warning.desc': 'Similar orders found. Please check before continuing.',
+
+        // ── Pull-to-refresh ────────────────────────────────────────────────────
+        'pull.release': '↓ Release to refresh',
+        'pull.refreshing': '↻ Refreshing...',
     }
 };
 
-// Current language
-let currentLanguage = localStorage.getItem('appLanguage') || 'bg';
-
-// Translation function
-function t(key) {
-    return translations[currentLanguage][key] || key;
+// ── Current language ───────────────────────────────────────────────────────────
+// Cookie-first (localStorage may be blocked by Edge Tracking Prevention)
+function getStoredLanguage() {
+    try {
+        const m = document.cookie.match(/(?:^|;\s*)pp_lang=([^;]*)/);
+        if (m) return decodeURIComponent(m[1]);
+    } catch {}
+    try { const v = localStorage.getItem('appLanguage'); if (v) return v; } catch {}
+    return 'bg'; // default
 }
 
-// Change language
+function storeLanguage(lang) {
+    try { document.cookie = 'pp_lang=' + encodeURIComponent(lang) + '; path=/; SameSite=Strict'; } catch {}
+    try { localStorage.setItem('appLanguage', lang); } catch {}
+}
+
+let currentLanguage = getStoredLanguage();
+
+// ── Translation function ────────────────────────────────────────────────────────
+function t(key, vars) {
+    const lang = translations[currentLanguage] || translations['bg'];
+    let text = lang[key] || translations['bg'][key] || key; // fallback chain: current → bg → key itself
+    if (vars) {
+        Object.keys(vars).forEach(k => { text = text.replace('{' + k + '}', vars[k]); });
+    }
+    return text;
+}
+
+// ── Change language ─────────────────────────────────────────────────────────────
 function setLanguage(lang) {
     if (!translations[lang]) return;
     currentLanguage = lang;
-    localStorage.setItem('appLanguage', lang);
+    storeLanguage(lang);
     translatePage();
 }
 
-// Translate all elements with data-i18n attribute
+// ── Translate all [data-i18n] elements ──────────────────────────────────────────
 function translatePage() {
-    // Translate static text elements
     document.querySelectorAll('[data-i18n]').forEach(el => {
         const key = el.getAttribute('data-i18n');
         const text = t(key);
-        
-        if (el.tagName === 'INPUT' && (el.type === 'text' || el.type === 'password' || el.type === 'email')) {
+
+        if (el.tagName === 'INPUT' && ['text','password','email','search'].includes(el.type)) {
             el.placeholder = text;
         } else if (el.tagName === 'TEXTAREA') {
             el.placeholder = text;
+        } else if (el.tagName === 'OPTION') {
+            el.textContent = text;
         } else {
             el.textContent = text;
         }
     });
-    
-    // Update language selector
-    const langSelector = document.getElementById('languageSelector');
-    if (langSelector) {
-        langSelector.value = currentLanguage;
-    }
-    
+
+    // Sync language selectors
+    ['languageSelector', 'languageSelectorLogin'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = currentLanguage;
+    });
+
     // Trigger re-rendering of dynamic content
     if (typeof window.triggerTranslationUpdate === 'function') {
         window.triggerTranslationUpdate();
     }
 }
 
-// Initialize on page load
+// ── Initialize on page load ─────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
     translatePage();
 });
 
-// Export for use in other files
+// ── Public API ──────────────────────────────────────────────────────────────────
 window.i18n = {
-    t: t,
-    setLanguage: setLanguage,
-    translatePage: translatePage,
+    t,
+    setLanguage,
+    translatePage,
     getCurrentLanguage: () => currentLanguage
 };

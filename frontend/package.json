@@ -1,7 +1,0 @@
-{
-  "dependencies": {
-    "@vonage/messages": "^1.19.0",
-    "@vonage/server-sdk": "^3.20.1",
-    "dotenv": "^17.4.2"
-  }
-}

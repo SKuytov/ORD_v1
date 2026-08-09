@@ -2,7 +2,7 @@
 <html lang="bg">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>PartPulse Order Management v2.6.3</title>
     <link rel="stylesheet" href="styles.css">
     <!-- File Upload Enhancement Styles -->
@@ -17,17 +17,14 @@
     <!-- ⭐ NEW: Intelligent Autocomplete -->
     <link rel="stylesheet" href="css/intelligent-autocomplete.css">
     <link rel="stylesheet" href="css/requester-dashboard.css">
-    <script src="upload-progress.js"></script>
-    <script src="analytics-cache.js"></script>
-    <script src="analytics-charts.js"></script>
-    <script src="analytics-insights.js"></script>
-    <script src="analytics-forecasting.js"></script>
-    <script src="analytics-export.js"></script>
-    <script src="analytics.js"></script>
-    
+    <link rel="stylesheet" href="css/accessibility.css">
+    <link rel="stylesheet" href="admin-cockpit.css">
 </head>
 <body>
+<a class="skip-link" href="#mainContent">Skip to main content</a>
 <div id="app">
+    <main id="mainContent" tabindex="-1">
+    <div id="appStatus" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
     <!-- Login Screen -->
     <div id="loginScreen" class="screen">
         <div class="login-container">
@@ -301,7 +298,7 @@
                 <div id="orderDetailPanel" class="side-panel hidden">
                     <div class="side-panel-header">
                         <h3 id="detailTitle" data-i18n="orderDetail.title">Order Details</h3>
-                        <button id="btnCloseDetail" class="btn-icon">✕</button>
+                    <button id="btnCloseDetail" class="btn-icon" aria-label="Close order details">✕</button>
                     </div>
                     <div id="orderDetailBody" class="side-panel-body">
                         <!-- Order details will be rendered here by app.js -->
@@ -351,7 +348,7 @@
                 <div id="approvalDetailPanel" class="side-panel hidden">
                     <div class="side-panel-header">
                         <h3>Approval Request</h3>
-                        <button id="btnCloseApprovalDetail" class="btn-icon">✕</button>
+                    <button id="btnCloseApprovalDetail" class="btn-icon" aria-label="Close approval details">✕</button>
                     </div>
                     <div id="approvalDetailBody" class="side-panel-body">
                         <!-- Approval details will be rendered here by approvals.js -->
@@ -375,7 +372,7 @@
                 <div id="quoteDetailPanel" class="side-panel hidden">
                     <div class="side-panel-header">
                         <h3 id="quoteDetailTitle" data-i18n="quoteDetail.title">Quote Details</h3>
-                        <button id="btnCloseQuoteDetail" class="btn-icon">✕</button>
+                    <button id="btnCloseQuoteDetail" class="btn-icon" aria-label="Close quote details">✕</button>
                     </div>
                     <div id="quoteDetailBody" class="side-panel-body"></div>
                 </div>
@@ -492,7 +489,7 @@
             <div id="buildingManagersOverlay" class="card" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:1000;min-width:420px;max-width:560px;width:90%;box-shadow:0 8px 48px rgba(0,0,0,.28)">
                 <div class="card-header-row">
                     <h2 style="margin:0">Managers — <span id="bmBuildingLabel" style="color:var(--primary)"></span></h2>
-                    <button type="button" id="btnCloseBmPanel" class="btn btn-secondary btn-sm">✕</button>
+                    <button type="button" id="btnCloseBmPanel" class="btn btn-secondary btn-sm" aria-label="Close building manager panel">✕</button>
                 </div>
                 <div id="bmCurrentList" style="margin-bottom:1rem;min-height:2rem"></div>
                 <div class="form-group" style="display:flex;gap:.5rem;align-items:flex-end">
@@ -628,17 +625,18 @@
             </section>
         </div>
     </div>
+    </main>
 </div>
 
 <!-- ⭐ Smart Quote Send Panel -->
 <div id="quoteSendPanel" class="quote-send-panel hidden"></div>
 
 <!-- ⭐ ENHANCEMENT #2: Procurement Create Order Modal (ENHANCED) -->
-<div id="procCreateOrderModal" class="modal-overlay hidden">
+<div id="procCreateOrderModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="procCreateOrderTitle">
     <div class="modal-card" style="max-width: 580px;">
         <div class="modal-header">
-            <h3>➕ Create Order</h3>
-            <button class="btn-close" onclick="closeProcCreateOrderModal()">✕</button>
+            <h3 id="procCreateOrderTitle">➕ Create Order</h3>
+            <button class="btn-close" aria-label="Close create order dialog" onclick="closeProcCreateOrderModal()">✕</button>
         </div>
         <div class="modal-body">
             <form id="procCreateOrderForm">
@@ -708,11 +706,11 @@
 </div>
 
 <!-- ⭐ ENHANCEMENT #3: Create Quote Modal -->
-<div id="createQuoteModal" class="modal-overlay hidden">
+<div id="createQuoteModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="createQuoteTitle">
     <div class="modal-card" style="max-width: 520px;">
         <div class="modal-header">
-            <h3>📋 Create Quote</h3>
-            <button class="btn-close" onclick="closeCreateQuoteModal()">✕</button>
+            <h3 id="createQuoteTitle">📋 Create Quote</h3>
+            <button class="btn-close" aria-label="Close create quote dialog" onclick="closeCreateQuoteModal()">✕</button>
         </div>
         <div class="modal-body">
             <div class="text-muted" style="margin-bottom: 0.75rem;">
@@ -752,13 +750,13 @@
 </div>
 
 <!-- Analytics Drill-Down Modal -->
-<div id="analyticsDrillModal" class="analytics-drill-modal hidden">
+<div id="analyticsDrillModal" class="analytics-drill-modal hidden" role="dialog" aria-modal="true" aria-labelledby="analyticsDrillTitle">
     <div class="analytics-drill-backdrop" id="analyticsDrillBackdrop"></div>
     <div class="analytics-drill-content">
         <div class="analytics-drill-header">
             <h3 id="analyticsDrillTitle">Orders</h3>
             <div class="analytics-drill-summary" id="analyticsDrillSummary"></div>
-            <button class="analytics-drill-close" id="analyticsDrillClose">&times;</button>
+            <button class="analytics-drill-close" id="analyticsDrillClose" aria-label="Close analytics details">&times;</button>
         </div>
         <div class="analytics-drill-body" id="analyticsDrillBody">
             <div class="analytics-loading"><div class="spinner"></div><div>Loading...</div></div>
@@ -766,33 +764,33 @@
     </div>
 </div>
 
-<!-- Chart.js CDN for Analytics -->
+<!-- Shared request layer: load before every application script. -->
+<script src="api-client.js"></script>
+<!-- Analytics dependencies must precede the modules that use them. -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<!-- ⭐ LOAD I18N FIRST -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+<script src="upload-progress.js"></script>
+<script src="analytics-cache.js"></script>
+<script src="analytics-charts.js"></script>
+<script src="analytics-insights.js"></script>
+<script src="analytics-forecasting.js"></script>
+<script src="analytics-export.js"></script>
+<script src="analytics.js"></script>
+<!-- i18n defines the global used by app.js and the language-selector handler. -->
 <script src="i18n.js"></script>
 <script src="app.js"></script>
-<!-- File Upload Enhancement Script -->
 <script src="js/order-form-enhanced.js"></script>
 <script src="documents.js"></script>
 <script src="approvals.js"></script>
 <script src="approval-submission.js"></script>
-<!-- ⭐ Order Assignment System (Phase 4) -->
 <script src="order-assignment.js"></script>
-<!-- ⭐ Professional Supplier Selector -->
 <script src="supplier-selector.js"></script>
-<!-- ⭐ Smart Supplier Suggestions -->
 <script src="supplier-suggestions.js"></script>
-<!-- ⭐ Brand Training UI -->
 <script src="brand-training.js"></script>
-<!-- ⭐ Smart Quote Send Panel -->
 <script src="quote-send.js"></script>
-<!-- ⭐ NEW: Intelligent Autocomplete (Phase 5) -->
 <script src="js/intelligent-autocomplete.js"></script>
-<!-- Analytics Export Libraries -->
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
-<!-- analytics.js already loaded in <head> — duplicate removed (CRIT-4 fix) -->
 
 <!-- ⭐ Language Selector Event Handlers -->
 <script>
@@ -831,7 +829,7 @@ setTimeout(() => {
 <div id="kpiDrillPanel" class="side-panel hidden">
   <div class="side-panel-header">
     <h3 id="kpiDrillTitle">Orders</h3>
-    <button id="btnCloseKpiDrill" class="btn-icon">&times;</button>
+    <button id="btnCloseKpiDrill" class="btn-icon" aria-label="Close KPI details">&times;</button>
   </div>
   <div id="kpiDrillBody" class="side-panel-body"></div>
 </div>
@@ -926,14 +924,14 @@ setTimeout(() => {
 <!-- ═══════════════════════════════════════════════════════════
      RFQ WIZARD MODAL — Send Request For Quotation to Supplier
      ═══════════════════════════════════════════════════════════ -->
-<div id="rfqWizardModal" class="modal-overlay hidden">
+<div id="rfqWizardModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="rfqWizardTitle">
   <div class="modal-card rfq-wizard-card">
     <div class="modal-header">
       <div>
         <h3 id="rfqWizardTitle">📧 Send RFQ to Supplier</h3>
         <div class="rfq-wizard-subtitle" id="rfqWizardSubtitle">Step 1 of 3 — Review Orders &amp; AI Supplier Assignment</div>
       </div>
-      <button class="btn-close" onclick="closeRfqWizard()">✕</button>
+      <button class="btn-close" aria-label="Close RFQ wizard" onclick="closeRfqWizard()">✕</button>
     </div>
     <div class="modal-body rfq-wizard-body" id="rfqWizardBody">
       <!-- Dynamically rendered by JS -->
@@ -961,11 +959,11 @@ setTimeout(() => {
 <!-- ═══════════════════════════════════════════════════════════
      SUPPLIER RESPONSE MODAL — enter prices after supplier replies
      ═══════════════════════════════════════════════════════════ -->
-<div id="supplierResponseModal" class="modal-overlay hidden">
+<div id="supplierResponseModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="supplierResponseTitle">
   <div class="modal-card" style="max-width:580px;">
     <div class="modal-header">
-      <h3>💬 Enter Supplier Response</h3>
-      <button class="btn-close" onclick="closeSupplierResponseModal()">✕</button>
+      <h3 id="supplierResponseTitle">💬 Enter Supplier Response</h3>
+      <button class="btn-close" aria-label="Close supplier response dialog" onclick="closeSupplierResponseModal()">✕</button>
     </div>
     <div class="modal-body" id="supplierResponseBody">
       <!-- Dynamically rendered -->
@@ -976,11 +974,11 @@ setTimeout(() => {
 <!-- ═══════════════════════════════════════════════════════════
      ORDER TEMPLATES MODAL — repeat/template orders
      ═══════════════════════════════════════════════════════════ -->
-<div id="orderTemplatesModal" class="modal-overlay hidden">
+<div id="orderTemplatesModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="orderTemplatesTitle">
   <div class="modal-card" style="max-width:520px;">
     <div class="modal-header">
-      <h3>🔁 Order Templates</h3>
-      <button class="btn-close" onclick="document.getElementById('orderTemplatesModal').classList.add('hidden')">✕</button>
+      <h3 id="orderTemplatesTitle">🔁 Order Templates</h3>
+      <button class="btn-close" aria-label="Close order templates dialog" onclick="document.getElementById('orderTemplatesModal').classList.add('hidden')">✕</button>
     </div>
     <div class="modal-body" id="orderTemplatesBody">
       <!-- Dynamically rendered -->
@@ -991,11 +989,11 @@ setTimeout(() => {
 <!-- ═══════════════════════════════════════════════════════════
      DUPLICATE ORDER WARNING MODAL
      ═══════════════════════════════════════════════════════════ -->
-<div id="duplicateOrderModal" class="modal-overlay hidden">
+<div id="duplicateOrderModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="duplicateOrderTitle">
   <div class="modal-card" style="max-width:480px;">
     <div class="modal-header">
-      <h3 style="color:#f59e0b;">⚠ Possible Duplicate Order</h3>
-      <button class="btn-close" onclick="document.getElementById('duplicateOrderModal').classList.add('hidden')">✕</button>
+      <h3 id="duplicateOrderTitle" style="color:#f59e0b;">⚠ Possible Duplicate Order</h3>
+      <button class="btn-close" aria-label="Close duplicate order dialog" onclick="document.getElementById('duplicateOrderModal').classList.add('hidden')">✕</button>
     </div>
     <div class="modal-body">
       <p id="duplicateOrderMsg" style="color:#f1f5f9;margin-bottom:1rem;"></p>
@@ -1010,6 +1008,8 @@ setTimeout(() => {
 
 <!-- ⭐ PartPulse Features — RFQ Wizard, Bulk Status, PO Gen, Templates, Supplier Response, Today's Actions, Export, Duplicate Detection -->
 <script src="partpulse-features.js"></script>
+<!-- Admin cockpit is maintained as a separate classic-script module. -->
+<script src="admin-cockpit.js"></script>
 
 <!-- Side panel backdrops -->
 <div id="orderDetailBackdrop" class="side-panel-backdrop hidden" onclick="document.getElementById('orderDetailPanel').classList.add('hidden');this.classList.add('hidden');"></div>
